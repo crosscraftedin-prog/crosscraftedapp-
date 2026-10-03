@@ -20,6 +20,7 @@ import {
   DAILY_VERSES,
   type PrayerPost,
 } from "@/lib/crosscrafted-data";
+import StreakBadge from "@/components/crosscrafted/StreakBadge";
 
 export default function PrayerWallView() {
   const [prayers, setPrayers] = useState<PrayerPost[]>(PRAYERS);
@@ -120,6 +121,28 @@ export default function PrayerWallView() {
     setIsAnonymous(false);
     setShowCreateModal(false);
     toast.success("Prayer request shared!", { description: "+10 Faith Points. The community is praying with you." });
+
+    // Record prayer sharing streak — once per day
+    try {
+      const streaksRaw = localStorage.getItem("crosscrafted_streaks") || "{}";
+      const before = JSON.parse(streaksRaw);
+      const prevDate = before?.prayer_share?.lastActiveDate;
+      const today = new Date().toISOString().split("T")[0];
+      if (prevDate !== today) {
+        import("@/lib/streaks").then(({ recordStreak }) => {
+          const info = recordStreak("prayer_share");
+          if (info.currentStreak === 1) {
+            toast("🔥 Prayer streak started!", { description: "Share a prayer daily to keep it alive." });
+          } else if ([3, 7, 14, 30, 60, 90].includes(info.currentStreak)) {
+            toast.success(`🔥 ${info.currentStreak}-day prayer streak!`, {
+              description: "Thank you for sharing your heart with the community daily.",
+            });
+          }
+        });
+      }
+    } catch {
+      // ignore
+    }
   };
 
   const formatAgo = (iso: string) => {
@@ -151,6 +174,9 @@ export default function PrayerWallView() {
           <Plus size={14} /> Share
         </button>
       </div>
+
+      {/* Prayer streak */}
+      <StreakBadge activity="prayer_share" />
 
       {/* Daily Verse */}
       <motion.div

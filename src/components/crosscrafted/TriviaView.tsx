@@ -38,6 +38,7 @@ import {
   MOCK_LEADERBOARD,
   type TriviaQuestion,
 } from "@/lib/crosscrafted-data";
+import StreakBadge from "@/components/crosscrafted/StreakBadge";
 
 const STATS_KEY = "crosscrafted_trivia_stats";
 const TIMER_SECONDS: Record<string, number> = {
@@ -124,6 +125,28 @@ export default function TriviaView() {
     };
     setStats(newStats);
     saveStats(newStats);
+
+    // Record daily trivia play streak — once per day
+    try {
+      const streaksRaw = localStorage.getItem("crosscrafted_streaks") || "{}";
+      const before = JSON.parse(streaksRaw);
+      const prevDate = before?.trivia_play?.lastActiveDate;
+      const today = new Date().toISOString().split("T")[0];
+      if (prevDate !== today) {
+        import("@/lib/streaks").then(({ recordStreak }) => {
+          const info = recordStreak("trivia_play");
+          if (info.currentStreak === 1) {
+            toast("🔥 Trivia streak started!", { description: "Play daily to keep it alive." });
+          } else if ([3, 7, 14, 30, 60, 90].includes(info.currentStreak)) {
+            toast.success(`🔥 ${info.currentStreak}-day trivia streak!`, {
+              description: "You're on fire! Keep playing daily.",
+            });
+          }
+        });
+      }
+    } catch {
+      // ignore
+    }
   };
 
   const advanceQuestion = () => {
@@ -344,6 +367,8 @@ export default function TriviaView() {
           >
             {gameState === "setup" && (
               <div className="space-y-5">
+                <StreakBadge activity="trivia_play" />
+
                 {/* Level Selection */}
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">

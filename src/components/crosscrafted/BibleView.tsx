@@ -37,6 +37,7 @@ import {
   type Translation,
   type Bookmark as BookmarkType,
 } from "@/lib/bible-data";
+import StreakBadge from "@/components/crosscrafted/StreakBadge";
 
 type View = "books" | "chapters" | "reader" | "search" | "bookmarks";
 
@@ -94,6 +95,22 @@ export default function BibleView() {
       setChapterVerses(data.verses.map((v) => ({ verse: v.verse, text: v.text.trim() })));
       setChapterText(data.verses.map((v) => `${v.verse} ${v.text.trim()}`).join(" "));
       scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+
+      // Record Bible reading streak — once per day
+      const { recordStreak } = await import("@/lib/streaks");
+      const before = JSON.parse(localStorage.getItem("crosscrafted_streaks") || "{}");
+      const prevDate = before?.bible_reading?.lastActiveDate;
+      const today = new Date().toISOString().split("T")[0];
+      if (prevDate !== today) {
+        const info = recordStreak("bible_reading");
+        if (info.currentStreak === 1) {
+          toast("🔥 Streak started!", { description: "Read the Bible daily to keep your streak alive." });
+        } else if ([3, 7, 14, 30, 60, 90, 180, 365].includes(info.currentStreak)) {
+          toast.success(`🔥 ${info.currentStreak}-day streak!`, {
+            description: `You've been reading the Bible for ${info.currentStreak} consecutive days. Keep going!`,
+          });
+        }
+      }
     } catch (e: any) {
       setChapterError(e.message || "Failed to load chapter. Check your connection.");
       toast.error("Failed to load chapter", { description: "Please check your internet connection." });
@@ -318,7 +335,11 @@ export default function BibleView() {
 
       {/* BOOKS VIEW */}
       {view === "books" && (
-        <BooksView onSelectBook={handleSelectBook} />
+        <>
+          <StreakBadge activity="bible_reading" />
+          <div className="h-4" />
+          <BooksView onSelectBook={handleSelectBook} />
+        </>
       )}
 
       {/* CHAPTERS VIEW */}
