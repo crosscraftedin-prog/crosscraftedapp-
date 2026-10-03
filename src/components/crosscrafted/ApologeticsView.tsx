@@ -9,23 +9,37 @@ import {
   X,
   Search,
   Sparkles,
-  ThumbsUp,
   Eye,
+  Plus,
+  CheckCircle2,
+  HelpCircle,
+  Send,
+  BookOpen,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   APOLOGETICS_POSTS,
+  APOLOGETICS_QUESTIONS,
   APOLOGETICS_TOPICS,
   CHURCH_GRADIENTS,
   type ApologeticsPost,
+  type ApologeticsQuestion,
+  type ApologeticsAnswer,
 } from "@/lib/crosscrafted-data";
 
 export default function ApologeticsView() {
+  const [activeTab, setActiveTab] = useState<"articles" | "qa">("articles");
   const [posts] = useState<ApologeticsPost[]>(APOLOGETICS_POSTS);
+  const [questions, setQuestions] = useState<ApologeticsQuestion[]>(APOLOGETICS_QUESTIONS);
   const [liked, setLiked] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [filterTopic, setFilterTopic] = useState("");
   const [openPost, setOpenPost] = useState<ApologeticsPost | null>(null);
+  const [openQuestion, setOpenQuestion] = useState<ApologeticsQuestion | null>(null);
+  const [showAskModal, setShowAskModal] = useState(false);
+  const [askForm, setAskForm] = useState({ title: "", body: "", topic: "", author: "" });
+  const [answerText, setAnswerText] = useState<Record<string, string>>({});
 
   const filtered = useMemo(() => {
     return posts.filter((p) => {
@@ -37,6 +51,17 @@ export default function ApologeticsView() {
       return true;
     });
   }, [posts, filterTopic, search]);
+
+  const filteredQuestions = useMemo(() => {
+    return questions.filter((q) => {
+      if (filterTopic && q.topic !== filterTopic) return false;
+      if (search) {
+        const s = search.toLowerCase();
+        if (!q.title.toLowerCase().includes(s) && !q.body.toLowerCase().includes(s)) return false;
+      }
+      return true;
+    });
+  }, [questions, filterTopic, search]);
 
   const toggleLike = (id: string) => {
     setLiked((prev) => {
@@ -55,17 +80,139 @@ export default function ApologeticsView() {
     toast.success("Post link copied!");
   };
 
+  const handleAskQuestion = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!askForm.title.trim() || !askForm.body.trim()) {
+      toast.error("Please enter both a title and question details");
+      return;
+    }
+    const newQ: ApologeticsQuestion = {
+      id: `qa${Date.now()}`,
+      title: askForm.title.trim(),
+      body: askForm.body.trim(),
+      author: askForm.author.trim() || "Anonymous",
+      topic: askForm.topic || "gods_existence",
+      date: new Date().toISOString().split("T")[0],
+      likes: 0,
+      answers: [],
+      status: "open",
+    };
+    setQuestions([newQ, ...questions]);
+    setAskForm({ title: "", body: "", topic: "", author: "" });
+    setShowAskModal(false);
+    toast.success("Question posted!", {
+      description: "Pastors and church leaders will be notified to answer.",
+    });
+  };
+
+  const handleAnswer = (questionId: string) => {
+    const text = (answerText[questionId] || "").trim();
+    if (!text) {
+      toast.error("Please write your answer");
+      return;
+    }
+    const newAnswer: ApologeticsAnswer = {
+      id: `qa${questionId}a${Date.now()}`,
+      author: "You",
+      authorRole: "Member",
+      body: text,
+      date: new Date().toISOString().split("T")[0],
+      is_accepted: false,
+      likes: 0,
+    };
+    setQuestions((qs) =>
+      qs.map((q) =>
+        q.id === questionId
+          ? { ...q, answers: [...q.answers, newAnswer], status: "answered" }
+          : q
+      )
+    );
+    if (openQuestion?.id === questionId) {
+      setOpenQuestion((q) =>
+        q ? { ...q, answers: [...q.answers, newAnswer], status: "answered" } : q
+      );
+    }
+    setAnswerText((prev) => ({ ...prev, [questionId]: "" }));
+    toast.success("Answer posted!", {
+      description: "Thank you for sharing your insight.",
+    });
+  };
+
+  const acceptAnswer = (questionId: string, answerId: string) => {
+    setQuestions((qs) =>
+      qs.map((q) =>
+        q.id === questionId
+          ? {
+              ...q,
+              answers: q.answers.map((a) => ({ ...a, is_accepted: a.id === answerId })),
+              status: "answered",
+            }
+          : q
+      )
+    );
+    if (openQuestion?.id === questionId) {
+      setOpenQuestion((q) =>
+        q
+          ? {
+              ...q,
+              answers: q.answers.map((a) => ({ ...a, is_accepted: a.id === answerId })),
+              status: "answered",
+            }
+          : q
+      );
+    }
+    toast.success("Answer accepted!", {
+      description: "This will be marked as the best answer for the question.",
+    });
+  };
+
   return (
     <div className="max-w-[680px] mx-auto px-4 py-5">
-      <div className="mb-4">
-        <h1 className="text-xl font-bold text-white">Apologetics</h1>
-        <p className="text-xs text-[#94A3B8] mt-0.5">Defend the faith with reason & Scripture</p>
+      <div className="flex justify-between items-center mb-4">
+        <div>
+          <h1 className="text-xl font-bold text-white">Apologetics</h1>
+          <p className="text-xs text-[#94A3B8] mt-0.5">Defend the faith with reason &amp; Scripture</p>
+        </div>
+        {activeTab === "qa" && (
+          <button
+            onClick={() => setShowAskModal(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all hover:-translate-y-px"
+            style={{ background: "linear-gradient(135deg, #38BDF8, #A855F7)" }}
+          >
+            <Plus size={14} /> Ask Question
+          </button>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 bg-white/[0.04] border border-white/[0.06] rounded-2xl mb-4">
+        <button
+          onClick={() => setActiveTab("articles")}
+          className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+            activeTab === "articles" ? "bg-[#38BDF8] text-slate-950" : "text-[#94A3B8] hover:text-white"
+          }`}
+        >
+          <BookOpen size={12} /> Articles
+        </button>
+        <button
+          onClick={() => setActiveTab("qa")}
+          className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+            activeTab === "qa" ? "bg-[#38BDF8] text-slate-950" : "text-[#94A3B8] hover:text-white"
+          }`}
+        >
+          <HelpCircle size={12} /> Q&amp;A
+          {questions.filter((q) => q.status === "open").length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full bg-[#F59E0B]/20 text-[#F59E0B] text-[9px] font-bold">
+              {questions.filter((q) => q.status === "open").length}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Search */}
       <input
         type="text"
-        placeholder="Search articles..."
+        placeholder={`Search ${activeTab === "articles" ? "articles" : "questions"}...`}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         className="neo-input text-sm mb-3"
@@ -97,107 +244,206 @@ export default function ApologeticsView() {
         ))}
       </div>
 
-      {/* Featured Post */}
-      {filtered[0] && !filterTopic && !search && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          onClick={() => setOpenPost(filtered[0])}
-          className="relative rounded-2xl overflow-hidden cursor-pointer mb-4 border border-white/[0.06]"
-        >
-          <div className="relative h-44" style={{ background: CHURCH_GRADIENTS[filtered[0].cover_gradient] }}>
-            <div className="absolute inset-0 bg-gradient-to-t from-[#1C1929] via-[#1C1929]/40 to-transparent" />
-            <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-[#22C55E]/15 backdrop-blur-sm border border-[#22C55E]/30 text-[#22C55E] text-[10px] font-bold uppercase tracking-wider">
-              Featured
-            </div>
-          </div>
-          <div className="absolute bottom-0 left-0 right-0 p-4">
-            <h2 className="text-lg font-extrabold text-white mb-1 leading-tight">{filtered[0].title}</h2>
-            <p className="text-xs text-white/70 line-clamp-2 mb-2">{filtered[0].body}</p>
-            <div className="flex items-center gap-3 text-[10px] text-white/60">
-              <span className="font-bold text-white/80">{filtered[0].author}</span>
-              <span>·</span>
-              <span>{new Date(filtered[0].date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
-              <span>·</span>
-              <span className="flex items-center gap-1">
-                <Heart size={9} /> {filtered[0].likes}
-              </span>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Post List */}
-      <div className="space-y-3">
-        {(filterTopic || search ? filtered : filtered.slice(1)).map((post, i) => {
-          const topic = APOLOGETICS_TOPICS.find((t) => t.id === post.topic);
-          const hasLiked = liked.has(post.id);
-          return (
-            <motion.div
-              key={post.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              onClick={() => setOpenPost(post)}
-              className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4 cursor-pointer hover:border-white/[0.12] transition-all"
-            >
-              <div className="flex items-start gap-3 mb-2">
-                <div
-                  className="w-1.5 h-12 rounded-full shrink-0 mt-1"
-                  style={{ background: topic?.color }}
-                />
-                <div className="flex-1 min-w-0">
-                  <span
-                    className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider inline-block mb-1.5"
-                    style={{ backgroundColor: `${topic?.color}20`, color: topic?.color }}
-                  >
-                    {topic?.label}
-                  </span>
-                  <h3 className="text-base font-bold text-white leading-tight">{post.title}</h3>
-                </div>
-              </div>
-              <p className="text-[13px] text-[#A09DB1] leading-relaxed line-clamp-3 mb-3">{post.body}</p>
-              <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
-                <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#38BDF8] to-[#A855F7] flex items-center justify-center text-[10px] font-bold text-white">
-                    {post.author.split(" ").map((n) => n[0]).join("").slice(0, 2)}
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-bold text-white">{post.author}</p>
-                    <p className="text-[9px] text-[#94A3B8]">
-                      {new Date(post.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                    </p>
+      <AnimatePresence mode="wait">
+        {activeTab === "articles" ? (
+          <motion.div key="articles" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            {/* Featured Post */}
+            {filtered[0] && !filterTopic && !search && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                onClick={() => setOpenPost(filtered[0])}
+                className="relative rounded-2xl overflow-hidden cursor-pointer mb-4 border border-white/[0.06]"
+              >
+                <div className="relative h-44" style={{ background: CHURCH_GRADIENTS[filtered[0].cover_gradient] }}>
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#1C1929] via-[#1C1929]/40 to-transparent" />
+                  <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-[#22C55E]/15 backdrop-blur-sm border border-[#22C55E]/30 text-[#22C55E] text-[10px] font-bold uppercase tracking-wider">
+                    Featured
                   </div>
                 </div>
-                <div className="flex items-center gap-3 text-[#94A3B8]">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleLike(post.id);
-                    }}
-                    className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
-                      hasLiked ? "bg-[#EC4899]/15 text-[#EC4899]" : "hover:text-white"
-                    }`}
+                <div className="absolute bottom-0 left-0 right-0 p-4">
+                  <h2 className="text-lg font-extrabold text-white mb-1 leading-tight">{filtered[0].title}</h2>
+                  <p className="text-xs text-white/70 line-clamp-2 mb-2">{filtered[0].body}</p>
+                  <div className="flex items-center gap-3 text-[10px] text-white/60">
+                    <span className="font-bold text-white/80">{filtered[0].author}</span>
+                    <span>·</span>
+                    <span>{new Date(filtered[0].date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                    <span>·</span>
+                    <span className="flex items-center gap-1">
+                      <Heart size={9} /> {filtered[0].likes}
+                    </span>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Post List */}
+            <div className="space-y-3">
+              {(filterTopic || search ? filtered : filtered.slice(1)).map((post, i) => {
+                const topic = APOLOGETICS_TOPICS.find((t) => t.id === post.topic);
+                const hasLiked = liked.has(post.id);
+                return (
+                  <motion.div
+                    key={post.id}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    onClick={() => setOpenPost(post)}
+                    className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4 cursor-pointer hover:border-white/[0.12] transition-all"
                   >
-                    <Heart size={12} fill={hasLiked ? "currentColor" : "none"} />
-                    {post.likes + (hasLiked ? 1 : 0)}
-                  </button>
-                  <span className="flex items-center gap-1 text-[10px]">
-                    <MessageCircle size={12} /> {post.comments}
-                  </span>
+                    <div className="flex items-start gap-3 mb-2">
+                      <div
+                        className="w-1.5 h-12 rounded-full shrink-0 mt-1"
+                        style={{ background: topic?.color }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <span
+                          className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider inline-block mb-1.5"
+                          style={{ backgroundColor: `${topic?.color}20`, color: topic?.color }}
+                        >
+                          {topic?.label}
+                        </span>
+                        <h3 className="text-base font-bold text-white leading-tight">{post.title}</h3>
+                      </div>
+                    </div>
+                    <p className="text-[13px] text-[#A09DB1] leading-relaxed line-clamp-3 mb-3">{post.body}</p>
+                    <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
+                      <div className="flex items-center gap-3">
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#38BDF8] to-[#A855F7] flex items-center justify-center text-[10px] font-bold text-white">
+                          {post.author.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-bold text-white">{post.author}</p>
+                          <p className="text-[9px] text-[#94A3B8]">
+                            {new Date(post.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 text-[#94A3B8]">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleLike(post.id);
+                          }}
+                          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                            hasLiked ? "bg-[#EC4899]/15 text-[#EC4899]" : "hover:text-white"
+                          }`}
+                        >
+                          <Heart size={12} fill={hasLiked ? "currentColor" : "none"} />
+                          {post.likes + (hasLiked ? 1 : 0)}
+                        </button>
+                        <span className="flex items-center gap-1 text-[10px]">
+                          <MessageCircle size={12} /> {post.comments}
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+
+            {filtered.length === 0 && (
+              <div className="text-center py-12">
+                <Search size={32} className="mx-auto text-[#475569] mb-2" />
+                <p className="text-sm text-[#475569]">No articles found.</p>
+              </div>
+            )}
+          </motion.div>
+        ) : (
+          <motion.div key="qa" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            {/* Q&A Banner */}
+            <div className="bg-gradient-to-br from-[#1C1929] to-[#2B254E] border border-[#38BDF8]/20 rounded-2xl p-4 mb-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#38BDF8]/15 border border-[#38BDF8]/30 flex items-center justify-center shrink-0">
+                  <HelpCircle size={18} className="text-[#38BDF8]" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-white mb-1">Have a question about faith?</p>
+                  <p className="text-[11px] text-[#A09DB1] leading-relaxed">
+                    Ask anything — pastors, church leaders, and verified admins will answer.
+                    Mark the best answer as accepted to help others.
+                  </p>
                 </div>
               </div>
-            </motion.div>
-          );
-        })}
-      </div>
+            </div>
 
-      {filtered.length === 0 && (
-        <div className="text-center py-16">
-          <Search size={40} className="mx-auto text-[#475569] mb-3" />
-          <p className="text-sm text-[#475569]">No articles found.</p>
-        </div>
-      )}
+            {/* Questions List */}
+            <div className="space-y-3">
+              {filteredQuestions.map((q, i) => {
+                const topic = APOLOGETICS_TOPICS.find((t) => t.id === q.topic);
+                const hasLiked = liked.has(q.id);
+                return (
+                  <motion.div
+                    key={q.id}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    onClick={() => setOpenQuestion(q)}
+                    className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4 cursor-pointer hover:border-white/[0.12] transition-all"
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <span
+                        className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                        style={{ backgroundColor: `${topic?.color}20`, color: topic?.color }}
+                      >
+                        {topic?.label}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                          q.status === "answered"
+                            ? "bg-[#22C55E]/15 text-[#22C55E]"
+                            : "bg-[#F59E0B]/15 text-[#F59E0B]"
+                        }`}
+                      >
+                        {q.status === "answered" ? "Answered" : "Open"}
+                      </span>
+                    </div>
+                    <h3 className="text-base font-bold text-white leading-tight mb-1">{q.title}</h3>
+                    <p className="text-[13px] text-[#A09DB1] leading-relaxed line-clamp-2 mb-2">{q.body}</p>
+                    <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-white/[0.06] flex items-center justify-center text-[10px] font-bold text-white">
+                          {q.author === "Anonymous" ? "?" : q.author.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-bold text-white">{q.author}</p>
+                          <p className="text-[9px] text-[#94A3B8]">
+                            {new Date(q.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 text-[#94A3B8]">
+                        {q.answers.length > 0 && (
+                          <span className="flex items-center gap-1 text-[10px] font-bold">
+                            <MessageCircle size={12} /> {q.answers.length} {q.answers.length === 1 ? "answer" : "answers"}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1 text-[10px]">
+                          <Heart size={12} /> {q.likes}
+                        </span>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+
+            {filteredQuestions.length === 0 && (
+              <div className="text-center py-12">
+                <HelpCircle size={32} className="mx-auto text-[#475569] mb-2" />
+                <p className="text-sm text-[#475569] mb-3">No questions found.</p>
+                <button
+                  onClick={() => setShowAskModal(true)}
+                  className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white"
+                  style={{ background: "linear-gradient(135deg, #38BDF8, #A855F7)" }}
+                >
+                  Ask the First Question
+                </button>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Post Detail Modal */}
       <AnimatePresence>
@@ -216,10 +462,7 @@ export default function ApologeticsView() {
               transition={{ type: "spring", damping: 30, stiffness: 350 }}
               className="bg-[#1C1929] border border-white/[0.08] rounded-t-[28px] md:rounded-[24px] w-full max-w-lg max-h-[90vh] overflow-y-auto"
             >
-              <div
-                className="relative h-32"
-                style={{ background: CHURCH_GRADIENTS[openPost.cover_gradient] }}
-              >
+              <div className="relative h-32" style={{ background: CHURCH_GRADIENTS[openPost.cover_gradient] }}>
                 <div className="absolute inset-0 bg-gradient-to-t from-[#1C1929] to-transparent" />
                 <button
                   onClick={() => setOpenPost(null)}
@@ -237,11 +480,7 @@ export default function ApologeticsView() {
                   <div>
                     <p className="text-sm font-bold text-white">{openPost.author}</p>
                     <p className="text-[10px] text-[#94A3B8]">
-                      {new Date(openPost.date).toLocaleDateString("en-US", {
-                        month: "long",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
+                      {new Date(openPost.date).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
                     </p>
                   </div>
                 </div>
@@ -259,7 +498,6 @@ export default function ApologeticsView() {
                 })()}
 
                 <h2 className="text-xl font-extrabold text-white leading-tight">{openPost.title}</h2>
-
                 <p className="text-sm text-[#A09DB1] leading-relaxed whitespace-pre-line">{openPost.body}</p>
 
                 <div className="flex items-center gap-3 pt-3 border-t border-white/[0.06]">
@@ -285,6 +523,244 @@ export default function ApologeticsView() {
                   </div>
                 </div>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Question Detail Modal */}
+      <AnimatePresence>
+        {openQuestion && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-end md:items-center justify-center z-[60] p-0 md:p-6"
+            onClick={(e) => e.target === e.currentTarget && setOpenQuestion(null)}
+          >
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              transition={{ type: "spring", damping: 30, stiffness: 350 }}
+              className="bg-[#1C1929] border border-white/[0.08] rounded-t-[28px] md:rounded-[24px] w-full max-w-lg max-h-[90vh] overflow-y-auto"
+            >
+              <div className="p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => setOpenQuestion(null)}
+                    className="flex items-center gap-1 text-xs text-[#94A3B8] hover:text-white transition-colors"
+                  >
+                    <X size={14} /> Close
+                  </button>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                      openQuestion.status === "answered"
+                        ? "bg-[#22C55E]/15 text-[#22C55E]"
+                        : "bg-[#F59E0B]/15 text-[#F59E0B]"
+                    }`}
+                  >
+                    {openQuestion.status === "answered" ? "Answered" : "Open"}
+                  </span>
+                </div>
+
+                {(() => {
+                  const topic = APOLOGETICS_TOPICS.find((t) => t.id === openQuestion.topic);
+                  return (
+                    <span
+                      className="inline-block px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                      style={{ backgroundColor: `${topic?.color}20`, color: topic?.color }}
+                    >
+                      {topic?.label}
+                    </span>
+                  );
+                })()}
+
+                <h2 className="text-xl font-extrabold text-white leading-tight">{openQuestion.title}</h2>
+                <p className="text-sm text-[#A09DB1] leading-relaxed">{openQuestion.body}</p>
+
+                <div className="flex items-center gap-3 pt-3 border-t border-white/[0.06]">
+                  <div className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center text-[10px] font-bold text-white">
+                    {openQuestion.author === "Anonymous" ? "?" : openQuestion.author.charAt(0)}
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold text-white">{openQuestion.author}</p>
+                    <p className="text-[9px] text-[#94A3B8]">
+                      {new Date(openQuestion.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Answers */}
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-3">
+                    {openQuestion.answers.length} {openQuestion.answers.length === 1 ? "Answer" : "Answers"}
+                  </p>
+                  <div className="space-y-3">
+                    {openQuestion.answers.map((a) => (
+                      <div
+                        key={a.id}
+                        className={`rounded-xl p-3 border ${
+                          a.is_accepted
+                            ? "bg-[#22C55E]/8 border-[#22C55E]/30"
+                            : "bg-white/[0.03] border-white/[0.06]"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#A855F7] to-[#38BDF8] flex items-center justify-center text-[10px] font-bold text-white">
+                            {a.author.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-[11px] font-bold text-white flex items-center gap-1.5">
+                              {a.author}
+                              {a.is_accepted && (
+                                <span className="flex items-center gap-0.5 text-[#22C55E] text-[9px] font-bold uppercase">
+                                  <CheckCircle2 size={10} /> Accepted
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-[9px] text-[#94A3B8]">
+                              {a.authorRole}{a.authorChurch ? ` · ${a.authorChurch}` : ""} · {a.date}
+                            </p>
+                          </div>
+                        </div>
+                        <p className="text-[12px] text-[#A09DB1] leading-relaxed">{a.body}</p>
+                        {!a.is_accepted && (
+                          <button
+                            onClick={() => acceptAnswer(openQuestion.id, a.id)}
+                            className="mt-2 text-[10px] font-bold text-[#22C55E] hover:underline"
+                          >
+                            ✓ Mark as accepted
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Answer input */}
+                  <div className="mt-4 pt-3 border-t border-white/[0.06]">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">
+                      Your Answer
+                    </p>
+                    <textarea
+                      value={answerText[openQuestion.id] || ""}
+                      onChange={(e) => setAnswerText((prev) => ({ ...prev, [openQuestion.id]: e.target.value }))}
+                      placeholder="Share your insight with biblical and logical reasoning..."
+                      className="neo-input h-24 resize-none text-sm mb-2"
+                    />
+                    <button
+                      onClick={() => handleAnswer(openQuestion.id)}
+                      className="w-full py-2.5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2"
+                      style={{ background: "linear-gradient(135deg, #38BDF8, #A855F7)" }}
+                    >
+                      <Send size={14} /> Post Answer
+                    </button>
+                    <p className="text-[10px] text-[#64748B] mt-2 text-center">
+                      Note: In production, only verified pastors/admins can post official answers.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Ask Question Modal */}
+      <AnimatePresence>
+        {showAskModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-end md:items-center justify-center z-[60]"
+            onClick={(e) => e.target === e.currentTarget && setShowAskModal(false)}
+          >
+            <motion.div
+              initial={{ y: 100 }}
+              animate={{ y: 0 }}
+              exit={{ y: 100 }}
+              transition={{ type: "spring", damping: 30, stiffness: 350 }}
+              className="bg-[#1C1929] border-t md:border border-white/[0.08] rounded-t-[28px] md:rounded-[24px] w-full max-w-lg p-5 max-h-[85vh] overflow-y-auto"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-bold bg-gradient-to-r from-[#38BDF8] to-[#A855F7] bg-clip-text text-transparent">
+                  Ask a Question
+                </h2>
+                <button onClick={() => setShowAskModal(false)} className="text-[#64748B] hover:text-white p-1">
+                  <X size={20} />
+                </button>
+              </div>
+              <form onSubmit={handleAskQuestion} className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                    Question Title *
+                  </label>
+                  <input
+                    type="text"
+                    value={askForm.title}
+                    onChange={(e) => setAskForm({ ...askForm, title: e.target.value })}
+                    className="neo-input text-sm"
+                    placeholder="e.g. How do we know Jesus is God?"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                    Topic
+                  </label>
+                  <select
+                    value={askForm.topic}
+                    onChange={(e) => setAskForm({ ...askForm, topic: e.target.value })}
+                    className="neo-input text-sm"
+                  >
+                    <option value="">Select topic</option>
+                    {APOLOGETICS_TOPICS.map((t) => (
+                      <option key={t.id} value={t.id}>{t.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                    Question Details *
+                  </label>
+                  <textarea
+                    value={askForm.body}
+                    onChange={(e) => setAskForm({ ...askForm, body: e.target.value })}
+                    className="neo-input h-32 resize-none text-sm"
+                    placeholder="Provide context, what you've read so far, what specifically you're struggling with..."
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                    Your Name (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={askForm.author}
+                    onChange={(e) => setAskForm({ ...askForm, author: e.target.value })}
+                    className="neo-input text-sm"
+                    placeholder="Leave blank for Anonymous"
+                  />
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowAskModal(false)}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-white/[0.04] text-[#94A3B8] hover:text-white border border-white/[0.06]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white"
+                    style={{ background: "linear-gradient(135deg, #38BDF8, #A855F7)" }}
+                  >
+                    Post Question
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </motion.div>
         )}

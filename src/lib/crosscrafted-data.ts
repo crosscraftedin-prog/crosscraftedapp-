@@ -1,6 +1,12 @@
 // CrossCrafted — Sample Data
 // All data is seeded locally; no backend required.
 
+export type ServiceTime = {
+  language: string; // e.g. "English", "Hindi", "Tamil"
+  time: string; // e.g. "8:00 AM - 11:00 AM"
+  day: string; // e.g. "Sunday", "Wednesday"
+};
+
 export type Church = {
   id: string;
   name: string;
@@ -8,12 +14,14 @@ export type Church = {
   state: string;
   city: string;
   location: string;
-  service_times: string;
+  service_times: ServiceTime[];
   languages: string[];
   followers_count: number;
   cover_gradient: number;
+  cover_image?: string;
   status: "verified" | "pending";
   denomination: string;
+  whatsapp_number?: string;
 };
 
 export type EventItem = {
@@ -32,7 +40,9 @@ export type EventItem = {
   price: number;
   attendees: number;
   cover_gradient: number;
+  cover_image?: string;
   church: string;
+  whatsapp_number?: string;
 };
 
 export type PrayerPost = {
@@ -57,6 +67,30 @@ export type ApologeticsPost = {
   likes: number;
   comments: number;
   cover_gradient: number;
+  cover_image?: string;
+};
+
+export type ApologeticsAnswer = {
+  id: string;
+  author: string;
+  authorRole: "Pastor" | "Church Leader" | "Admin" | "Member";
+  authorChurch?: string;
+  body: string;
+  date: string;
+  is_accepted: boolean;
+  likes: number;
+};
+
+export type ApologeticsQuestion = {
+  id: string;
+  title: string;
+  body: string;
+  author: string;
+  topic: string;
+  date: string;
+  likes: number;
+  answers: ApologeticsAnswer[];
+  status: "open" | "answered" | "closed";
 };
 
 export type Product = {
@@ -71,7 +105,9 @@ export type Product = {
   rating: number;
   reviews: number;
   cover_gradient: number;
+  cover_image?: string;
   in_stock: boolean;
+  whatsapp_number?: string;
 };
 
 export type TriviaQuestion = {
@@ -172,12 +208,18 @@ export const CHURCHES: Church[] = [
     state: "Karnataka",
     city: "Bengaluru",
     location: "Indiranagar, 100 Feet Road",
-    service_times: "Sun 9AM & 11AM · Wed 7PM",
+    service_times: [
+      { language: "English", day: "Sunday", time: "8:00 AM - 11:00 AM" },
+      { language: "Kannada", day: "Sunday", time: "11:30 AM - 2:00 PM" },
+      { language: "English", day: "Wednesday", time: "7:00 PM - 8:30 PM" },
+    ],
     languages: ["English", "Kannada", "Hindi"],
     followers_count: 1240,
     cover_gradient: 0,
+    cover_image: "https://images.unsplash.com/photo-1520637836862-4d197d17c91a?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     status: "verified",
     denomination: "Non-denominational",
+    whatsapp_number: "+919876543210",
   },
   {
     id: "c2",
@@ -187,12 +229,19 @@ export const CHURCHES: Church[] = [
     state: "Maharashtra",
     city: "Mumbai",
     location: "Bandra West, Hill Road",
-    service_times: "Sun 8AM, 10AM & 6PM · Fri 7:30PM",
+    service_times: [
+      { language: "English", day: "Sunday", time: "8:00 AM - 10:00 AM" },
+      { language: "Hindi", day: "Sunday", time: "10:30 AM - 12:30 PM" },
+      { language: "Marathi", day: "Sunday", time: "6:00 PM - 8:00 PM" },
+      { language: "English", day: "Friday", time: "7:30 PM - 9:00 PM" },
+    ],
     languages: ["English", "Hindi", "Marathi"],
     followers_count: 2180,
     cover_gradient: 1,
+    cover_image: "https://images.unsplash.com/photo-1516223298848-69b6c3c7a2d5?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     status: "verified",
     denomination: "Pentecostal",
+    whatsapp_number: "+919876543211",
   },
   {
     id: "c3",
@@ -202,12 +251,19 @@ export const CHURCHES: Church[] = [
     state: "Tamil Nadu",
     city: "Chennai",
     location: "T. Nagar, Pondy Bazaar",
-    service_times: "Sun 7AM, 9:30AM & 6PM · Tue 7PM",
+    service_times: [
+      { language: "Tamil", day: "Sunday", time: "7:00 AM - 9:00 AM" },
+      { language: "English", day: "Sunday", time: "9:30 AM - 11:30 AM" },
+      { language: "Tamil", day: "Sunday", time: "6:00 PM - 8:00 PM" },
+      { language: "English", day: "Tuesday", time: "7:00 PM - 8:30 PM" },
+    ],
     languages: ["English", "Tamil"],
     followers_count: 3420,
     cover_gradient: 2,
+    cover_image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     status: "verified",
     denomination: "Assemblies of God",
+    whatsapp_number: "+919876543212",
   },
   {
     id: "c4",
@@ -217,12 +273,18 @@ export const CHURCHES: Church[] = [
     state: "Telangana",
     city: "Hyderabad",
     location: "Jubilee Hills, Road No. 36",
-    service_times: "Sun 9AM & 11:30AM · Wed 7:15PM",
+    service_times: [
+      { language: "English", day: "Sunday", time: "9:00 AM - 11:00 AM" },
+      { language: "Telugu", day: "Sunday", time: "11:30 AM - 1:30 PM" },
+      { language: "English", day: "Wednesday", time: "7:15 PM - 8:45 PM" },
+    ],
     languages: ["English", "Telugu"],
     followers_count: 980,
     cover_gradient: 3,
+    cover_image: "https://images.unsplash.com/photo-1438032005730-c779502df39b?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     status: "verified",
     denomination: "Reformed",
+    whatsapp_number: "+919876543213",
   },
   {
     id: "c5",
@@ -232,12 +294,18 @@ export const CHURCHES: Church[] = [
     state: "Kerala",
     city: "Kochi",
     location: "Edappally, NH 66",
-    service_times: "Sun 6:30AM & 9AM · Fri 7PM",
+    service_times: [
+      { language: "Malayalam", day: "Sunday", time: "6:30 AM - 8:30 AM" },
+      { language: "English", day: "Sunday", time: "9:00 AM - 11:00 AM" },
+      { language: "Malayalam", day: "Friday", time: "7:00 PM - 8:30 PM" },
+    ],
     languages: ["Malayalam", "English"],
     followers_count: 1675,
     cover_gradient: 4,
+    cover_image: "https://images.unsplash.com/photo-1546484959-f9a381d1330d?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     status: "verified",
     denomination: "Mar Thoma",
+    whatsapp_number: "+919876543214",
   },
   {
     id: "c6",
@@ -247,12 +315,18 @@ export const CHURCHES: Church[] = [
     state: "Delhi",
     city: "New Delhi",
     location: "Saket, District Centre",
-    service_times: "Sun 9:30AM · Wed 7:30PM",
+    service_times: [
+      { language: "English", day: "Sunday", time: "9:30 AM - 11:30 AM" },
+      { language: "Hindi", day: "Sunday", time: "11:30 AM - 1:00 PM" },
+      { language: "English", day: "Wednesday", time: "7:30 PM - 9:00 PM" },
+    ],
     languages: ["English", "Hindi"],
     followers_count: 540,
     cover_gradient: 5,
+    cover_image: "https://images.unsplash.com/photo-1473773508845-188df298d2d1?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     status: "pending",
     denomination: "Brethren",
+    whatsapp_number: "+919876543215",
   },
   {
     id: "c7",
@@ -262,12 +336,18 @@ export const CHURCHES: Church[] = [
     state: "Punjab",
     city: "Ludhiana",
     location: "Model Town, Gurmandi Road",
-    service_times: "Sun 10AM & 6PM · Thu 7PM",
+    service_times: [
+      { language: "English", day: "Sunday", time: "10:00 AM - 12:00 PM" },
+      { language: "Punjabi", day: "Sunday", time: "6:00 PM - 8:00 PM" },
+      { language: "English", day: "Thursday", time: "7:00 PM - 8:30 PM" },
+    ],
     languages: ["English", "Punjabi", "Hindi"],
     followers_count: 720,
     cover_gradient: 6,
+    cover_image: "https://images.unsplash.com/photo-1565728744382-61accd4aa148?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     status: "verified",
     denomination: "Baptist",
+    whatsapp_number: "+919876543216",
   },
   {
     id: "c8",
@@ -277,12 +357,17 @@ export const CHURCHES: Church[] = [
     state: "Karnataka",
     city: "Bengaluru",
     location: "Koramangala, 5th Block",
-    service_times: "Sun 10:30AM · Wed 7:30PM",
+    service_times: [
+      { language: "English", day: "Sunday", time: "10:30 AM - 12:30 PM" },
+      { language: "English", day: "Wednesday", time: "7:30 PM - 9:00 PM" },
+    ],
     languages: ["English"],
     followers_count: 410,
     cover_gradient: 7,
+    cover_image: "https://images.unsplash.com/photo-1496950866446-3253e1470e8e?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     status: "pending",
     denomination: "Non-denominational",
+    whatsapp_number: "+919876543217",
   },
 ];
 
@@ -314,7 +399,9 @@ export const EVENTS: EventItem[] = [
     price: 0,
     attendees: 740,
     cover_gradient: 0,
+    cover_image: "https://images.unsplash.com/photo-1516223298848-69b6c3c7a2d5?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     church: "Grace City Church",
+    whatsapp_number: "+919876543210",
   },
   {
     id: "e2",
@@ -332,7 +419,9 @@ export const EVENTS: EventItem[] = [
     price: 0,
     attendees: 180,
     cover_gradient: 1,
+    cover_image: "https://images.unsplash.com/photo-1513475382585-d06e58bcb5c0?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     church: "New Life Fellowship",
+    whatsapp_number: "+919876543211",
   },
   {
     id: "e3",
@@ -351,7 +440,9 @@ export const EVENTS: EventItem[] = [
     price: 1500,
     attendees: 420,
     cover_gradient: 2,
+    cover_image: "https://images.unsplash.com/photo-1473773508845-188df298d2d1?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     church: "Bethel AG Church",
+    whatsapp_number: "+919876543212",
   },
   {
     id: "e4",
@@ -370,7 +461,9 @@ export const EVENTS: EventItem[] = [
     price: 2200,
     attendees: 22,
     cover_gradient: 3,
+    cover_image: "https://images.unsplash.com/photo-1496950866446-3253e1470e8e?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     church: "Covenant Community Church",
+    whatsapp_number: "+919876543213",
   },
   {
     id: "e5",
@@ -388,7 +481,9 @@ export const EVENTS: EventItem[] = [
     price: 0,
     attendees: 1200,
     cover_gradient: 4,
+    cover_image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     church: "Zion Mar Thoma Church",
+    whatsapp_number: "+919876543214",
   },
   {
     id: "e6",
@@ -406,7 +501,9 @@ export const EVENTS: EventItem[] = [
     price: 0,
     attendees: 290,
     cover_gradient: 5,
+    cover_image: "https://images.unsplash.com/photo-1520637836862-4d197d17c91a?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     church: "Delhi Bible Chapel",
+    whatsapp_number: "+919876543215",
   },
 ];
 
@@ -580,7 +677,9 @@ export const PRODUCTS: Product[] = [
     rating: 4.8,
     reviews: 234,
     cover_gradient: 0,
+    cover_image: "https://images.unsplash.com/photo-1546484959-f9a381d1330d?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     in_stock: true,
+    whatsapp_number: "+919876543220",
   },
   {
     id: "pr2",
@@ -595,7 +694,9 @@ export const PRODUCTS: Product[] = [
     rating: 4.9,
     reviews: 156,
     cover_gradient: 1,
+    cover_image: "https://images.unsplash.com/photo-1565728744382-61accd4aa148?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     in_stock: true,
+    whatsapp_number: "+919876543221",
   },
   {
     id: "pr3",
@@ -610,7 +711,9 @@ export const PRODUCTS: Product[] = [
     rating: 4.7,
     reviews: 89,
     cover_gradient: 2,
+    cover_image: "https://images.unsplash.com/photo-1513475382585-d06e58bcb5c0?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     in_stock: true,
+    whatsapp_number: "+919876543222",
   },
   {
     id: "pr4",
@@ -625,7 +728,9 @@ export const PRODUCTS: Product[] = [
     rating: 4.6,
     reviews: 178,
     cover_gradient: 3,
+    cover_image: "https://images.unsplash.com/photo-1438032005730-c779502df39b?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     in_stock: true,
+    whatsapp_number: "+919876543223",
   },
   {
     id: "pr5",
@@ -640,7 +745,9 @@ export const PRODUCTS: Product[] = [
     rating: 4.9,
     reviews: 412,
     cover_gradient: 4,
+    cover_image: "https://images.unsplash.com/photo-1520637836862-4d197d17c91a?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     in_stock: true,
+    whatsapp_number: "+919876543220",
   },
   {
     id: "pr6",
@@ -655,7 +762,9 @@ export const PRODUCTS: Product[] = [
     rating: 4.8,
     reviews: 67,
     cover_gradient: 5,
+    cover_image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     in_stock: false,
+    whatsapp_number: "+919876543221",
   },
 ];
 
@@ -956,3 +1065,233 @@ export const DAILY_VERSES = [
     reflection: "Prayer is not a last resort, but our first response. Maintain steady faith and support each other through seasons of waiting and transformation.",
   },
 ];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// APOLOGETICS Q&A — Questions asked by users, answered by pastors/admins
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const APOLOGETICS_QUESTIONS: ApologeticsQuestion[] = [
+  {
+    id: "qa1",
+    title: "If God is good, why is there so much suffering in the world?",
+    body: "I've been struggling with this question for a long time. My friend was diagnosed with cancer at 28 and I don't understand why a loving God would allow this. Please help me understand.",
+    author: "Anonymous",
+    topic: "problem_of_evil",
+    date: "2025-01-18",
+    likes: 67,
+    status: "answered",
+    answers: [
+      {
+        id: "qa1a1",
+        author: "Pastor Ravi Zacharias",
+        authorRole: "Pastor",
+        authorChurch: "New Life Fellowship",
+        body: "Your question is one of the most honest and difficult ones we can ask. I'm so sorry about your friend. Here's how I've come to understand it: God created us with genuine free will — without the possibility of choosing evil, love would be forced, not love. But God didn't stay distant from suffering; He entered it. Jesus wept at Lazarus's tomb. He sweat blood in Gethsemane. He cried 'My God, why have you forsaken me?' on the cross. God's answer to suffering isn't an explanation — it's His presence. And He promises that one day He will wipe every tear (Rev 21:4). In the meantime, we walk with Him and with each other. Praying for your friend right now.",
+        date: "2025-01-19",
+        is_accepted: true,
+        likes: 89,
+      },
+      {
+        id: "qa1a2",
+        author: "Dr. William Craig",
+        authorRole: "Church Leader",
+        body: "Adding to Pastor Ravi's beautiful response — philosophically, the 'soul-making theodicy' (John Hick) suggests that suffering can produce virtues like courage, compassion, and patience that cannot exist without adversity. This doesn't make suffering 'good' but explains how God can redeem it. Romans 8:28 promises He works all things for good for those who love Him.",
+        date: "2025-01-20",
+        is_accepted: false,
+        likes: 34,
+      },
+    ],
+  },
+  {
+    id: "qa2",
+    title: "How can I be sure Jesus actually rose from the dead?",
+    body: "I believe in God but I struggle with the resurrection. It feels like a story. What's the actual historical evidence?",
+    author: "Daniel Kumar",
+    topic: "resurrection",
+    date: "2025-01-16",
+    likes: 124,
+    status: "answered",
+    answers: [
+      {
+        id: "qa2a1",
+        author: "Dr. Gary Habermas",
+        authorRole: "Church Leader",
+        authorChurch: "Bethel AG Church",
+        body: "Great question. Even skeptical historians accept these facts: (1) Jesus died by crucifixion. (2) His tomb was found empty. (3) Multiple people, including skeptics like Paul and James, claimed to see Him alive after. (4) The disciples were transformed from fearful cowards to bold preachers willing to die for this claim. The best explanation that fits all the data is that He actually rose. Read 'The Case for the Resurrection of Jesus' for a deep dive.",
+        date: "2025-01-17",
+        is_accepted: true,
+        likes: 156,
+      },
+    ],
+  },
+  {
+    id: "qa3",
+    title: "Is evolution compatible with Christianity?",
+    body: "I'm a biology student and I see strong evidence for evolution. Can I be a Christian and believe in evolution?",
+    author: "Grace Sharma",
+    topic: "science_faith",
+    date: "2025-01-14",
+    likes: 92,
+    status: "open",
+    answers: [],
+  },
+  {
+    id: "qa4",
+    title: "Why are there so many different Christian denominations?",
+    body: "If there's one Bible and one Jesus, why are there Catholics, Baptists, Pentecostals, etc.? It's confusing for a new believer.",
+    author: "Joshua Isaac",
+    topic: "world_religions",
+    date: "2025-01-12",
+    likes: 48,
+    status: "open",
+    answers: [],
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRIVIA — Real prizes (admin-listed physical gifts)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TriviaGift = {
+  id: string;
+  title: string;
+  description: string;
+  image_url: string;
+  points_required: number;
+  tier: "bronze" | "silver" | "gold" | "platinum";
+  stock: number;
+};
+
+export const TRIVIA_GIFTS: TriviaGift[] = [
+  {
+    id: "g1",
+    title: "CrossCrafted T-Shirt",
+    description: "Premium cotton tee with the CrossCrafted logo. Available in S, M, L, XL. Choose your size at checkout.",
+    image_url: "https://images.unsplash.com/photo-1438032005730-c779502df39b?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
+    points_required: 500,
+    tier: "bronze",
+    stock: 50,
+  },
+  {
+    id: "g2",
+    title: "Personalized Bible (ESV)",
+    description: "English Standard Version Bible with your name embossed on the cover. Genuine leather binding.",
+    image_url: "https://images.unsplash.com/photo-1546484959-f9a381d1330d?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
+    points_required: 1500,
+    tier: "silver",
+    stock: 20,
+  },
+  {
+    id: "g3",
+    title: "Olive Wood Cross from Bethlehem",
+    description: "Hand-carved olive wood cross imported from Bethlehem. Each piece is unique. Comes with certificate of authenticity.",
+    image_url: "https://images.unsplash.com/photo-1565728744382-61accd4aa148?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
+    points_required: 3000,
+    tier: "gold",
+    stock: 10,
+  },
+  {
+    id: "g4",
+    title: "Worship Album Bundle (5 CDs)",
+    description: "5 acclaimed worship albums from leading Christian artists. Plus a digital download code.",
+    image_url: "https://images.unsplash.com/photo-1513475382585-d06e58bcb5c0?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
+    points_required: 1000,
+    tier: "bronze",
+    stock: 30,
+  },
+  {
+    id: "g5",
+    title: "Devotional Library (10 Books)",
+    description: "Curated collection of 10 classic devotionals including Lewis, Tozer, Chambers, and Piper. Hardcover editions.",
+    image_url: "https://images.unsplash.com/photo-1520637836862-4d197d17c91a?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
+    points_required: 5000,
+    tier: "platinum",
+    stock: 5,
+  },
+  {
+    id: "g6",
+    title: "Jerusalem Pilgrimage Voucher",
+    description: "Partial sponsorship voucher for a guided Holy Land tour. Visit Jerusalem, Bethlehem, and Galilee.",
+    image_url: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
+    points_required: 10000,
+    tier: "platinum",
+    stock: 2,
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRIVIA — Church vs Church Competitions
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TriviaCompetition = {
+  id: string;
+  title: string;
+  description: string;
+  start_date: string;
+  end_date: string;
+  prize: string;
+  prize_image?: string;
+  participants: { church_id: string; church_name: string; score: number; players: number }[];
+  status: "upcoming" | "live" | "ended";
+  organizer: string;
+};
+
+export const TRIVIA_COMPETITIONS: TriviaCompetition[] = [
+  {
+    id: "comp1",
+    title: "Bangalore Bible Bowl 2025",
+    description:
+      "Annual Bible trivia championship for churches across Bengaluru. Each church fields 5 players. Top 3 churches win cash prizes + trophies. Individual MVP wins a personalized Bible.",
+    start_date: inDays(7),
+    end_date: inDays(9),
+    prize: "₹25,000 cash + Trophy + Personalized Bibles",
+    prize_image: "https://images.unsplash.com/photo-1546484959-f9a381d1330d?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
+    organizer: "CrossCrafted + Grace City Church",
+    status: "upcoming",
+    participants: [
+      { church_id: "c1", church_name: "Grace City Church", score: 0, players: 5 },
+      { church_id: "c8", church_name: "Living Hope Church", score: 0, players: 4 },
+    ],
+  },
+  {
+    id: "comp2",
+    title: "South India Scripture Showdown",
+    description:
+      "Inter-state competition for churches in Tamil Nadu, Kerala, Karnataka, and Telangana. 7-day trivia marathon. Categories: Full Bible, NT, OT, Apologetics.",
+    start_date: inDays(-3),
+    end_date: inDays(4),
+    prize: "₹50,000 + Featured spot on CrossCrafted home page",
+    prize_image: "https://images.unsplash.com/photo-1565728744382-61accd4aa148?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
+    organizer: "CrossCrafted",
+    status: "live",
+    participants: [
+      { church_id: "c1", church_name: "Grace City Church", score: 4280, players: 12 },
+      { church_id: "c3", church_name: "Bethel AG Church", score: 5140, players: 18 },
+      { church_id: "c4", church_name: "Covenant Community Church", score: 3620, players: 8 },
+      { church_id: "c5", church_name: "Zion Mar Thoma Church", score: 4890, players: 15 },
+    ],
+  },
+  {
+    id: "comp3",
+    title: "Mumbai Revival Trivia Challenge",
+    description:
+      "Solo player competition for individuals across Maharashtra. Top 10 players win worship album bundles and CrossCrafted merchandise.",
+    start_date: inDays(-30),
+    end_date: inDays(-1),
+    prize: "Worship Album Bundle + CrossCrafted T-Shirts",
+    prize_image: "https://images.unsplash.com/photo-1513475382585-d06e58bcb5c0?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
+    organizer: "New Life Fellowship",
+    status: "ended",
+    participants: [
+      { church_id: "c2", church_name: "New Life Fellowship", score: 6720, players: 24 },
+      { church_id: "c7", church_name: "Calvary Baptist Church", score: 5340, players: 16 },
+    ],
+  },
+];
+
+// Player invitations - share links for inviting friends/groups
+export function generateInviteLink(competitionId: string, playerName: string): string {
+  const invite = `Hey! ${playerName} invited you to join a Bible Trivia competition on CrossCrafted. Play now: https://crosscrafted.app/trivia?comp=${competitionId}&invited_by=${encodeURIComponent(playerName)}`;
+  return invite;
+}
+

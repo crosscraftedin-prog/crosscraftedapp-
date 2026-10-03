@@ -12,11 +12,15 @@ import {
   Store,
   MapPin,
   Truck,
+  Image as ImageIcon,
+  Phone,
+  IndianRupee,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   PRODUCTS,
   CHURCH_GRADIENTS,
+  INDIAN_STATES,
   type Product,
 } from "@/lib/crosscrafted-data";
 
@@ -35,13 +39,73 @@ const StarRating = ({ rating, size = 11 }: { rating: number; size?: number }) =>
   </div>
 );
 
+const WhatsAppIcon = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+  </svg>
+);
+
 export default function ShopView() {
-  const [products] = useState<Product[]>(PRODUCTS);
+  const [products, setProducts] = useState<Product[]>(PRODUCTS);
   const [wishlist, setWishlist] = useState<Set<string>>(new Set());
   const [cart, setCart] = useState<Set<string>>(new Set());
   const [activeCategory, setActiveCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [openProduct, setOpenProduct] = useState<Product | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    price: "",
+    mrp: "",
+    category: "Bibles",
+    vendor: "",
+    city: "",
+    state: "",
+    cover_image: "",
+    whatsapp_number: "",
+  });
+
+  const handleCreateProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name || !formData.price || !formData.whatsapp_number) {
+      toast.error("Please fill in name, price, and WhatsApp number");
+      return;
+    }
+    const newProduct: Product = {
+      id: `pr${Date.now()}`,
+      name: formData.name,
+      description: formData.description,
+      price: Number(formData.price),
+      mrp: formData.mrp ? Number(formData.mrp) : Number(formData.price),
+      category: formData.category,
+      vendor: formData.vendor || "Individual Seller",
+      city: formData.city || "—",
+      rating: 0,
+      reviews: 0,
+      cover_gradient: Math.floor(Math.random() * CHURCH_GRADIENTS.length),
+      cover_image: formData.cover_image || undefined,
+      in_stock: true,
+      whatsapp_number: formData.whatsapp_number,
+    };
+    setProducts([newProduct, ...products]);
+    setFormData({
+      name: "",
+      description: "",
+      price: "",
+      mrp: "",
+      category: "Bibles",
+      vendor: "",
+      city: "",
+      state: "",
+      cover_image: "",
+      whatsapp_number: "",
+    });
+    setShowCreateModal(false);
+    toast.success("Product listed!", {
+      description: "Buyers can now contact you on WhatsApp to purchase.",
+    });
+  };
 
   const filtered = useMemo(() => {
     return products.filter((p) => {
@@ -102,7 +166,7 @@ export default function ShopView() {
             </button>
           )}
           <button
-            onClick={() => toast("Listing flow coming soon!", { description: "For now, browse the catalog." })}
+            onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all hover:-translate-y-px"
             style={{ background: "linear-gradient(135deg, #9786E3, #38BDF8)" }}
           >
@@ -151,10 +215,19 @@ export default function ShopView() {
               onClick={() => setOpenProduct(product)}
               className="bg-[#1C1929] border border-white/[0.06] rounded-2xl overflow-hidden cursor-pointer hover:border-white/[0.12] transition-all group"
             >
-              <div
-                className="relative h-32"
-                style={{ background: CHURCH_GRADIENTS[product.cover_gradient] }}
-              >
+              <div className="relative h-32">
+                {product.cover_image ? (
+                  <img
+                    src={product.cover_image}
+                    alt={product.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                ) : (
+                  <div
+                    className="w-full h-full"
+                    style={{ background: CHURCH_GRADIENTS[product.cover_gradient] }}
+                  />
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-[#1C1929]/40 to-transparent" />
                 {discount > 0 && (
                   <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-[#EF4444] text-white text-[9px] font-bold uppercase tracking-wider">
@@ -230,10 +303,19 @@ export default function ShopView() {
               transition={{ type: "spring", damping: 30, stiffness: 350 }}
               className="bg-[#1C1929] border border-white/[0.08] rounded-t-[28px] md:rounded-[24px] w-full max-w-lg max-h-[90vh] overflow-y-auto"
             >
-              <div
-                className="relative h-56"
-                style={{ background: CHURCH_GRADIENTS[openProduct.cover_gradient] }}
-              >
+              <div className="relative h-56">
+                {openProduct.cover_image ? (
+                  <img
+                    src={openProduct.cover_image}
+                    alt={openProduct.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div
+                    className="w-full h-full"
+                    style={{ background: CHURCH_GRADIENTS[openProduct.cover_gradient] }}
+                  />
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-[#1C1929] via-transparent to-transparent" />
                 <button
                   onClick={() => setOpenProduct(null)}
@@ -306,6 +388,18 @@ export default function ShopView() {
                   >
                     <Heart size={18} fill={wishlist.has(openProduct.id) ? "currentColor" : "none"} />
                   </button>
+                  {openProduct.whatsapp_number && (
+                    <a
+                      href={`https://wa.me/${openProduct.whatsapp_number.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
+                        `Hello! I'm interested in buying "${openProduct.name}" listed for ₹${openProduct.price} on CrossCrafted. Is it available?`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-[#25D366] hover:bg-[#1FB855] transition-all hover:-translate-y-px flex items-center justify-center gap-2"
+                    >
+                      <WhatsAppIcon size={16} /> Contact Seller
+                    </a>
+                  )}
                   <button
                     onClick={() => {
                       addToCart(openProduct);
@@ -319,6 +413,204 @@ export default function ShopView() {
                   </button>
                 </div>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* List Item Modal */}
+      <AnimatePresence>
+        {showCreateModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-end md:items-center justify-center z-[60]"
+            onClick={(e) => e.target === e.currentTarget && setShowCreateModal(false)}
+          >
+            <motion.div
+              initial={{ y: 100 }}
+              animate={{ y: 0 }}
+              exit={{ y: 100 }}
+              transition={{ type: "spring", damping: 30, stiffness: 350 }}
+              className="bg-[#1C1929] border-t md:border border-white/[0.08] rounded-t-[28px] md:rounded-[24px] w-full max-w-lg p-5 max-h-[85vh] overflow-y-auto"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-bold bg-gradient-to-r from-[#9786E3] to-[#38BDF8] bg-clip-text text-transparent">
+                  List an Item
+                </h2>
+                <button onClick={() => setShowCreateModal(false)} className="text-[#64748B] hover:text-white p-1">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="bg-[#25D366]/8 border border-[#25D366]/25 rounded-xl p-3 mb-4 flex items-start gap-2">
+                <WhatsAppIcon size={16} />
+                <div>
+                  <p className="text-[11px] font-bold text-[#25D366]">No payment gateway needed</p>
+                  <p className="text-[10px] text-[#A09DB1] leading-relaxed mt-0.5">
+                    Buyers will contact you directly on WhatsApp. You arrange payment &amp; delivery with them.
+                  </p>
+                </div>
+              </div>
+              <form onSubmit={handleCreateProduct} className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                    Product Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="neo-input text-sm"
+                    placeholder="e.g. ESV Study Bible"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                    Description
+                  </label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    className="neo-input h-20 resize-none text-sm"
+                    placeholder="Condition, features, what's included..."
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                      <IndianRupee size={10} className="inline mr-0.5" /> Selling Price *
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.price}
+                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                      className="neo-input text-sm"
+                      placeholder="999"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                      <IndianRupee size={10} className="inline mr-0.5" /> MRP (optional)
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.mrp}
+                      onChange={(e) => setFormData({ ...formData, mrp: e.target.value })}
+                      className="neo-input text-sm"
+                      placeholder="1499"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                      Category
+                    </label>
+                    <select
+                      value={formData.category}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                      className="neo-input text-sm"
+                    >
+                      {CATEGORIES.filter((c) => c !== "All").map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                      State
+                    </label>
+                    <select
+                      value={formData.state}
+                      onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                      className="neo-input text-sm"
+                    >
+                      <option value="">Select state</option>
+                      {INDIAN_STATES.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      className="neo-input text-sm"
+                      placeholder="Mumbai"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                      Vendor / Your Name
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.vendor}
+                      onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
+                      className="neo-input text-sm"
+                      placeholder="Your name or shop"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                    <ImageIcon size={10} className="inline mr-0.5" /> Product Image URL
+                  </label>
+                  <input
+                    type="url"
+                    value={formData.cover_image}
+                    onChange={(e) => setFormData({ ...formData, cover_image: e.target.value })}
+                    className="neo-input text-sm"
+                    placeholder="https://example.com/photo.jpg"
+                  />
+                  {formData.cover_image && (
+                    <div className="mt-2 rounded-xl overflow-hidden h-24 border border-white/[0.06]">
+                      <img src={formData.cover_image} alt="preview" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                    <Phone size={10} className="inline mr-0.5" /> WhatsApp Number *
+                  </label>
+                  <input
+                    type="tel"
+                    value={formData.whatsapp_number}
+                    onChange={(e) => setFormData({ ...formData, whatsapp_number: e.target.value })}
+                    className="neo-input text-sm"
+                    placeholder="+91 98765 43210"
+                    required
+                  />
+                  <p className="text-[10px] text-[#64748B] mt-1">
+                    Buyers will see a "Contact Seller" button that opens WhatsApp with this number.
+                  </p>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-white/[0.04] text-[#94A3B8] hover:text-white border border-white/[0.06]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white"
+                    style={{ background: "linear-gradient(135deg, #9786E3, #38BDF8)" }}
+                  >
+                    List Item
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </motion.div>
         )}

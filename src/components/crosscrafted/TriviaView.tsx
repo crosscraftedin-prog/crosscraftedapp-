@@ -21,6 +21,11 @@ import {
   Cross,
   Scroll,
   Shield,
+  UserPlus,
+  Users,
+  Gift,
+  Calendar,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -28,6 +33,8 @@ import {
   QUIZ_CATEGORIES,
   PRIZE_TIERS,
   TRIVIA_QUESTIONS,
+  TRIVIA_GIFTS,
+  TRIVIA_COMPETITIONS,
   MOCK_LEADERBOARD,
   type TriviaQuestion,
 } from "@/lib/crosscrafted-data";
@@ -95,7 +102,7 @@ export default function TriviaView() {
   const [bestStreak, setBestStreak] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
-  const [activeTab, setActiveTab] = useState<"play" | "leaderboard" | "stats">("play");
+  const [activeTab, setActiveTab] = useState<"play" | "compete" | "rewards" | "leaderboard" | "stats">("play");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [stats, setStats] = useState(getStats);
 
@@ -210,10 +217,60 @@ export default function TriviaView() {
     }
   };
 
-  const shareResults = () => {
+  const shareResults = async () => {
     const text = `Bible Trivia Challenge!\n\nScore: ${score} pts | Correct: ${correctCount}/${questions.length} | Best Streak: ${bestStreak}\nLevel: ${selectedLevel?.label} | Category: ${selectedCategory?.label}\n\nPlay now on CrossCrafted!`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "CrossCrafted Bible Trivia",
+          text,
+          url: window.location.href,
+        });
+        return;
+      } catch (_) {
+        // user cancelled — fall through to clipboard
+      }
+    }
     navigator.clipboard.writeText(text);
     toast.success("Results copied to clipboard!");
+  };
+
+  const inviteFriend = async () => {
+    const text = `Hey! Come play Bible Trivia with me on CrossCrafted. I just scored ${score} points in ${selectedLevel?.label} ${selectedCategory?.label}! Can you beat me? 💪`;
+    const url = `${window.location.origin}/?comp=trivia&invited_by=you`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Join me on CrossCrafted",
+          text,
+          url,
+        });
+        return;
+      } catch (_) {
+        // fall through
+      }
+    }
+    navigator.clipboard.writeText(`${text}\n\n${url}`);
+    toast.success("Invite link copied!", { description: "Share with friends via WhatsApp, SMS, or any app." });
+  };
+
+  const inviteGroup = async () => {
+    const text = `🎮 Let's play Bible Trivia together on CrossCrafted!\n\nI'm starting a group game — join me and let's see who knows the Bible best. Multiple players can play the same quiz and compare scores!\n\nLevel: ${selectedLevel?.label} | Category: ${selectedCategory?.label}`;
+    const url = `${window.location.origin}/?comp=trivia&group=true&invited_by=you`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Group Bible Trivia",
+          text,
+          url,
+        });
+        return;
+      } catch (_) {
+        // fall through
+      }
+    }
+    navigator.clipboard.writeText(`${text}\n\n${url}`);
+    toast.success("Group invite copied!", { description: "Send to your church group on WhatsApp." });
   };
 
   const resetGame = () => {
@@ -255,16 +312,18 @@ export default function TriviaView() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-white/[0.04] border border-white/[0.06] rounded-2xl mb-5">
+      <div className="flex gap-1 p-1 bg-white/[0.04] border border-white/[0.06] rounded-2xl mb-5 overflow-x-auto">
         {([
           { id: "play", label: "Play" },
-          { id: "leaderboard", label: "Leaderboard" },
+          { id: "compete", label: "Compete" },
+          { id: "rewards", label: "Rewards" },
+          { id: "leaderboard", label: "Leaders" },
           { id: "stats", label: "My Stats" },
         ] as const).map((t) => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`flex-1 min-w-fit px-3 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
               activeTab === t.id
                 ? "bg-[#7C3AED] text-white shadow-lg shadow-[#7C3AED]/25"
                 : "text-[#94A3B8] hover:text-white"
@@ -625,6 +684,27 @@ export default function TriviaView() {
                     <RotateCcw size={14} /> Play Again
                   </button>
                 </div>
+
+                {/* Invite friends / group */}
+                <div className="max-w-sm mx-auto w-full space-y-2 pt-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] text-center">
+                    Challenge your friends
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={inviteFriend}
+                      className="flex-1 py-2.5 rounded-xl bg-[#25D366]/15 border border-[#25D366]/30 text-[#25D366] hover:bg-[#25D366]/25 text-[11px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <UserPlus size={13} /> Invite Friend
+                    </button>
+                    <button
+                      onClick={inviteGroup}
+                      className="flex-1 py-2.5 rounded-xl bg-[#38BDF8]/15 border border-[#38BDF8]/30 text-[#38BDF8] hover:bg-[#38BDF8]/25 text-[11px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Users size={13} /> Invite Group
+                    </button>
+                  </div>
+                </div>
               </motion.div>
             )}
           </motion.div>
@@ -675,6 +755,18 @@ export default function TriviaView() {
                 </div>
               </div>
             ))}
+          </motion.div>
+        )}
+
+        {activeTab === "compete" && (
+          <motion.div key="compete" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <CompeteView userPoints={stats.totalPoints} />
+          </motion.div>
+        )}
+
+        {activeTab === "rewards" && (
+          <motion.div key="rewards" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <RewardsView userPoints={stats.totalPoints} />
           </motion.div>
         )}
 
@@ -783,6 +875,307 @@ export default function TriviaView() {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── COMPETE VIEW ──────────────────────────────────────────────────────────
+
+function CompeteView({ userPoints }: { userPoints: number }) {
+  const [joinedCompetitions, setJoinedCompetitions] = useState<Set<string>>(new Set());
+
+  const handleJoin = (compId: string, title: string) => {
+    setJoinedCompetitions((prev) => {
+      const next = new Set(prev);
+      if (next.has(compId)) {
+        next.delete(compId);
+        toast("Left competition");
+      } else {
+        next.add(compId);
+        toast.success(`Joined "${title}"!`, {
+          description: "Play trivia normally — your points count toward your church's score.",
+        });
+      }
+      return next;
+    });
+  };
+
+  const handleInviteChurch = async (compTitle: string) => {
+    const text = `🏆 "${compTitle}" — a Bible Trivia competition on CrossCrafted!\n\nMy church is competing. Is yours? Join us and let's see who knows the Bible best!`;
+    const url = `${window.location.origin}/?comp=trivia`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Church Trivia Competition", text, url });
+        return;
+      } catch (_) {}
+    }
+    navigator.clipboard.writeText(`${text}\n\n${url}`);
+    toast.success("Invite copied!", { description: "Share with your church group." });
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="bg-gradient-to-br from-[#1C1929] to-[#2B254E] border border-[#7C3AED]/20 rounded-2xl p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Trophy size={16} className="text-[#F59E0B]" />
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B]">Church vs Church</p>
+        </div>
+        <p className="text-sm font-bold text-white mb-1">Compete with other churches</p>
+        <p className="text-[11px] text-[#A09DB1] leading-relaxed">
+          Join a competition, play trivia normally, and your points count toward your church's score.
+          Top churches win cash prizes, trophies, and real gifts.
+        </p>
+      </div>
+
+      {/* Competitions */}
+      {TRIVIA_COMPETITIONS.map((comp, i) => {
+        const isJoined = joinedCompetitions.has(comp.id);
+        const sorted = [...comp.participants].sort((a, b) => b.score - a.score);
+        const leader = sorted[0];
+        return (
+          <motion.div
+            key={comp.id}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.06 }}
+            className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4"
+          >
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
+                      comp.status === "live"
+                        ? "bg-[#EF4444]/15 text-[#EF4444]"
+                        : comp.status === "upcoming"
+                        ? "bg-[#38BDF8]/15 text-[#38BDF8]"
+                        : "bg-white/[0.06] text-[#94A3B8]"
+                    }`}
+                  >
+                    {comp.status === "live" && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#EF4444] mr-1 animate-pulse" />}
+                    {comp.status}
+                  </span>
+                  <span className="text-[10px] text-[#94A3B8]">{comp.organizer}</span>
+                </div>
+                <h3 className="text-base font-bold text-white mb-1">{comp.title}</h3>
+                <p className="text-[11px] text-[#A09DB1] leading-relaxed line-clamp-2">{comp.description}</p>
+              </div>
+              {comp.prize_image && (
+                <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 ml-2 border border-white/[0.06]">
+                  <img src={comp.prize_image} alt="" className="w-full h-full object-cover" />
+                </div>
+              )}
+            </div>
+
+            {/* Prize */}
+            <div className="bg-[#F59E0B]/8 border border-[#F59E0B]/20 rounded-xl p-2.5 mb-3 flex items-center gap-2">
+              <Gift size={14} className="text-[#F59E0B] shrink-0" />
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B]">Prize</p>
+                <p className="text-[11px] text-white">{comp.prize}</p>
+              </div>
+            </div>
+
+            {/* Leaderboard */}
+            {comp.status !== "upcoming" && sorted.length > 0 && (
+              <div className="mb-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">
+                  {comp.status === "live" ? "Live Standings" : "Final Results"}
+                </p>
+                <div className="space-y-1.5">
+                  {sorted.map((p, idx) => (
+                    <div key={p.church_id} className="flex items-center gap-2">
+                      <div
+                        className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-extrabold ${
+                          idx === 0
+                            ? "bg-[#F59E0B] text-slate-950"
+                            : idx === 1
+                            ? "bg-[#94A3B8] text-slate-950"
+                            : idx === 2
+                            ? "bg-[#F97316] text-slate-950"
+                            : "bg-white/[0.06] text-white"
+                        }`}
+                      >
+                        {idx + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-white truncate">{p.church_name}</p>
+                        <p className="text-[9px] text-[#94A3B8]">{p.players} players</p>
+                      </div>
+                      <span className="text-xs font-bold text-[#F59E0B] tabular-nums">
+                        {p.score.toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-2 border-t border-white/[0.04]">
+              {comp.status !== "ended" && (
+                <button
+                  onClick={() => handleJoin(comp.id, comp.title)}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                    isJoined
+                      ? "bg-[#22C55E]/15 border border-[#22C55E]/30 text-[#22C55E]"
+                      : "bg-[#7C3AED] hover:bg-[#6D28D9] text-white"
+                  }`}
+                >
+                  {isJoined ? "✓ Joined" : "Join Competition"}
+                </button>
+              )}
+              <button
+                onClick={() => handleInviteChurch(comp.title)}
+                className="flex-1 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+              >
+                <Users size={12} /> Invite Church
+              </button>
+            </div>
+          </motion.div>
+        );
+      })}
+
+      {/* Host your own */}
+      <div className="bg-[#1C1929] border border-dashed border-white/[0.12] rounded-2xl p-4 text-center">
+        <Calendar size={20} className="mx-auto text-[#7C3AED] mb-2" />
+        <p className="text-sm font-bold text-white mb-1">Want to host a competition?</p>
+        <p className="text-[11px] text-[#94A3B8] mb-3 max-w-xs mx-auto">
+          Pastors and church admins can create custom trivia competitions for their church or inter-church events.
+        </p>
+        <button
+          onClick={() => toast("Admin access required", { description: "Sign in as a church admin to host competitions." })}
+          className="px-4 py-2 rounded-xl bg-[#7C3AED]/15 border border-[#7C3AED]/30 text-[#A78BFA] text-xs font-bold hover:bg-[#7C3AED]/25 transition-all"
+        >
+          Host a Competition
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── REWARDS VIEW ──────────────────────────────────────────────────────────
+
+function RewardsView({ userPoints }: { userPoints: number }) {
+  const [claimedGifts, setClaimedGifts] = useState<Set<string>>(new Set());
+
+  const tierColors = {
+    bronze: "#CD7F32",
+    silver: "#C0C0C0",
+    gold: "#FFD700",
+    platinum: "#E5E4E2",
+  };
+
+  const handleClaim = (giftId: string, title: string, points_required: number) => {
+    if (userPoints < points_required) {
+      toast.error("Not enough points", {
+        description: `You need ${points_required - userPoints} more points to claim this gift.`,
+      });
+      return;
+    }
+    setClaimedGifts((prev) => {
+      const next = new Set(prev);
+      if (next.has(giftId)) {
+        next.delete(giftId);
+        toast("Removed from claimed");
+      } else {
+        next.add(giftId);
+        toast.success(`Claimed: ${title}!`, {
+          description: "Admin will contact you via WhatsApp to arrange delivery.",
+        });
+      }
+      return next;
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="bg-gradient-to-br from-[#1C1929] to-[#2B254E] border border-[#F59E0B]/20 rounded-2xl p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Gift size={16} className="text-[#F59E0B]" />
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B]">Real Gifts</p>
+            </div>
+            <p className="text-2xl font-extrabold text-white">{userPoints.toLocaleString()} pts</p>
+            <p className="text-[11px] text-[#94A3B8] mt-0.5">Available to redeem</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] uppercase tracking-wider text-[#94A3B8]">Claimed</p>
+            <p className="text-2xl font-extrabold text-[#22C55E]">{claimedGifts.size}</p>
+          </div>
+        </div>
+      </div>
+
+      <p className="text-[11px] text-[#94A3B8] px-1">
+        Earn points by playing trivia, then redeem them for real physical gifts.
+        Admin will contact you on WhatsApp to arrange delivery.
+      </p>
+
+      {/* Gifts grid */}
+      <div className="grid grid-cols-2 gap-3">
+        {TRIVIA_GIFTS.map((gift, i) => {
+          const canClaim = userPoints >= gift.points_required;
+          const isClaimed = claimedGifts.has(gift.id);
+          return (
+            <motion.div
+              key={gift.id}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              className="bg-[#1C1929] border border-white/[0.06] rounded-2xl overflow-hidden"
+            >
+              <div className="relative h-24">
+                <img src={gift.image_url} alt={gift.title} className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#1C1929] via-transparent to-transparent" />
+                <span
+                  className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider"
+                  style={{ backgroundColor: `${tierColors[gift.tier]}E6`, color: "#0A0A0A" }}
+                >
+                  {gift.tier}
+                </span>
+                <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-black/60 text-white text-[9px] font-bold">
+                  {gift.stock} left
+                </span>
+              </div>
+              <div className="p-3">
+                <h3 className="text-xs font-bold text-white leading-tight mb-1 line-clamp-1">{gift.title}</h3>
+                <p className="text-[10px] text-[#94A3B8] line-clamp-2 mb-2">{gift.description}</p>
+                <div className="flex items-center gap-1 mb-2">
+                  <Zap size={10} className="text-[#F59E0B]" />
+                  <span className="text-[11px] font-bold text-[#F59E0B]">{gift.points_required.toLocaleString()} pts</span>
+                </div>
+                <button
+                  onClick={() => handleClaim(gift.id, gift.title, gift.points_required)}
+                  disabled={!canClaim}
+                  className={`w-full py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                    isClaimed
+                      ? "bg-[#22C55E]/15 text-[#22C55E] border border-[#22C55E]/30"
+                      : canClaim
+                      ? "bg-[#F59E0B] text-slate-950 hover:bg-[#E59E0B]"
+                      : "bg-white/[0.04] text-[#475569] cursor-not-allowed"
+                  }`}
+                >
+                  {isClaimed ? "✓ Claimed" : canClaim ? "Redeem" : `${gift.points_required - userPoints} more pts`}
+                </button>
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* Earn more CTA */}
+      <div className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4 text-center mt-2">
+        <p className="text-[11px] text-[#94A3B8] mb-2">Need more points to claim a gift?</p>
+        <button
+          onClick={() => toast("Switch to Play tab", { description: "Play trivia to earn more points!" })}
+          className="px-5 py-2 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-bold transition-all"
+        >
+          Play Trivia to Earn
+        </button>
+      </div>
     </div>
   );
 }

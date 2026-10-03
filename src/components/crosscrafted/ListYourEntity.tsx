@@ -13,9 +13,12 @@ import {
   Sparkles,
   Check,
   Send,
+  Plus,
+  Trash2,
+  Image as ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import { INDIAN_STATES, LANGUAGES } from "@/lib/crosscrafted-data";
+import { INDIAN_STATES, LANGUAGES, type ServiceTime } from "@/lib/crosscrafted-data";
 
 type Props = {
   variant: "church" | "business";
@@ -23,7 +26,22 @@ type Props = {
 
 export default function ListYourEntity({ variant }: Props) {
   const [submitted, setSubmitted] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    description: string;
+    state: string;
+    city: string;
+    location: string;
+    contact_name: string;
+    contact_email: string;
+    contact_phone: string;
+    service_times: string;
+    denomination: string;
+    languages: string[];
+    cover_image: string;
+    whatsapp_number: string;
+    serviceRows: ServiceTime[];
+  }>({
     name: "",
     description: "",
     state: "",
@@ -34,8 +52,32 @@ export default function ListYourEntity({ variant }: Props) {
     contact_phone: "",
     service_times: "",
     denomination: "",
-    languages: [] as string[],
+    languages: [],
+    cover_image: "",
+    whatsapp_number: "",
+    serviceRows: [{ language: "English", day: "Sunday", time: "" }],
   });
+
+  const addServiceRow = () => {
+    setFormData((prev) => ({
+      ...prev,
+      serviceRows: [...prev.serviceRows, { language: "English", day: "Sunday", time: "" }],
+    }));
+  };
+
+  const removeServiceRow = (idx: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      serviceRows: prev.serviceRows.filter((_, i) => i !== idx),
+    }));
+  };
+
+  const updateServiceRow = (idx: number, field: keyof ServiceTime, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      serviceRows: prev.serviceRows.map((s, i) => (i === idx ? { ...s, [field]: value } : s)),
+    }));
+  };
 
   const handleLanguageToggle = (lang: string) => {
     setFormData((prev) => ({
@@ -88,6 +130,9 @@ export default function ListYourEntity({ variant }: Props) {
               service_times: "",
               denomination: "",
               languages: [],
+              cover_image: "",
+              whatsapp_number: "",
+              serviceRows: [{ language: "English", day: "Sunday", time: "" }],
             });
           }}
           className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white"
@@ -204,19 +249,7 @@ export default function ListYourEntity({ variant }: Props) {
         </div>
 
         {variant === "church" ? (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
-                <Clock size={10} className="inline mr-0.5" /> Service Times
-              </label>
-              <input
-                type="text"
-                value={formData.service_times}
-                onChange={(e) => setFormData({ ...formData, service_times: e.target.value })}
-                className="neo-input text-sm"
-                placeholder="Sun 9AM & 11AM"
-              />
-            </div>
+          <>
             <div>
               <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
                 Denomination
@@ -229,8 +262,140 @@ export default function ListYourEntity({ variant }: Props) {
                 placeholder="Non-denominational"
               />
             </div>
-          </div>
-        ) : null}
+
+            {/* Multi-row service times */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8]">
+                  <Clock size={10} className="inline mr-0.5" /> Service Times
+                </label>
+                <button
+                  type="button"
+                  onClick={addServiceRow}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#22C55E]/15 border border-[#22C55E]/30 text-[#22C55E] text-[10px] font-bold hover:bg-[#22C55E]/25 transition-all"
+                >
+                  <Plus size={10} /> Add Service
+                </button>
+              </div>
+              <div className="space-y-2">
+                {formData.serviceRows.map((svc, idx) => (
+                  <div key={idx} className="flex gap-2 items-start">
+                    <select
+                      value={svc.language}
+                      onChange={(e) => updateServiceRow(idx, "language", e.target.value)}
+                      className="neo-input text-xs w-28 py-2"
+                    >
+                      {LANGUAGES.map((l) => (
+                        <option key={l} value={l}>{l}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={svc.day}
+                      onChange={(e) => updateServiceRow(idx, "day", e.target.value)}
+                      className="neo-input text-xs w-28 py-2"
+                    >
+                      {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      value={svc.time}
+                      onChange={(e) => updateServiceRow(idx, "time", e.target.value)}
+                      className="neo-input text-xs flex-1 py-2"
+                      placeholder="8:00 AM - 11:00 AM"
+                    />
+                    {formData.serviceRows.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeServiceRow(idx)}
+                        className="p-2 text-[#94A3B8] hover:text-[#EF4444] transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-[#64748B] mt-1.5">
+                Add one row per service. e.g. English 8-11am, Hindi 11:30-2pm.
+              </p>
+            </div>
+
+            {/* Cover Image */}
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                <ImageIcon size={10} className="inline mr-0.5" /> Cover Image URL
+              </label>
+              <input
+                type="url"
+                value={formData.cover_image}
+                onChange={(e) => setFormData({ ...formData, cover_image: e.target.value })}
+                className="neo-input text-sm"
+                placeholder="https://example.com/church-photo.jpg"
+              />
+              {formData.cover_image && (
+                <div className="mt-2 rounded-xl overflow-hidden h-24 border border-white/[0.06]">
+                  <img src={formData.cover_image} alt="preview" className="w-full h-full object-cover" />
+                </div>
+              )}
+            </div>
+
+            {/* WhatsApp */}
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                <Phone size={10} className="inline mr-0.5" /> WhatsApp Number
+              </label>
+              <input
+                type="tel"
+                value={formData.whatsapp_number}
+                onChange={(e) => setFormData({ ...formData, whatsapp_number: e.target.value })}
+                className="neo-input text-sm"
+                placeholder="+91 98765 43210"
+              />
+              <p className="text-[10px] text-[#64748B] mt-1">
+                Visitors can contact your church directly on WhatsApp for inquiries.
+              </p>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Cover Image for business */}
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                <ImageIcon size={10} className="inline mr-0.5" /> Cover Image URL
+              </label>
+              <input
+                type="url"
+                value={formData.cover_image}
+                onChange={(e) => setFormData({ ...formData, cover_image: e.target.value })}
+                className="neo-input text-sm"
+                placeholder="https://example.com/business-photo.jpg"
+              />
+              {formData.cover_image && (
+                <div className="mt-2 rounded-xl overflow-hidden h-24 border border-white/[0.06]">
+                  <img src={formData.cover_image} alt="preview" className="w-full h-full object-cover" />
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                <Phone size={10} className="inline mr-0.5" /> WhatsApp Number *
+              </label>
+              <input
+                type="tel"
+                value={formData.whatsapp_number}
+                onChange={(e) => setFormData({ ...formData, whatsapp_number: e.target.value })}
+                className="neo-input text-sm"
+                placeholder="+91 98765 43210"
+                required
+              />
+              <p className="text-[10px] text-[#64748B] mt-1">
+                Buyers will see a "Contact Seller" button that opens WhatsApp with this number.
+              </p>
+            </div>
+          </>
+        )}
 
         <div>
           <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
