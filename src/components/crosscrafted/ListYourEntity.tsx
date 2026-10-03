@@ -1,0 +1,320 @@
+"use client";
+
+import { useState } from "react";
+import { motion } from "framer-motion";
+import {
+  Building2,
+  Mail,
+  Phone,
+  User,
+  MapPin,
+  Clock,
+  Globe,
+  Sparkles,
+  Check,
+  Send,
+} from "lucide-react";
+import { toast } from "sonner";
+import { INDIAN_STATES, LANGUAGES } from "@/lib/crosscrafted-data";
+
+type Props = {
+  variant: "church" | "business";
+};
+
+export default function ListYourEntity({ variant }: Props) {
+  const [submitted, setSubmitted] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    state: "",
+    city: "",
+    location: "",
+    contact_name: "",
+    contact_email: "",
+    contact_phone: "",
+    service_times: "",
+    denomination: "",
+    languages: [] as string[],
+  });
+
+  const handleLanguageToggle = (lang: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      languages: prev.languages.includes(lang)
+        ? prev.languages.filter((l) => l !== lang)
+        : [...prev.languages, lang],
+    }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitted(true);
+    toast.success(
+      variant === "church" ? "Church listing submitted!" : "Business listing submitted!",
+      {
+        description: "Our team will review and approve within 48 hours.",
+      }
+    );
+  };
+
+  if (submitted) {
+    return (
+      <div className="max-w-[680px] mx-auto px-4 py-12 text-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-[#22C55E]/20 to-[#3B82F6]/20 border border-[#22C55E]/30 mb-4"
+        >
+          <Check size={36} className="text-[#22C55E]" />
+        </motion.div>
+        <h2 className="text-2xl font-extrabold text-white mb-2">Submission Received!</h2>
+        <p className="text-sm text-[#A09DB1] mb-6 max-w-sm mx-auto">
+          Thanks for adding your {variant === "church" ? "church" : "business"} to crosscrafted.
+          Our team will review your submission and approve it within 48 hours. You'll receive
+          an email confirmation once it's live.
+        </p>
+        <button
+          onClick={() => {
+            setSubmitted(false);
+            setFormData({
+              name: "",
+              description: "",
+              state: "",
+              city: "",
+              location: "",
+              contact_name: "",
+              contact_email: "",
+              contact_phone: "",
+              service_times: "",
+              denomination: "",
+              languages: [],
+            });
+          }}
+          className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white"
+          style={{ background: "linear-gradient(135deg, #A855F7, #EC4899)" }}
+        >
+          Submit Another
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-[680px] mx-auto px-4 py-5">
+      <div className="mb-5">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#22C55E]/10 border border-[#22C55E]/25 text-[#22C55E] text-[10px] font-bold uppercase tracking-wider mb-2">
+          <Sparkles size={11} />
+          {variant === "church" ? "Church Directory" : "Marketplace"}
+        </div>
+        <h1 className="text-xl font-bold text-white">
+          {variant === "church" ? "List Your Church" : "List Your Business"}
+        </h1>
+        <p className="text-xs text-[#94A3B8] mt-0.5">
+          {variant === "church"
+            ? "Help believers find a community"
+            : "Reach Christian buyers across India"}
+        </p>
+      </div>
+
+      <div className="bg-gradient-to-br from-[#1C1929] to-[#2B254E] border border-[#22C55E]/15 rounded-2xl p-4 mb-4">
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-xl bg-[#22C55E]/15 border border-[#22C55E]/30 flex items-center justify-center shrink-0">
+            <Building2 size={16} className="text-[#22C55E]" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-white mb-0.5">Why list with us?</p>
+            <p className="text-[11px] text-[#A09DB1] leading-relaxed">
+              {variant === "church"
+                ? "Reach 5,000+ active believers looking for a church home. Add your service times, languages, and denomination to help people find you."
+                : "Connect with thousands of Christian buyers across India. No payment gateway needed — buyers contact you directly via WhatsApp."}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+            {variant === "church" ? "Church" : "Business"} Name
+          </label>
+          <input
+            type="text"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            className="neo-input text-sm"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+            Description
+          </label>
+          <textarea
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            className="neo-input h-24 resize-none text-sm"
+            placeholder={variant === "church" ? "Tell people about your church..." : "What does your business sell?"}
+            required
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+              <MapPin size={10} className="inline mr-0.5" /> State
+            </label>
+            <select
+              value={formData.state}
+              onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+              className="neo-input text-sm"
+              required
+            >
+              <option value="">Select</option>
+              {INDIAN_STATES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+              City
+            </label>
+            <input
+              type="text"
+              value={formData.city}
+              onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+              className="neo-input text-sm"
+              required
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+            Address
+          </label>
+          <input
+            type="text"
+            value={formData.location}
+            onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+            className="neo-input text-sm"
+            required
+          />
+        </div>
+
+        {variant === "church" ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                <Clock size={10} className="inline mr-0.5" /> Service Times
+              </label>
+              <input
+                type="text"
+                value={formData.service_times}
+                onChange={(e) => setFormData({ ...formData, service_times: e.target.value })}
+                className="neo-input text-sm"
+                placeholder="Sun 9AM & 11AM"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                Denomination
+              </label>
+              <input
+                type="text"
+                value={formData.denomination}
+                onChange={(e) => setFormData({ ...formData, denomination: e.target.value })}
+                className="neo-input text-sm"
+                placeholder="Non-denominational"
+              />
+            </div>
+          </div>
+        ) : null}
+
+        <div>
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+            <Globe size={10} className="inline mr-0.5" /> Languages
+          </label>
+          <div className="flex flex-wrap gap-1.5 p-3 bg-white/[0.04] border border-white/[0.06] rounded-xl">
+            {LANGUAGES.map((lang) => {
+              const selected = formData.languages.includes(lang);
+              return (
+                <button
+                  key={lang}
+                  type="button"
+                  onClick={() => handleLanguageToggle(lang)}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
+                    selected
+                      ? "bg-[#22C55E] text-slate-950"
+                      : "bg-white/[0.04] text-[#94A3B8] hover:text-white"
+                  }`}
+                >
+                  {lang}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="border-t border-white/[0.06] pt-3">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-3">
+            Contact Details
+          </p>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                <User size={10} className="inline mr-0.5" /> Contact Name
+              </label>
+              <input
+                type="text"
+                value={formData.contact_name}
+                onChange={(e) => setFormData({ ...formData, contact_name: e.target.value })}
+                className="neo-input text-sm"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                  <Mail size={10} className="inline mr-0.5" /> Email
+                </label>
+                <input
+                  type="email"
+                  value={formData.contact_email}
+                  onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
+                  className="neo-input text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                  <Phone size={10} className="inline mr-0.5" /> Phone
+                </label>
+                <input
+                  type="tel"
+                  value={formData.contact_phone}
+                  onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
+                  className="neo-input text-sm"
+                  placeholder="+91"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          className="w-full py-3.5 rounded-2xl text-sm font-extrabold uppercase tracking-wider flex items-center justify-center gap-2 transition-all hover:-translate-y-px text-white"
+          style={{
+            background: "linear-gradient(135deg, #22C55E, #3B82F6)",
+            boxShadow: "0 4px 16px rgba(34,197,94,0.25)",
+          }}
+        >
+          <Send size={14} /> Submit Listing
+        </button>
+      </form>
+    </div>
+  );
+}
