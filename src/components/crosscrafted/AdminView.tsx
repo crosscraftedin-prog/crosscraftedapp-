@@ -33,13 +33,15 @@ import {
   PRAYERS,
   APOLOGETICS_QUESTIONS,
   TRIVIA_COMPETITIONS,
-  TRIVIA_GIFTS,
   type Church,
   type EventItem,
   type Product,
   type PrayerPost,
   type ApologeticsQuestion,
+  type TriviaGift,
 } from "@/lib/crosscrafted-data";
+import { getAllGifts, getAdminGifts, addGift, updateGift, removeGift, isAdminGift } from "@/lib/gifts-store";
+import ImagePicker from "@/components/crosscrafted/ImagePicker";
 
 const ADMIN_PASSWORD = "crosscrafted2025"; // demo password — replace with real auth
 const ADMIN_SESSION_KEY = "crosscrafted_admin_session";
@@ -756,18 +758,377 @@ function CompetitionsTab() {
       </div>
 
       {/* Gifts management */}
-      <AdminSectionHeader title="Reward Gifts" count={TRIVIA_GIFTS.length} color="#F59E0B" />
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-        {TRIVIA_GIFTS.map((g) => (
-          <div key={g.id} className="bg-[#1C1929] border border-white/[0.06] rounded-xl p-3">
-            <div className="w-full h-20 rounded-lg overflow-hidden mb-2">
-              <img src={g.image_url} alt={g.title} className="w-full h-full object-cover" />
+      <GiftsManagement />
+    </div>
+  );
+}
+
+// ─── GIFTS MANAGEMENT ────────────────────────────────────────────────────
+
+function GiftsManagement() {
+  const [gifts, setGifts] = useState<TriviaGift[]>([]);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<{
+    title: string;
+    description: string;
+    images: string[];
+    points_required: string;
+    tier: "bronze" | "silver" | "gold" | "platinum";
+    stock: string;
+  }>({
+    title: "",
+    description: "",
+    images: [],
+    points_required: "",
+    tier: "bronze",
+    stock: "10",
+  });
+
+  // Load merged gifts (default + admin-added) on mount
+  useEffect(() => {
+    setGifts(getAllGifts());
+  }, []);
+
+  const resetForm = () => {
+    setForm({
+      title: "",
+      description: "",
+      images: [],
+      points_required: "",
+      tier: "bronze",
+      stock: "10",
+    });
+    setEditingId(null);
+    setShowAddForm(false);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.title.trim() || !form.points_required || form.images.length === 0) {
+      toast.error("Please fill in title, points, and add at least 1 image");
+      return;
+    }
+
+    const giftData = {
+      title: form.title.trim(),
+      description: form.description.trim(),
+      image_url: form.images[0], // first image is the cover
+      points_required: Number(form.points_required),
+      tier: form.tier,
+      stock: Number(form.stock) || 0,
+    };
+
+    if (editingId && isAdminGift(editingId)) {
+      // Update existing admin gift
+      updateGift(editingId, giftData);
+      toast.success("Gift updated!", { description: "Changes are live in Trivia > Rewards." });
+    } else {
+      // Add new gift
+      addGift(giftData);
+      toast.success("Gift added!", {
+        description: "It's now visible in Trivia > Rewards for players to redeem.",
+      });
+    }
+
+    setGifts(getAllGifts());
+    resetForm();
+  };
+
+  const handleEdit = (gift: TriviaGift) => {
+    if (!isAdminGift(gift.id)) {
+      toast("Default gifts can't be edited", {
+        description: "Only gifts you've added from the admin panel can be modified.",
+      });
+      return;
+    }
+    setEditingId(gift.id);
+    setForm({
+      title: gift.title,
+      description: gift.description,
+      images: [gift.image_url],
+      points_required: String(gift.points_required),
+      tier: gift.tier,
+      stock: String(gift.stock),
+    });
+    setShowAddForm(true);
+    // Scroll to form
+    setTimeout(() => {
+      document.getElementById("gift-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+  };
+
+  const handleRemove = (id: string) => {
+    if (!isAdminGift(id)) {
+      toast("Default gifts can't be removed", {
+        description: "Only gifts you've added from the admin panel can be deleted.",
+      });
+      return;
+    }
+    removeGift(id);
+    setGifts(getAllGifts());
+    toast("Gift removed", { description: "Players can no longer redeem this gift." });
+  };
+
+  const handleStockChange = (id: string, delta: number) => {
+    if (!isAdminGift(id)) return;
+    const gift = gifts.find((g) => g.id === id);
+    if (!gift) return;
+    const newStock = Math.max(0, gift.stock + delta);
+    updateGift(id, { stock: newStock });
+    setGifts(getAllGifts());
+  };
+
+  const tierColors: Record<string, string> = {
+    bronze: "#CD7F32",
+    silver: "#C0C0C0",
+    gold: "#FFD700",
+    platinum: "#E5E4E2",
+  };
+
+  const adminCount = gifts.filter((g) => isAdminGift(g.id)).length;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <AdminSectionHeader title="Reward Gifts" count={gifts.length} color="#F59E0B" />
+        <button
+          onClick={() => {
+            if (showAddForm) {
+              resetForm();
+            } else {
+              setShowAddForm(true);
+            }
+          }}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#F59E0B] hover:bg-[#E59E0B] text-slate-950 text-xs font-bold transition-all"
+        >
+          {showAddForm ? <X size={12} /> : <Plus size={12} />}
+          {showAddForm ? "Cancel" : "Add Gift"}
+        </button>
+      </div>
+
+      {adminCount > 0 && (
+        <p className="text-[10px] text-[#64748B] px-1">
+          {adminCount} admin-added · {gifts.length - adminCount} default gifts
+        </p>
+      )}
+
+      {/* Add/Edit Gift Form */}
+      <AnimatePresence>
+        {showAddForm && (
+          <motion.form
+            id="gift-form"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            onSubmit={handleSubmit}
+            className="bg-[#1C1929] border border-[#F59E0B]/20 rounded-2xl p-4 space-y-3 overflow-hidden"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Gift size={14} className="text-[#F59E0B]" />
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[#F59E0B]">
+                {editingId ? "Edit Gift" : "Add New Reward Gift"}
+              </p>
             </div>
-            <p className="text-xs font-bold text-white line-clamp-1">{g.title}</p>
-            <p className="text-[10px] text-[#F59E0B] font-bold mt-0.5">{g.points_required} pts</p>
-            <p className="text-[9px] text-[#94A3B8] mt-0.5">{g.stock} in stock</p>
-          </div>
-        ))}
+
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                Gift Title *
+              </label>
+              <input
+                type="text"
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                className="neo-input text-sm"
+                placeholder="e.g. CrossCrafted Hoodie"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                Description
+              </label>
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                className="neo-input text-sm h-16 resize-none"
+                placeholder="What's the gift? Sizes, colors, what's included..."
+              />
+            </div>
+
+            {/* Image upload */}
+            <ImagePicker
+              images={form.images}
+              onChange={(images) => setForm({ ...form, images })}
+              max={3}
+              label="Gift Photos *"
+            />
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                  Points Required *
+                </label>
+                <input
+                  type="number"
+                  value={form.points_required}
+                  onChange={(e) => setForm({ ...form, points_required: e.target.value })}
+                  className="neo-input text-sm"
+                  placeholder="500"
+                  min="1"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                  Tier
+                </label>
+                <select
+                  value={form.tier}
+                  onChange={(e) => setForm({ ...form, tier: e.target.value as any })}
+                  className="neo-input text-sm"
+                >
+                  <option value="bronze">Bronze</option>
+                  <option value="silver">Silver</option>
+                  <option value="gold">Gold</option>
+                  <option value="platinum">Platinum</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                  Stock
+                </label>
+                <input
+                  type="number"
+                  value={form.stock}
+                  onChange={(e) => setForm({ ...form, stock: e.target.value })}
+                  className="neo-input text-sm"
+                  placeholder="10"
+                  min="0"
+                />
+              </div>
+            </div>
+
+            {/* Tier preview */}
+            <div className="flex items-center gap-2 p-2 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+              <span
+                className="px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider"
+                style={{ backgroundColor: `${tierColors[form.tier]}25`, color: tierColors[form.tier] }}
+              >
+                {form.tier}
+              </span>
+              <span className="text-[10px] text-[#94A3B8]">
+                {form.points_required || "0"} pts to unlock · {form.stock || "0"} in stock
+              </span>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={resetForm}
+                className="flex-1 py-2.5 rounded-xl bg-white/[0.04] text-[#94A3B8] hover:text-white border border-white/[0.06] text-sm font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-slate-950 bg-[#F59E0B] hover:bg-[#E59E0B] transition-all"
+              >
+                {editingId ? "Update Gift" : "Add Gift"}
+              </button>
+            </div>
+          </motion.form>
+        )}
+      </AnimatePresence>
+
+      {/* Gifts grid */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+        {gifts.map((g) => {
+          const admin = isAdminGift(g.id);
+          return (
+            <div
+              key={g.id}
+              className={`bg-[#1C1929] border rounded-xl p-3 ${
+                admin ? "border-[#F59E0B]/30" : "border-white/[0.06]"
+              }`}
+            >
+              <div className="relative w-full h-24 rounded-lg overflow-hidden mb-2">
+                <img src={g.image_url} alt={g.title} className="w-full h-full object-cover" />
+                <span
+                  className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider"
+                  style={{ backgroundColor: `${tierColors[g.tier]}E6`, color: "#0A0A0A" }}
+                >
+                  {g.tier}
+                </span>
+                {admin && (
+                  <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded-md bg-[#F59E0B] text-slate-950 text-[8px] font-bold uppercase tracking-wider">
+                    Admin
+                  </span>
+                )}
+              </div>
+              <p className="text-xs font-bold text-white line-clamp-1">{g.title}</p>
+              <p className="text-[9px] text-[#A09DB1] line-clamp-2 mt-0.5 mb-1">{g.description}</p>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold text-[#F59E0B]">{g.points_required.toLocaleString()} pts</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleStockChange(g.id, -1)}
+                    disabled={!admin}
+                    className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold transition-all ${
+                      admin ? "bg-white/[0.06] text-white hover:bg-white/[0.12]" : "bg-white/[0.02] text-[#475569] cursor-not-allowed"
+                    }`}
+                  >
+                    −
+                  </button>
+                  <span className="text-[10px] font-bold text-white tabular-nums w-6 text-center">{g.stock}</span>
+                  <button
+                    onClick={() => handleStockChange(g.id, 1)}
+                    disabled={!admin}
+                    className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold transition-all ${
+                      admin ? "bg-white/[0.06] text-white hover:bg-white/[0.12]" : "bg-white/[0.02] text-[#475569] cursor-not-allowed"
+                    }`}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => handleEdit(g)}
+                  disabled={!admin}
+                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                    admin
+                      ? "bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white"
+                      : "bg-white/[0.02] text-[#475569] cursor-not-allowed"
+                  }`}
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => handleRemove(g.id)}
+                  disabled={!admin}
+                  className={`flex items-center justify-center px-2 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                    admin
+                      ? "bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] hover:bg-[#EF4444]/25"
+                      : "bg-white/[0.02] text-[#475569] cursor-not-allowed"
+                  }`}
+                >
+                  <Trash2 size={11} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="bg-[#F59E0B]/8 border border-[#F59E0B]/20 rounded-xl p-3">
+        <p className="text-[10px] text-[#A09DB1] leading-relaxed">
+          <span className="font-bold text-[#F59E0B]">Tip:</span> Gifts you add appear instantly in the
+          Trivia → Rewards tab for players to redeem. Default gifts (without the "Admin" badge) are
+          seeded examples and can't be edited or removed — only gifts you add here can be modified.
+          When a player redeems a gift, contact them on WhatsApp to arrange delivery.
+        </p>
       </div>
     </div>
   );

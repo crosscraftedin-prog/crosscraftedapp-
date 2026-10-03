@@ -37,6 +37,7 @@ import {
   TRIVIA_COMPETITIONS,
   MOCK_LEADERBOARD,
   type TriviaQuestion,
+  type TriviaGift,
 } from "@/lib/crosscrafted-data";
 import StreakBadge from "@/components/crosscrafted/StreakBadge";
 
@@ -1084,6 +1085,14 @@ function CompeteView({ userPoints }: { userPoints: number }) {
 
 function RewardsView({ userPoints }: { userPoints: number }) {
   const [claimedGifts, setClaimedGifts] = useState<Set<string>>(new Set());
+  const [gifts, setGifts] = useState<TriviaGift[]>([]);
+
+  // Load merged gifts (default + admin-added) on mount
+  useEffect(() => {
+    import("@/lib/gifts-store").then(({ getAllGifts }) => {
+      setGifts(getAllGifts());
+    });
+  }, []);
 
   const tierColors = {
     bronze: "#CD7F32",
@@ -1141,7 +1150,7 @@ function RewardsView({ userPoints }: { userPoints: number }) {
 
       {/* Gifts grid */}
       <div className="grid grid-cols-2 gap-3">
-        {TRIVIA_GIFTS.map((gift, i) => {
+        {gifts.length > 0 ? gifts.map((gift, i) => {
           const canClaim = userPoints >= gift.points_required;
           const isClaimed = claimedGifts.has(gift.id);
           return (
@@ -1188,7 +1197,13 @@ function RewardsView({ userPoints }: { userPoints: number }) {
               </div>
             </motion.div>
           );
-        })}
+        }) : (
+          <div className="col-span-2 text-center py-12">
+            <Gift size={32} className="mx-auto text-[#475569] mb-2" />
+            <p className="text-sm text-[#94A3B8]">No gifts available yet.</p>
+            <p className="text-[10px] text-[#64748B] mt-1">Admins can add gifts from the Admin panel.</p>
+          </div>
+        )}
       </div>
 
       {/* Earn more CTA */}
