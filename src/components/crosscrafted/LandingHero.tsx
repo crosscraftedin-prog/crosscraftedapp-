@@ -96,7 +96,7 @@ export default function LandingHero({ onEnterApp }: Props) {
             <button onClick={() => onEnterApp("bible")} className="hover:text-white transition-colors">Bible</button>
             <button onClick={() => onEnterApp("churches")} className="hover:text-white transition-colors">Churches</button>
             <button onClick={() => onEnterApp("trivia")} className="hover:text-white transition-colors">Trivia</button>
-            <button onClick={() => onEnterApp("shop")} className="hover:text-white transition-colors">Marketplace</button>
+            <button onClick={() => onEnterApp("prayer-wall")} className="hover:text-white transition-colors">Prayer Wall</button>
           </nav>
           <button
             onClick={() => onEnterApp("bible")}
