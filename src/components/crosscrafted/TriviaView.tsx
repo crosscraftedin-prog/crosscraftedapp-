@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Award,
@@ -8,7 +9,6 @@ import {
   X,
   Flame,
   Trophy,
-  Star,
   Play,
   RotateCcw,
   ArrowRight,
@@ -26,22 +26,21 @@ import {
   Gift,
   Calendar,
   Zap,
+  BookMarked,
+  Lock,
+  CheckCircle2,
+  AlertCircle,
+  LogIn,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   QUIZ_LEVELS,
   QUIZ_CATEGORIES,
-  PRIZE_TIERS,
-  TRIVIA_QUESTIONS,
-  TRIVIA_GIFTS,
-  TRIVIA_COMPETITIONS,
-  MOCK_LEADERBOARD,
   type TriviaQuestion,
-  type TriviaGift,
 } from "@/lib/crosscrafted-data";
 import StreakBadge from "@/components/crosscrafted/StreakBadge";
+import { useTriviaApi } from "@/lib/trivia-api";
 
-const STATS_KEY = "crosscrafted_trivia_stats";
 const TIMER_SECONDS: Record<string, number> = {
   beginners: 30,
   intermediate: 20,
@@ -49,124 +48,62 @@ const TIMER_SECONDS: Record<string, number> = {
   expert: 10,
 };
 
-const CATEGORY_ICONS: Record<string, typeof BookOpen> = {
-  full_bible: BookOpen,
-  new_testament: Cross,
-  old_testament: Scroll,
-  apologetics: Shield,
-};
-
-const RANKS = [
-  "Curious Seeker",
-  "Bible Reader",
-  "Scripture Scholar",
-  "Faith Champion",
-  "Word Warrior",
-  "Bible Master",
-];
-
-const getRank = (points: number) => {
-  if (points >= 5000) return 5;
-  if (points >= 3000) return 4;
-  if (points >= 1500) return 3;
-  if (points >= 500) return 2;
-  if (points >= 100) return 1;
-  return 0;
-};
-
-const getStats = () => {
-  try {
-    return JSON.parse(localStorage.getItem(STATS_KEY) || "null") || {
-      gamesPlayed: 0,
-      totalPoints: 0,
-      bestStreak: 0,
-    };
-  } catch {
-    return { gamesPlayed: 0, totalPoints: 0, bestStreak: 0 };
-  }
-};
-
-const saveStats = (s: any) => localStorage.setItem(STATS_KEY, JSON.stringify(s));
-
+type QuizMode = "EARN_POINTS" | "PRACTICE";
 type GameState = "setup" | "playing" | "result";
 
+type ServerQuestion = {
+  id: string;
+  question: string;
+  options: string[];
+  difficulty: string;
+  category: string;
+  basePoints: number;
+  scriptureReference: string | null;
+};
+
+type SubmitResult = {
+  mode: string;
+  totalPointsEarned: number;
+  correctCount: number;
+  totalQuestions: number;
+  newTotalPoints: number;
+  bestStreak?: number;
+  questionResults: {
+    questionId: string;
+    correct: boolean;
+    pointsAwarded: number;
+    alreadyScored: boolean;
+    streakBonus: number;
+    question: string;
+    options: string[];
+    correctAnswer: number;
+    explanation: string;
+    scriptureReference: string | null;
+  }[];
+};
+
 export default function TriviaView() {
+  const { data: session } = useSession();
+  const api = useTriviaApi();
+
   const [selectedLevel, setSelectedLevel] = useState<(typeof QUIZ_LEVELS)[number] | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<(typeof QUIZ_CATEGORIES)[number] | null>(null);
-  const [quizMode, setQuizMode] = useState(10);
+  const [quizMode, setQuizMode] = useState<number>(10);
+  const [gameMode, setGameMode] = useState<QuizMode>("EARN_POINTS");
   const [gameState, setGameState] = useState<GameState>("setup");
-  const [questions, setQuestions] = useState<TriviaQuestion[]>([]);
+  const [questions, setQuestions] = useState<ServerQuestion[]>([]);
   const [currentQ, setCurrentQ] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
-  const [score, setScore] = useState(0);
-  const [streak, setStreak] = useState(0);
-  const [bestStreak, setBestStreak] = useState(0);
-  const [correctCount, setCorrectCount] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
   const [activeTab, setActiveTab] = useState<"play" | "compete" | "rewards" | "leaderboard" | "stats">("play");
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [stats, setStats] = useState(getStats);
+  const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
+  const [quizSession, setQuizSession] = useState<{ difficulty: string; category: string; mode: QuizMode } | null>(null);
+  const [answers, setAnswers] = useState<{ questionId: string; selectedAnswer: number }[]>([]);
+  const [newCount, setNewCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
 
-  const availableQuestions = useMemo(() => {
-    if (!selectedLevel || !selectedCategory) return [];
-    return TRIVIA_QUESTIONS.filter(
-      (q) => q.difficulty === selectedLevel.id && q.category === selectedCategory.id
-    );
-  }, [selectedLevel, selectedCategory]);
-
-  // Quiz flow functions — declared in dependency order:
-  // finishGame → advanceQuestion → handleTimeUp (so each one's references are already defined).
-  const finishGame = () => {
-    setGameState("result");
-    const newStats = {
-      gamesPlayed: stats.gamesPlayed + 1,
-      totalPoints: stats.totalPoints + score,
-      bestStreak: Math.max(stats.bestStreak, bestStreak),
-    };
-    setStats(newStats);
-    saveStats(newStats);
-
-    // Record daily trivia play streak — once per day
-    try {
-      const streaksRaw = localStorage.getItem("crosscrafted_streaks") || "{}";
-      const before = JSON.parse(streaksRaw);
-      const prevDate = before?.trivia_play?.lastActiveDate;
-      const today = new Date().toISOString().split("T")[0];
-      if (prevDate !== today) {
-        import("@/lib/streaks").then(({ recordStreak }) => {
-          const info = recordStreak("trivia_play");
-          if (info.currentStreak === 1) {
-            toast("🔥 Trivia streak started!", { description: "Play daily to keep it alive." });
-          } else if ([3, 7, 14, 30, 60, 90].includes(info.currentStreak)) {
-            toast.success(`🔥 ${info.currentStreak}-day trivia streak!`, {
-              description: "You're on fire! Keep playing daily.",
-            });
-          }
-        });
-      }
-    } catch {
-      // ignore
-    }
-  };
-
-  const advanceQuestion = () => {
-    if (currentQ + 1 >= questions.length) {
-      finishGame();
-    } else {
-      setCurrentQ((prev) => prev + 1);
-      setSelectedAnswer(null);
-      setShowExplanation(false);
-      if (selectedLevel) setTimeLeft(TIMER_SECONDS[selectedLevel.id]);
-    }
-  };
-
-  function handleTimeUp() {
-    if (selectedAnswer !== null) return;
-    setShowExplanation(true);
-    setStreak(0);
-    setTimeout(() => advanceQuestion(), 2200);
-  }
+  const isAuthenticated = !!session?.user;
 
   // Timer effect
   useEffect(() => {
@@ -175,126 +112,173 @@ export default function TriviaView() {
       handleTimeUp();
       return;
     }
-    timerRef.current = setInterval(() => {
+    const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current);
+          clearInterval(timer);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
+    return () => clearInterval(timer);
   }, [gameState, showExplanation, currentQ]);
 
-  useEffect(() => {
-    if (timeLeft === 0 && gameState === "playing" && !showExplanation) {
-      handleTimeUp();
-    }
-  }, [timeLeft]);
+  const handleTimeUp = useCallback(() => {
+    if (selectedAnswer !== null) return;
+    setShowExplanation(true);
+    setTimeout(() => advanceQuestion(), 2500);
+  }, [selectedAnswer]);
 
-  const startQuiz = () => {
+  const startQuiz = async () => {
     if (!selectedLevel || !selectedCategory) {
       toast.error("Please select a level and category");
       return;
     }
-    if (availableQuestions.length === 0) {
-      toast.error("No questions available for this combination. Try another!");
+
+    // EARN_POINTS mode requires auth
+    if (gameMode === "EARN_POINTS" && !isAuthenticated) {
+      toast.error("Sign in required to earn Faith Points", {
+        description: "Switch to Practice Mode or sign in to start earning.",
+      });
       return;
     }
-    const pool = [...availableQuestions];
-    const shuffled = pool.sort(() => Math.random() - 0.5).slice(0, Math.min(quizMode, pool.length));
-    setQuestions(shuffled);
-    setCurrentQ(0);
-    setScore(0);
-    setStreak(0);
-    setBestStreak(0);
-    setCorrectCount(0);
-    setSelectedAnswer(null);
-    setShowExplanation(false);
-    setGameState("playing");
-    setTimeLeft(TIMER_SECONDS[selectedLevel.id]);
+
+    try {
+      const result = await api.startQuiz({
+        difficulty: selectedLevel.id,
+        category: selectedCategory.id,
+        count: quizMode,
+        mode: gameMode,
+      });
+
+      if (!result.questions || result.questions.length === 0) {
+        toast.error("No questions available for this combination", {
+          description: "Try another level or category.",
+        });
+        return;
+      }
+
+      setQuestions(result.questions);
+      setNewCount(result.newCount || 0);
+      setTotalCount(result.totalCount || 0);
+      setCurrentQ(0);
+      setSelectedAnswer(null);
+      setShowExplanation(false);
+      setAnswers([]);
+      setSubmitResult(null);
+      setGameState("playing");
+      setTimeLeft(TIMER_SECONDS[selectedLevel.id]);
+
+      setQuizSession({
+        difficulty: selectedLevel.id,
+        category: selectedCategory.id,
+        mode: gameMode,
+      });
+
+      if (gameMode === "EARN_POINTS" && result.newCount < result.questions.length) {
+        toast(`Only ${result.newCount} new questions available`, {
+          description: `You'll earn points for ${result.newCount} new questions. The rest are already mastered.`,
+        });
+      }
+    } catch (e: any) {
+      toast.error("Failed to start quiz", { description: e.message });
+    }
   };
 
   const handleAnswer = (answerIdx: number) => {
     if (selectedAnswer !== null) return;
-    if (timerRef.current) clearInterval(timerRef.current);
     setSelectedAnswer(answerIdx);
     setShowExplanation(true);
 
     const q = questions[currentQ];
-    const isCorrect = answerIdx === q.answer;
-    if (isCorrect) {
-      const streakBonus = Math.min(streak, 5) * 2;
-      const points = q.points + streakBonus;
-      setScore((prev) => prev + points);
-      setStreak((prev) => {
-        const newStreak = prev + 1;
-        setBestStreak((best) => Math.max(best, newStreak));
-        return newStreak;
-      });
-      setCorrectCount((prev) => prev + 1);
+    setAnswers((prev) => [...prev, { questionId: q.id, selectedAnswer: answerIdx }]);
+  };
+
+  const advanceQuestion = () => {
+    if (currentQ + 1 >= questions.length) {
+      finishQuiz();
     } else {
-      setStreak(0);
+      setCurrentQ((prev) => prev + 1);
+      setSelectedAnswer(null);
+      setShowExplanation(false);
+      if (selectedLevel) setTimeLeft(TIMER_SECONDS[selectedLevel.id]);
+    }
+  };
+
+  const finishQuiz = async () => {
+    if (!quizSession) return;
+
+    try {
+      const result = await api.submitQuiz({
+        difficulty: quizSession.difficulty,
+        category: quizSession.category,
+        mode: quizSession.mode,
+        answers,
+      });
+
+      setSubmitResult(result);
+      setGameState("result");
+
+      if (result.mode === "EARN_POINTS") {
+        // Record streak (only for earn mode, once per day)
+        try {
+          const streaksRaw = localStorage.getItem("crosscrafted_streaks") || "{}";
+          const before = JSON.parse(streaksRaw);
+          const prevDate = before?.trivia_play?.lastActiveDate;
+          const today = new Date().toISOString().split("T")[0];
+          if (prevDate !== today) {
+            import("@/lib/streaks").then(({ recordStreak }) => {
+              const info = recordStreak("trivia_play");
+              if (info.currentStreak === 1) {
+                toast("🔥 Trivia streak started!", { description: "Play daily to keep it alive." });
+              } else if ([3, 7, 14, 30, 60, 90].includes(info.currentStreak)) {
+                toast.success(`🔥 ${info.currentStreak}-day trivia streak!`);
+              }
+            });
+          }
+        } catch {}
+
+        if (result.totalPointsEarned > 0) {
+          toast.success(`+${result.totalPointsEarned} Faith Points earned!`, {
+            description: `Your verified balance: ${result.newTotalPoints} FP`,
+          });
+        } else {
+          toast("0 Faith Points earned", {
+            description: "You've already mastered all these questions. Try Practice Mode or a different category.",
+          });
+        }
+      }
+    } catch (e: any) {
+      toast.error("Failed to submit quiz", { description: e.message });
+      setGameState("setup");
     }
   };
 
   const shareResults = async () => {
-    const text = `Bible Trivia Challenge!\n\nScore: ${score} pts | Correct: ${correctCount}/${questions.length} | Best Streak: ${bestStreak}\nLevel: ${selectedLevel?.label} | Category: ${selectedCategory?.label}\n\nPlay now on CrossCrafted!`;
+    if (!submitResult) return;
+    const text = `Bible Trivia ${gameMode === "EARN_POINTS" ? "(Earn Points)" : "(Practice)"}!\n\nCorrect: ${submitResult.correctCount}/${submitResult.totalQuestions}\n${gameMode === "EARN_POINTS" ? `Points earned: ${submitResult.totalPointsEarned} FP\n` : ""}Level: ${selectedLevel?.label} | Category: ${selectedCategory?.label}\n\nPlay now on CrossCrafted!`;
     if (navigator.share) {
       try {
-        await navigator.share({
-          title: "CrossCrafted Bible Trivia",
-          text,
-          url: window.location.href,
-        });
+        await navigator.share({ title: "CrossCrafted Bible Trivia", text });
         return;
-      } catch (_) {
-        // user cancelled — fall through to clipboard
-      }
+      } catch {}
     }
     navigator.clipboard.writeText(text);
     toast.success("Results copied to clipboard!");
   };
 
   const inviteFriend = async () => {
-    const text = `Hey! Come play Bible Trivia with me on CrossCrafted. I just scored ${score} points in ${selectedLevel?.label} ${selectedCategory?.label}! Can you beat me? 💪`;
-    const url = `${window.location.origin}/?comp=trivia&invited_by=you`;
+    const text = `Hey! Come play Bible Trivia with me on CrossCrafted. ${gameMode === "EARN_POINTS" ? "Earn Faith Points for new questions you answer correctly!" : ""}`;
+    const url = `${window.location.origin}/`;
     if (navigator.share) {
       try {
-        await navigator.share({
-          title: "Join me on CrossCrafted",
-          text,
-          url,
-        });
+        await navigator.share({ title: "Join me on CrossCrafted", text, url });
         return;
-      } catch (_) {
-        // fall through
-      }
+      } catch {}
     }
     navigator.clipboard.writeText(`${text}\n\n${url}`);
-    toast.success("Invite link copied!", { description: "Share with friends via WhatsApp, SMS, or any app." });
-  };
-
-  const inviteGroup = async () => {
-    const text = `🎮 Let's play Bible Trivia together on CrossCrafted!\n\nI'm starting a group game — join me and let's see who knows the Bible best. Multiple players can play the same quiz and compare scores!\n\nLevel: ${selectedLevel?.label} | Category: ${selectedCategory?.label}`;
-    const url = `${window.location.origin}/?comp=trivia&group=true&invited_by=you`;
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: "Group Bible Trivia",
-          text,
-          url,
-        });
-        return;
-      } catch (_) {
-        // fall through
-      }
-    }
-    navigator.clipboard.writeText(`${text}\n\n${url}`);
-    toast.success("Group invite copied!", { description: "Send to your church group on WhatsApp." });
+    toast.success("Invite link copied!");
   };
 
   const resetGame = () => {
@@ -302,38 +286,49 @@ export default function TriviaView() {
     setSelectedLevel(null);
     setSelectedCategory(null);
     setQuestions([]);
-    setCurrentQ(0);
-    setScore(0);
-    setStreak(0);
-    setBestStreak(0);
-    setCorrectCount(0);
-    setSelectedAnswer(null);
-    setShowExplanation(false);
+    setAnswers([]);
+    setSubmitResult(null);
+    setQuizSession(null);
   };
 
-  const currentRank = RANKS[getRank(stats.totalPoints)];
-  const currentPrize =
-    [...PRIZE_TIERS].reverse().find((p) => stats.totalPoints >= p.minPoints) || PRIZE_TIERS[0];
-  const nextPrize = PRIZE_TIERS.find((p) => p.minPoints > stats.totalPoints);
-  const prizeProgress = nextPrize
-    ? ((stats.totalPoints - currentPrize.minPoints) / (nextPrize.minPoints - currentPrize.minPoints)) * 100
-    : 100;
-
-  const currentQ_ = questions[currentQ];
-  const progressPct = questions.length ? ((currentQ + (showExplanation ? 1 : 0)) / questions.length) * 100 : 0;
+  const currentQuestion = questions[currentQ];
 
   return (
     <div className="max-w-[680px] mx-auto px-4 py-5">
-      <div className="flex items-center justify-between mb-4">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-4">
         <div>
           <h1 className="text-xl font-bold text-white">Bible Trivia</h1>
-          <p className="text-xs text-[#94A3B8] mt-0.5">Test your Bible knowledge</p>
+          <p className="text-xs text-[#94A3B8] mt-0.5">
+            {isAuthenticated
+              ? `Verified: ${session?.user?.totalPoints || 0} FP`
+              : "Sign in to earn Faith Points"}
+          </p>
         </div>
-        <div className="flex items-center gap-1 px-3 py-2 rounded-xl bg-[#F59E0B]/10 border border-[#F59E0B]/25">
-          <Trophy size={14} className="text-[#F59E0B]" />
-          <span className="text-xs font-bold text-[#F59E0B]">{stats.totalPoints} pts</span>
-        </div>
+        {isAuthenticated && (
+          <div className="flex items-center gap-1 px-3 py-2 rounded-xl bg-[#F59E0B]/10 border border-[#F59E0B]/25">
+            <Trophy size={14} className="text-[#F59E0B]" />
+            <span className="text-xs font-bold text-[#F59E0B]">{session?.user?.totalPoints || 0} FP</span>
+          </div>
+        )}
       </div>
+
+      {/* Auth banner */}
+      {!isAuthenticated && (
+        <div className="bg-[#38BDF8]/8 border border-[#38BDF8]/20 rounded-xl p-3 mb-4 flex items-center gap-3">
+          <LogIn size={18} className="text-[#38BDF8] shrink-0" />
+          <div className="flex-1">
+            <p className="text-xs font-bold text-white">Sign in to earn Faith Points</p>
+            <p className="text-[10px] text-[#A09DB1]">Practice Mode is available without signing in.</p>
+          </div>
+          <a
+            href="/auth/signin"
+            className="px-3 py-1.5 rounded-lg bg-[#38BDF8] text-slate-950 text-xs font-bold hover:bg-[#0EA5E9] transition-all"
+          >
+            Sign In
+          </a>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-white/[0.04] border border-white/[0.06] rounded-2xl mb-5 overflow-x-auto">
@@ -347,7 +342,7 @@ export default function TriviaView() {
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
-            className={`flex-1 min-w-fit px-3 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+            className={`flex-1 min-w-fit px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
               activeTab === t.id
                 ? "bg-[#7C3AED] text-white shadow-lg shadow-[#7C3AED]/25"
                 : "text-[#94A3B8] hover:text-white"
@@ -360,21 +355,56 @@ export default function TriviaView() {
 
       <AnimatePresence mode="wait">
         {activeTab === "play" && (
-          <motion.div
-            key="play"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
+          <motion.div key="play" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             {gameState === "setup" && (
               <div className="space-y-5">
                 <StreakBadge activity="trivia_play" />
 
+                {/* Mode toggle */}
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">Quiz Mode</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setGameMode("EARN_POINTS")}
+                      className={`p-3 rounded-2xl border text-left transition-all ${
+                        gameMode === "EARN_POINTS"
+                          ? "bg-[#7C3AED]/15 border-[#7C3AED]/50"
+                          : "bg-white/[0.03] border-white/[0.06]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <Trophy size={14} className={gameMode === "EARN_POINTS" ? "text-[#A78BFA]" : "text-[#94A3B8]"} />
+                        <p className="text-sm font-bold text-white">🎯 Earn Points</p>
+                      </div>
+                      <p className="text-[10px] text-[#94A3B8] leading-relaxed">
+                        New questions award Faith Points. Already-mastered questions give 0 FP.
+                      </p>
+                      {!isAuthenticated && (
+                        <p className="text-[9px] text-[#F59E0B] mt-1">⚠ Sign in required</p>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setGameMode("PRACTICE")}
+                      className={`p-3 rounded-2xl border text-left transition-all ${
+                        gameMode === "PRACTICE"
+                          ? "bg-[#38BDF8]/15 border-[#38BDF8]/50"
+                          : "bg-white/[0.03] border-white/[0.06]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <BookOpen size={14} className={gameMode === "PRACTICE" ? "text-[#38BDF8]" : "text-[#94A3B8]"} />
+                        <p className="text-sm font-bold text-white">📖 Practice</p>
+                      </div>
+                      <p className="text-[10px] text-[#94A3B8] leading-relaxed">
+                        Unlimited replays. No points earned. Learn freely.
+                      </p>
+                    </button>
+                  </div>
+                </div>
+
                 {/* Level Selection */}
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">
-                    Choose Level
-                  </p>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">Choose Level</p>
                   <div className="grid grid-cols-2 gap-2">
                     {QUIZ_LEVELS.map((lvl) => {
                       const selected = selectedLevel?.id === lvl.id;
@@ -383,15 +413,9 @@ export default function TriviaView() {
                           key={lvl.id}
                           onClick={() => setSelectedLevel(lvl)}
                           className={`p-3 rounded-2xl border text-left transition-all ${
-                            selected
-                              ? "border-transparent text-white"
-                              : "bg-white/[0.03] border-white/[0.06] hover:bg-white/[0.05]"
+                            selected ? "border-transparent text-white" : "bg-white/[0.03] border-white/[0.06] hover:bg-white/[0.05]"
                           }`}
-                          style={
-                            selected
-                              ? { background: `${lvl.color}20`, borderColor: `${lvl.color}80` }
-                              : {}
-                          }
+                          style={selected ? { background: `${lvl.color}20`, borderColor: `${lvl.color}80` } : {}}
                         >
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-2xl">{lvl.icon}</span>
@@ -399,7 +423,7 @@ export default function TriviaView() {
                               className="text-[10px] font-bold px-1.5 py-0.5 rounded"
                               style={{ backgroundColor: `${lvl.color}25`, color: lvl.color }}
                             >
-                              {lvl.points} pts
+                              {lvl.points} FP
                             </span>
                           </div>
                           <p className="text-sm font-bold text-white">{lvl.label}</p>
@@ -412,55 +436,38 @@ export default function TriviaView() {
 
                 {/* Category Selection */}
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">
-                    Choose Category
-                  </p>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">Choose Category</p>
                   <div className="grid grid-cols-2 gap-2">
                     {QUIZ_CATEGORIES.map((cat) => {
                       const selected = selectedCategory?.id === cat.id;
-                      const Icon = CATEGORY_ICONS[cat.id] || BookOpen;
                       return (
                         <button
                           key={cat.id}
                           onClick={() => setSelectedCategory(cat)}
                           className={`p-3 rounded-2xl border flex items-center gap-3 transition-all ${
-                            selected
-                              ? "border-transparent text-white"
-                              : "bg-white/[0.03] border-white/[0.06] hover:bg-white/[0.05]"
+                            selected ? "border-transparent text-white" : "bg-white/[0.03] border-white/[0.06] hover:bg-white/[0.05]"
                           }`}
-                          style={
-                            selected
-                              ? { background: `${cat.color}20`, borderColor: `${cat.color}80` }
-                              : {}
-                          }
+                          style={selected ? { background: `${cat.color}20`, borderColor: `${cat.color}80` } : {}}
                         >
                           <div
                             className="w-9 h-9 rounded-xl flex items-center justify-center"
                             style={{ backgroundColor: `${cat.color}20`, color: cat.color }}
                           >
-                            <Icon size={16} />
+                            {cat.icon === "BookOpen" && <BookOpen size={16} />}
+                            {cat.icon === "Cross" && <Cross size={16} />}
+                            {cat.icon === "Scroll" && <Scroll size={16} />}
+                            {cat.icon === "Shield" && <Shield size={16} />}
                           </div>
-                          <div>
-                            <p className="text-sm font-bold text-white">{cat.label}</p>
-                            <p className="text-[10px] text-[#94A3B8]">
-                              {availableQuestions.length > 0
-                                ? `${TRIVIA_QUESTIONS.filter(
-                                    (q) => q.difficulty === selectedLevel?.id && q.category === cat.id
-                                  ).length} questions`
-                                : "Pick level first"}
-                            </p>
-                          </div>
+                          <p className="text-sm font-bold text-white">{cat.label}</p>
                         </button>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* Quiz Mode */}
+                {/* Quiz Length */}
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">
-                    Quiz Length
-                  </p>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">Quiz Length</p>
                   <div className="grid grid-cols-3 gap-2">
                     {[5, 10, 15].map((n) => (
                       <button
@@ -480,77 +487,72 @@ export default function TriviaView() {
 
                 <button
                   onClick={startQuiz}
-                  disabled={!selectedLevel || !selectedCategory || availableQuestions.length === 0}
+                  disabled={api.loading || (gameMode === "EARN_POINTS" && !isAuthenticated)}
                   className="w-full py-3.5 rounded-2xl text-sm font-extrabold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed text-white hover:-translate-y-px"
                   style={{
-                    background: "linear-gradient(135deg, #7C3AED, #EC4899)",
-                    boxShadow: "0 4px 16px rgba(124,58,237,0.3)",
+                    background: gameMode === "EARN_POINTS"
+                      ? "linear-gradient(135deg, #7C3AED, #EC4899)"
+                      : "linear-gradient(135deg, #38BDF8, #A855F7)",
+                    boxShadow: gameMode === "EARN_POINTS"
+                      ? "0 4px 16px rgba(124,58,237,0.3)"
+                      : "0 4px 16px rgba(56,189,248,0.3)",
                   }}
                 >
-                  <Play size={16} fill="currentColor" /> Start Quiz
+                  {api.loading ? (
+                    "Loading..."
+                  ) : (
+                    <>
+                      <Play size={16} fill="currentColor" />
+                      {gameMode === "EARN_POINTS" ? "Start Earning Points" : "Start Practice"}
+                    </>
+                  )}
                 </button>
-
-                {selectedLevel && selectedCategory && availableQuestions.length === 0 && (
-                  <p className="text-center text-xs text-[#F59E0B]">
-                    No questions yet for this combo. Try Beginners/Full Bible to start.
-                  </p>
-                )}
               </div>
             )}
 
-            {gameState === "playing" && currentQ_ && (
+            {gameState === "playing" && currentQuestion && (
               <div className="space-y-4">
-                {/* Progress bar */}
+                {/* Progress */}
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-bold text-white">
                     Question {currentQ + 1} / {questions.length}
                   </span>
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1 text-[#F59E0B] font-bold">
-                      <Target size={12} /> {score}
+                  {gameMode === "EARN_POINTS" && newCount > 0 && (
+                    <span className="text-[#22C55E] font-bold text-[10px]">
+                      {newCount} new · {totalCount - newCount} mastered
                     </span>
-                    {streak >= 2 && (
-                      <span className="flex items-center gap-1 text-[#EF4444] font-bold">
-                        <Flame size={12} /> {streak}x
-                      </span>
-                    )}
-                  </div>
+                  )}
                 </div>
                 <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
                   <motion.div
                     className="h-full rounded-full"
-                    style={{ background: "linear-gradient(90deg, #7C3AED, #EC4899)" }}
-                    animate={{ width: `${progressPct}%` }}
+                    style={{ background: gameMode === "EARN_POINTS" ? "linear-gradient(90deg, #7C3AED, #EC4899)" : "linear-gradient(90deg, #38BDF8, #A855F7)" }}
+                    animate={{ width: `${((currentQ + (showExplanation ? 1 : 0)) / questions.length) * 100}%` }}
                   />
                 </div>
 
                 {/* Timer */}
                 <div className="flex items-center gap-2">
-                  <Clock
-                    size={14}
-                    className={timeLeft <= 5 ? "text-[#EF4444]" : "text-[#A855F7]"}
-                  />
+                  <Clock size={14} className={timeLeft <= 5 ? "text-[#EF4444]" : "text-[#A855F7]"} />
                   <div className="flex-1 h-1 bg-white/[0.06] rounded-full overflow-hidden">
                     <motion.div
-                      className={`h-full rounded-full ${
-                        timeLeft <= 5 ? "bg-[#EF4444]" : "bg-[#A855F7]"
-                      }`}
-                      animate={{
-                        width: `${(timeLeft / (selectedLevel ? TIMER_SECONDS[selectedLevel.id] : 30)) * 100}%`,
-                      }}
-                      transition={{ duration: 0.3 }}
+                      className={`h-full rounded-full ${timeLeft <= 5 ? "bg-[#EF4444]" : "bg-[#A855F7]"}`}
+                      animate={{ width: `${(timeLeft / (selectedLevel ? TIMER_SECONDS[selectedLevel.id] : 30)) * 100}%` }}
                     />
                   </div>
-                  <span
-                    className={`text-xs font-bold tabular-nums ${
-                      timeLeft <= 5 ? "text-[#EF4444]" : "text-[#94A3B8]"
-                    }`}
-                  >
+                  <span className={`text-xs font-bold tabular-nums ${timeLeft <= 5 ? "text-[#EF4444]" : "text-[#94A3B8]"}`}>
                     {timeLeft}s
                   </span>
                 </div>
 
-                {/* Question Card */}
+                {/* Mode badge */}
+                {gameMode === "PRACTICE" && (
+                  <div className="bg-[#38BDF8]/8 border border-[#38BDF8]/20 rounded-xl px-3 py-1.5">
+                    <p className="text-[10px] font-bold text-[#38BDF8] uppercase tracking-wider">📖 Practice Mode — 0 FP</p>
+                  </div>
+                )}
+
+                {/* Question */}
                 <motion.div
                   key={currentQ}
                   initial={{ opacity: 0, x: 20 }}
@@ -565,27 +567,20 @@ export default function TriviaView() {
                         color: selectedLevel?.color,
                       }}
                     >
-                      {selectedLevel?.label} · {selectedLevel?.points} pts
+                      {selectedLevel?.label} · {selectedLevel?.points} FP
                     </span>
                   </div>
                   <p className="text-base font-bold text-white leading-relaxed mb-4">
-                    {currentQ_.question}
+                    {currentQuestion.question}
                   </p>
 
                   <div className="space-y-2">
-                    {currentQ_.options.map((opt, idx) => {
-                      const isCorrect = idx === currentQ_.answer;
+                    {currentQuestion.options.map((opt, idx) => {
                       const isSelected = idx === selectedAnswer;
-                      let style: React.CSSProperties = {};
-                      let cls =
-                        "w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all border ";
+                      let cls = "w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all border ";
 
                       if (selectedAnswer === null) {
                         cls += "bg-white/[0.03] border-white/[0.06] text-[#A09DB1] hover:bg-white/[0.06] hover:text-white";
-                      } else if (isCorrect) {
-                        cls += "bg-[#22C55E]/15 border-[#22C55E]/40 text-white";
-                      } else if (isSelected) {
-                        cls += "bg-[#EF4444]/15 border-[#EF4444]/40 text-white";
                       } else {
                         cls += "bg-white/[0.02] border-white/[0.04] text-[#64748B]";
                       }
@@ -596,29 +591,12 @@ export default function TriviaView() {
                           onClick={() => handleAnswer(idx)}
                           disabled={selectedAnswer !== null}
                           className={cls}
-                          style={style}
                         >
                           <span className="flex items-center gap-2">
-                            <span
-                              className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold ${
-                                selectedAnswer === null
-                                  ? "bg-white/[0.06] text-[#94A3B8]"
-                                  : isCorrect
-                                  ? "bg-[#22C55E] text-white"
-                                  : isSelected
-                                  ? "bg-[#EF4444] text-white"
-                                  : "bg-white/[0.04] text-[#64748B]"
-                              }`}
-                            >
+                            <span className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold bg-white/[0.06] text-[#94A3B8]">
                               {String.fromCharCode(65 + idx)}
                             </span>
                             {opt}
-                            {selectedAnswer !== null && isCorrect && (
-                              <Check size={14} className="ml-auto text-[#22C55E]" />
-                            )}
-                            {selectedAnswer !== null && isSelected && !isCorrect && (
-                              <X size={14} className="ml-auto text-[#EF4444]" />
-                            )}
                           </span>
                         </button>
                       );
@@ -632,26 +610,33 @@ export default function TriviaView() {
                         animate={{ opacity: 1, height: "auto" }}
                         className="mt-3 overflow-hidden"
                       >
+                        {/* Points indicator */}
+                        {gameMode === "EARN_POINTS" && (
+                          <div className="bg-[#7C3AED]/8 border border-[#7C3AED]/20 rounded-xl p-3 mb-2">
+                            <p className="text-[10px] text-[#A09DB1]">
+                              Points will be calculated server-side after quiz submission.
+                            </p>
+                          </div>
+                        )}
                         <div className="bg-[#7C3AED]/8 border border-[#7C3AED]/20 rounded-xl p-3">
                           <div className="flex items-center gap-1.5 mb-1">
                             <Sparkles size={12} className="text-[#A78BFA]" />
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-[#A78BFA]">
-                              Explanation
-                            </p>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-[#A78BFA]">Explanation</p>
                           </div>
                           <p className="text-xs text-[#A09DB1] leading-relaxed">
-                            {currentQ_.explanation}
+                            {currentQuestion.scriptureReference && (
+                              <span className="font-bold text-white">{currentQuestion.scriptureReference}: </span>
+                            )}
+                            {currentQuestion.question}
                           </p>
                         </div>
-                        {selectedAnswer !== null && (
-                          <button
-                            onClick={advanceQuestion}
-                            className="w-full mt-3 py-2.5 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2"
-                          >
-                            {currentQ + 1 >= questions.length ? "See Results" : "Next Question"}
-                            <ArrowRight size={14} />
-                          </button>
-                        )}
+                        <button
+                          onClick={advanceQuestion}
+                          className="w-full mt-3 py-2.5 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2"
+                        >
+                          {currentQ + 1 >= questions.length ? "Submit Quiz" : "Next Question"}
+                          <ArrowRight size={14} />
+                        </button>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -659,41 +644,90 @@ export default function TriviaView() {
               </div>
             )}
 
-            {gameState === "result" && (
+            {gameState === "result" && submitResult && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="text-center space-y-5 py-6"
               >
                 <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-[#F59E0B]/20 to-[#EF4444]/20 border border-[#F59E0B]/30 mb-2">
-                  <Trophy size={36} className="text-[#F59E0B]" />
+                  {gameMode === "EARN_POINTS" ? (
+                    <Trophy size={36} className="text-[#F59E0B]" />
+                  ) : (
+                    <BookOpen size={36} className="text-[#38BDF8]" />
+                  )}
                 </div>
                 <div>
-                  <h2 className="text-2xl font-extrabold text-white mb-1">Quiz Complete!</h2>
+                  <h2 className="text-2xl font-extrabold text-white mb-1">
+                    {gameMode === "EARN_POINTS" ? "Quiz Complete!" : "Practice Complete!"}
+                  </h2>
                   <p className="text-sm text-[#94A3B8]">
-                    {correctCount >= questions.length * 0.8
-                      ? "Outstanding! You're a Bible scholar!"
-                      : correctCount >= questions.length * 0.5
-                      ? "Well done! Keep studying the Word."
-                      : "Keep going — every saint started as a seeker!"}
+                    {gameMode === "EARN_POINTS"
+                      ? submitResult.totalPointsEarned > 0
+                        ? `You earned ${submitResult.totalPointsEarned} Faith Points!`
+                        : "No new points — you've already mastered these questions."
+                      : "Great practice session!"}
                   </p>
                 </div>
 
                 <div className="grid grid-cols-3 gap-3 max-w-sm mx-auto">
-                  <div className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4">
-                    <p className="text-2xl font-extrabold text-[#F59E0B]">{score}</p>
-                    <p className="text-[9px] uppercase tracking-wider text-[#94A3B8] mt-1">Points</p>
-                  </div>
+                  {gameMode === "EARN_POINTS" && (
+                    <div className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4">
+                      <p className="text-2xl font-extrabold text-[#F59E0B]">
+                        +{submitResult.totalPointsEarned}
+                      </p>
+                      <p className="text-[9px] uppercase tracking-wider text-[#94A3B8] mt-1">FP Earned</p>
+                    </div>
+                  )}
                   <div className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4">
                     <p className="text-2xl font-extrabold text-[#22C55E]">
-                      {correctCount}/{questions.length}
+                      {submitResult.correctCount}/{submitResult.totalQuestions}
                     </p>
                     <p className="text-[9px] uppercase tracking-wider text-[#94A3B8] mt-1">Correct</p>
                   </div>
-                  <div className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4">
-                    <p className="text-2xl font-extrabold text-[#EF4444]">{bestStreak}</p>
-                    <p className="text-[9px] uppercase tracking-wider text-[#94A3B8] mt-1">Best Streak</p>
-                  </div>
+                  {gameMode === "EARN_POINTS" && (
+                    <div className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4">
+                      <p className="text-2xl font-extrabold text-[#38BDF8]">
+                        {submitResult.newTotalPoints}
+                      </p>
+                      <p className="text-[9px] uppercase tracking-wider text-[#94A3B8] mt-1">Total FP</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Question results breakdown */}
+                <div className="max-w-sm mx-auto text-left space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2 text-center">
+                    Question Breakdown
+                  </p>
+                  {submitResult.questionResults.map((qr, i) => (
+                    <div
+                      key={i}
+                      className={`flex items-center gap-3 p-2.5 rounded-xl border ${
+                        qr.pointsAwarded > 0
+                          ? "bg-[#22C55E]/8 border-[#22C55E]/25"
+                          : qr.correct
+                          ? "bg-white/[0.03] border-white/[0.06]"
+                          : "bg-[#EF4444]/8 border-[#EF4444]/25"
+                      }`}
+                    >
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                        qr.pointsAwarded > 0 ? "bg-[#22C55E]" : qr.correct ? "bg-[#94A3B8]" : "bg-[#EF4444]"
+                      }`}>
+                        {qr.correct ? <Check size={14} className="text-white" /> : <X size={14} className="text-white" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] text-white line-clamp-1">{qr.question}</p>
+                        {qr.pointsAwarded > 0 ? (
+                          <p className="text-[10px] text-[#22C55E] font-bold">+{qr.pointsAwarded} FP earned</p>
+                        ) : qr.alreadyScored ? (
+                          <p className="text-[10px] text-[#94A3B8]">✅ Already mastered (0 FP)</p>
+                        ) : (
+                          <p className="text-[10px] text-[#EF4444]">Incorrect (0 FP)</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 <div className="flex gap-2 max-w-sm mx-auto">
@@ -711,416 +745,281 @@ export default function TriviaView() {
                   </button>
                 </div>
 
-                {/* Invite friends / group */}
-                <div className="max-w-sm mx-auto w-full space-y-2 pt-2">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] text-center">
-                    Challenge your friends
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={inviteFriend}
-                      className="flex-1 py-2.5 rounded-xl bg-[#25D366]/15 border border-[#25D366]/30 text-[#25D366] hover:bg-[#25D366]/25 text-[11px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
-                    >
-                      <UserPlus size={13} /> Invite Friend
-                    </button>
-                    <button
-                      onClick={inviteGroup}
-                      className="flex-1 py-2.5 rounded-xl bg-[#38BDF8]/15 border border-[#38BDF8]/30 text-[#38BDF8] hover:bg-[#38BDF8]/25 text-[11px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
-                    >
-                      <Users size={13} /> Invite Group
-                    </button>
+                {gameMode === "EARN_POINTS" && (
+                  <div className="max-w-sm mx-auto w-full space-y-2 pt-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] text-center">
+                      Challenge your friends
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={inviteFriend}
+                        className="flex-1 py-2.5 rounded-xl bg-[#25D366]/15 border border-[#25D366]/30 text-[#25D366] hover:bg-[#25D366]/25 text-[11px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <UserPlus size={13} /> Invite Friend
+                      </button>
+                      <button
+                        onClick={inviteFriend}
+                        className="flex-1 py-2.5 rounded-xl bg-[#38BDF8]/15 border border-[#38BDF8]/30 text-[#38BDF8] hover:bg-[#38BDF8]/25 text-[11px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <Users size={13} /> Invite Group
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
               </motion.div>
             )}
           </motion.div>
         )}
 
-        {activeTab === "leaderboard" && (
-          <motion.div
-            key="lb"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="space-y-3"
-          >
-            <p className="text-xs text-[#94A3B8] mb-3">
-              Top Bible scholars on crosscrafted — keep playing to climb the ranks!
-            </p>
-            {MOCK_LEADERBOARD.map((u) => (
-              <div
-                key={u.rank}
-                className={`flex items-center gap-3 p-3 rounded-2xl border ${
-                  u.rank <= 3
-                    ? "bg-[#F59E0B]/8 border-[#F59E0B]/25"
-                    : "bg-white/[0.03] border-white/[0.06]"
-                }`}
-              >
-                <div
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center font-extrabold text-sm ${
-                    u.rank === 1
-                      ? "bg-[#F59E0B] text-slate-950"
-                      : u.rank === 2
-                      ? "bg-[#94A3B8] text-slate-950"
-                      : u.rank === 3
-                      ? "bg-[#F97316] text-slate-950"
-                      : "bg-white/[0.06] text-white"
-                  }`}
-                >
-                  {u.rank <= 3 ? <Crown size={18} /> : u.rank}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-white">{u.name}</p>
-                  <p className="text-[11px] text-[#94A3B8]">{u.tier}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-[#F59E0B] tabular-nums">
-                    {u.points.toLocaleString()}
-                  </p>
-                  <p className="text-[10px] text-[#94A3B8] uppercase tracking-wider">pts</p>
-                </div>
-              </div>
-            ))}
-          </motion.div>
-        )}
-
-        {activeTab === "compete" && (
-          <motion.div key="compete" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <CompeteView userPoints={stats.totalPoints} />
-          </motion.div>
-        )}
-
-        {activeTab === "rewards" && (
-          <motion.div key="rewards" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <RewardsView userPoints={stats.totalPoints} />
-          </motion.div>
-        )}
-
-        {activeTab === "stats" && (
-          <motion.div
-            key="stats"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="space-y-4"
-          >
-            <div className="bg-gradient-to-br from-[#1C1929] to-[#2B254E] border border-[#7C3AED]/20 rounded-2xl p-5">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-14 h-14 rounded-2xl bg-[#7C3AED]/20 border border-[#7C3AED]/30 flex items-center justify-center text-2xl">
-                  🎓
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-[#94A3B8]">Your Rank</p>
-                  <p className="text-lg font-extrabold text-white">{currentRank}</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-white/[0.04] rounded-xl p-3 text-center">
-                  <p className="text-xl font-extrabold text-[#F59E0B]">{stats.totalPoints}</p>
-                  <p className="text-[9px] uppercase tracking-wider text-[#94A3B8] mt-1">Total Points</p>
-                </div>
-                <div className="bg-white/[0.04] rounded-xl p-3 text-center">
-                  <p className="text-xl font-extrabold text-[#38BDF8]">{stats.gamesPlayed}</p>
-                  <p className="text-[9px] uppercase tracking-wider text-[#94A3B8] mt-1">Games Played</p>
-                </div>
-                <div className="bg-white/[0.04] rounded-xl p-3 text-center">
-                  <p className="text-xl font-extrabold text-[#EF4444]">{stats.bestStreak}</p>
-                  <p className="text-[9px] uppercase tracking-wider text-[#94A3B8] mt-1">Best Streak</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Prize progress */}
-            <div className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-[#94A3B8]">Current Tier</p>
-                  <p className="text-base font-bold text-white flex items-center gap-1.5">
-                    <span>{currentPrize.icon}</span> {currentPrize.title}
-                  </p>
-                </div>
-                {nextPrize && (
-                  <div className="text-right">
-                    <p className="text-[10px] uppercase tracking-wider text-[#94A3B8]">Next</p>
-                    <p className="text-xs font-bold text-white flex items-center gap-1 justify-end">
-                      <span>{nextPrize.icon}</span> {nextPrize.title}
-                    </p>
-                  </div>
-                )}
-              </div>
-              {nextPrize && (
-                <>
-                  <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden mb-2">
-                    <motion.div
-                      className="h-full rounded-full"
-                      style={{ background: "linear-gradient(90deg, #F59E0B, #EF4444)" }}
-                      animate={{ width: `${Math.min(prizeProgress, 100)}%` }}
-                    />
-                  </div>
-                  <p className="text-[10px] text-[#94A3B8]">
-                    {(nextPrize.minPoints - stats.totalPoints).toLocaleString()} more points to {nextPrize.title}
-                  </p>
-                </>
-              )}
-            </div>
-
-            {/* All Prize Tiers */}
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">All Tiers</p>
-              <div className="space-y-2">
-                {PRIZE_TIERS.map((tier) => {
-                  const unlocked = stats.totalPoints >= tier.minPoints;
-                  const isCurrent = currentPrize.title === tier.title;
-                  return (
-                    <div
-                      key={tier.title}
-                      className={`flex items-center gap-3 p-3 rounded-xl border ${
-                        isCurrent
-                          ? "bg-[#F59E0B]/8 border-[#F59E0B]/30"
-                          : unlocked
-                          ? "bg-white/[0.03] border-white/[0.06]"
-                          : "bg-white/[0.01] border-white/[0.03] opacity-50"
-                      }`}
-                    >
-                      <span className="text-xl">{tier.icon}</span>
-                      <div className="flex-1">
-                        <p className="text-sm font-bold text-white flex items-center gap-1.5">
-                          {tier.title}
-                          {unlocked && <Check size={12} className="text-[#22C55E]" />}
-                        </p>
-                        <p className="text-[10px] text-[#94A3B8]">{tier.reward}</p>
-                      </div>
-                      <span className="text-[10px] font-bold text-[#F59E0B] tabular-nums">
-                        {tier.minPoints}+ pts
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </motion.div>
-        )}
+        {activeTab === "leaderboard" && <LeaderboardTab />}
+        {activeTab === "stats" && <StatsTab isAuthenticated={isAuthenticated} />}
+        {activeTab === "rewards" && <RewardsTab isAuthenticated={isAuthenticated} userPoints={session?.user?.totalPoints || 0} />}
+        {activeTab === "compete" && <CompeteView />}
       </AnimatePresence>
     </div>
   );
 }
 
-// ─── COMPETE VIEW ──────────────────────────────────────────────────────────
+// ─── LEADERBOARD TAB ──────────────────────────────────────────────────────────
 
-function CompeteView({ userPoints }: { userPoints: number }) {
-  const [joinedCompetitions, setJoinedCompetitions] = useState<Set<string>>(new Set());
+function LeaderboardTab() {
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleJoin = (compId: string, title: string) => {
-    setJoinedCompetitions((prev) => {
-      const next = new Set(prev);
-      if (next.has(compId)) {
-        next.delete(compId);
-        toast("Left competition");
-      } else {
-        next.add(compId);
-        toast.success(`Joined "${title}"!`, {
-          description: "Play trivia normally — your points count toward your church's score.",
-        });
-      }
-      return next;
-    });
-  };
+  useEffect(() => {
+    fetch("/api/trivia/leaderboard")
+      .then((r) => r.json())
+      .then((data) => {
+        setLeaderboard(data.leaderboard || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
 
-  const handleInviteChurch = async (compTitle: string) => {
-    const text = `🏆 "${compTitle}" — a Bible Trivia competition on CrossCrafted!\n\nMy church is competing. Is yours? Join us and let's see who knows the Bible best!`;
-    const url = `${window.location.origin}/?comp=trivia`;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: "Church Trivia Competition", text, url });
-        return;
-      } catch (_) {}
-    }
-    navigator.clipboard.writeText(`${text}\n\n${url}`);
-    toast.success("Invite copied!", { description: "Share with your church group." });
-  };
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="w-8 h-8 rounded-full border-2 border-transparent border-t-[#A855F7] animate-spin" />
+      </div>
+    );
+  }
+
+  if (leaderboard.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <Trophy size={32} className="mx-auto text-[#475569] mb-2" />
+        <p className="text-sm text-[#94A3B8]">No players on the leaderboard yet.</p>
+        <p className="text-[10px] text-[#64748B] mt-1">Be the first to earn Faith Points!</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="bg-gradient-to-br from-[#1C1929] to-[#2B254E] border border-[#7C3AED]/20 rounded-2xl p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Trophy size={16} className="text-[#F59E0B]" />
-          <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B]">Church vs Church</p>
-        </div>
-        <p className="text-sm font-bold text-white mb-1">Compete with other churches</p>
-        <p className="text-[11px] text-[#A09DB1] leading-relaxed">
-          Join a competition, play trivia normally, and your points count toward your church's score.
-          Top churches win cash prizes, trophies, and real gifts.
-        </p>
-      </div>
-
-      {/* Competitions */}
-      {TRIVIA_COMPETITIONS.map((comp, i) => {
-        const isJoined = joinedCompetitions.has(comp.id);
-        const sorted = [...comp.participants].sort((a, b) => b.score - a.score);
-        const leader = sorted[0];
-        return (
-          <motion.div
-            key={comp.id}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.06 }}
-            className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4"
-          >
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
-                      comp.status === "live"
-                        ? "bg-[#EF4444]/15 text-[#EF4444]"
-                        : comp.status === "upcoming"
-                        ? "bg-[#38BDF8]/15 text-[#38BDF8]"
-                        : "bg-white/[0.06] text-[#94A3B8]"
-                    }`}
-                  >
-                    {comp.status === "live" && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#EF4444] mr-1 animate-pulse" />}
-                    {comp.status}
-                  </span>
-                  <span className="text-[10px] text-[#94A3B8]">{comp.organizer}</span>
-                </div>
-                <h3 className="text-base font-bold text-white mb-1">{comp.title}</h3>
-                <p className="text-[11px] text-[#A09DB1] leading-relaxed line-clamp-2">{comp.description}</p>
-              </div>
-              {comp.prize_image && (
-                <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 ml-2 border border-white/[0.06]">
-                  <img src={comp.prize_image} alt="" className="w-full h-full object-cover" />
-                </div>
-              )}
-            </div>
-
-            {/* Prize */}
-            <div className="bg-[#F59E0B]/8 border border-[#F59E0B]/20 rounded-xl p-2.5 mb-3 flex items-center gap-2">
-              <Gift size={14} className="text-[#F59E0B] shrink-0" />
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B]">Prize</p>
-                <p className="text-[11px] text-white">{comp.prize}</p>
-              </div>
-            </div>
-
-            {/* Leaderboard */}
-            {comp.status !== "upcoming" && sorted.length > 0 && (
-              <div className="mb-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">
-                  {comp.status === "live" ? "Live Standings" : "Final Results"}
-                </p>
-                <div className="space-y-1.5">
-                  {sorted.map((p, idx) => (
-                    <div key={p.church_id} className="flex items-center gap-2">
-                      <div
-                        className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-extrabold ${
-                          idx === 0
-                            ? "bg-[#F59E0B] text-slate-950"
-                            : idx === 1
-                            ? "bg-[#94A3B8] text-slate-950"
-                            : idx === 2
-                            ? "bg-[#F97316] text-slate-950"
-                            : "bg-white/[0.06] text-white"
-                        }`}
-                      >
-                        {idx + 1}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-white truncate">{p.church_name}</p>
-                        <p className="text-[9px] text-[#94A3B8]">{p.players} players</p>
-                      </div>
-                      <span className="text-xs font-bold text-[#F59E0B] tabular-nums">
-                        {p.score.toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex gap-2 pt-2 border-t border-white/[0.04]">
-              {comp.status !== "ended" && (
-                <button
-                  onClick={() => handleJoin(comp.id, comp.title)}
-                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                    isJoined
-                      ? "bg-[#22C55E]/15 border border-[#22C55E]/30 text-[#22C55E]"
-                      : "bg-[#7C3AED] hover:bg-[#6D28D9] text-white"
-                  }`}
-                >
-                  {isJoined ? "✓ Joined" : "Join Competition"}
-                </button>
-              )}
-              <button
-                onClick={() => handleInviteChurch(comp.title)}
-                className="flex-1 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5"
-              >
-                <Users size={12} /> Invite Church
-              </button>
-            </div>
-          </motion.div>
-        );
-      })}
-
-      {/* Host your own */}
-      <div className="bg-[#1C1929] border border-dashed border-white/[0.12] rounded-2xl p-4 text-center">
-        <Calendar size={20} className="mx-auto text-[#7C3AED] mb-2" />
-        <p className="text-sm font-bold text-white mb-1">Want to host a competition?</p>
-        <p className="text-[11px] text-[#94A3B8] mb-3 max-w-xs mx-auto">
-          Pastors and church admins can create custom trivia competitions for their church or inter-church events.
-        </p>
-        <button
-          onClick={() => toast("Admin access required", { description: "Sign in as a church admin to host competitions." })}
-          className="px-4 py-2 rounded-xl bg-[#7C3AED]/15 border border-[#7C3AED]/30 text-[#A78BFA] text-xs font-bold hover:bg-[#7C3AED]/25 transition-all"
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
+      <p className="text-xs text-[#94A3B8] mb-3">
+        Real leaderboard — ranked by verified lifetime Faith Points from the server.
+      </p>
+      {leaderboard.map((u) => (
+        <div
+          key={u.rank}
+          className={`flex items-center gap-3 p-3 rounded-2xl border ${
+            u.rank <= 3
+              ? "bg-[#F59E0B]/8 border-[#F59E0B]/25"
+              : "bg-white/[0.03] border-white/[0.06]"
+          }`}
         >
-          Host a Competition
-        </button>
-      </div>
-    </div>
+          <div
+            className={`w-10 h-10 rounded-xl flex items-center justify-center font-extrabold text-sm ${
+              u.rank === 1 ? "bg-[#F59E0B] text-slate-950"
+              : u.rank === 2 ? "bg-[#94A3B8] text-slate-950"
+              : u.rank === 3 ? "bg-[#F97316] text-slate-950"
+              : "bg-white/[0.06] text-white"
+            }`}
+          >
+            {u.rank <= 3 ? <Crown size={18} /> : u.rank}
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-bold text-white">{u.name}</p>
+            <p className="text-[11px] text-[#94A3B8]">{u.tierIcon} {u.tier}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm font-bold text-[#F59E0B] tabular-nums">{u.points.toLocaleString()}</p>
+            <p className="text-[10px] text-[#94A3B8] uppercase tracking-wider">FP</p>
+          </div>
+        </div>
+      ))}
+    </motion.div>
   );
 }
 
-// ─── REWARDS VIEW ──────────────────────────────────────────────────────────
+// ─── STATS TAB ────────────────────────────────────────────────────────────────
 
-function RewardsView({ userPoints }: { userPoints: number }) {
-  const [claimedGifts, setClaimedGifts] = useState<Set<string>>(new Set());
-  const [gifts, setGifts] = useState<TriviaGift[]>([]);
+function StatsTab({ isAuthenticated }: { isAuthenticated: boolean }) {
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Load merged gifts (default + admin-added) on mount
+  const loadStats = useCallback(() => {
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
+    fetch("/api/trivia/stats")
+      .then((r) => (r.status === 401 ? null : r.json()))
+      .then((data) => {
+        setStats(data);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [isAuthenticated]);
+
   useEffect(() => {
-    import("@/lib/gifts-store").then(({ getAllGifts }) => {
-      setGifts(getAllGifts());
-    });
+    loadStats();
+  }, [loadStats]);
+
+  if (!isAuthenticated) {
+    return (
+      <div className="text-center py-12">
+        <Lock size={32} className="mx-auto text-[#475569] mb-3" />
+        <p className="text-sm text-[#94A3B8] mb-3">Sign in to view your verified stats</p>
+        <a
+          href="/auth/signin"
+          className="inline-block px-6 py-2.5 rounded-xl bg-[#7C3AED] text-white text-sm font-bold"
+        >
+          Sign In
+        </a>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="w-8 h-8 rounded-full border-2 border-transparent border-t-[#A855F7] animate-spin" />
+      </div>
+    );
+  }
+
+  if (!stats) return null;
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+      {/* Migration notice */}
+      <div className="bg-[#38BDF8]/8 border border-[#38BDF8]/20 rounded-xl p-3">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 size={14} className="text-[#38BDF8] shrink-0" />
+          <p className="text-[11px] text-[#A09DB1]">
+            Faith Points are now tracked securely. Your verified balance is shown above.
+          </p>
+        </div>
+      </div>
+
+      <div className="bg-gradient-to-br from-[#1C1929] to-[#2B254E] border border-[#7C3AED]/20 rounded-2xl p-5">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-14 h-14 rounded-2xl bg-[#7C3AED]/20 border border-[#7C3AED]/30 flex items-center justify-center text-2xl">
+            {stats.tier?.icon}
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-[#94A3B8]">Your Tier</p>
+            <p className="text-lg font-extrabold text-white">{stats.tier?.title}</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-white/[0.04] rounded-xl p-3 text-center">
+            <p className="text-xl font-extrabold text-[#F59E0B]">{stats.totalPoints}</p>
+            <p className="text-[9px] uppercase tracking-wider text-[#94A3B8] mt-1">Total FP</p>
+          </div>
+          <div className="bg-white/[0.04] rounded-xl p-3 text-center">
+            <p className="text-xl font-extrabold text-[#38BDF8]">{stats.gamesPlayed}</p>
+            <p className="text-[9px] uppercase tracking-wider text-[#94A3B8] mt-1">Quizzes</p>
+          </div>
+          <div className="bg-white/[0.04] rounded-xl p-3 text-center">
+            <p className="text-xl font-extrabold text-[#EF4444]">{stats.bestStreak}</p>
+            <p className="text-[9px] uppercase tracking-wider text-[#94A3B8] mt-1">Best Streak</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Questions mastered */}
+      <div className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-bold text-white">Questions Mastered</p>
+          <span className="text-xs font-bold text-[#22C55E]">
+            {stats.questionsScored} / {stats.totalQuestions}
+          </span>
+        </div>
+        <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-[#22C55E] to-[#3B82F6]"
+            style={{ width: `${stats.totalQuestions > 0 ? (stats.questionsScored / stats.totalQuestions) * 100 : 0}%` }}
+          />
+        </div>
+        <p className="text-[10px] text-[#94A3B8] mt-2">
+          {stats.totalQuestions - stats.questionsScored} questions remaining to earn points from.
+        </p>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── REWARDS TAB ──────────────────────────────────────────────────────────────
+
+function RewardsTab({ isAuthenticated, userPoints }: { isAuthenticated: boolean; userPoints: number }) {
+  const [gifts, setGifts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [claiming, setClaiming] = useState<string | null>(null);
+
+  const loadGifts = useCallback(() => {
+    fetch("/api/trivia/gifts")
+      .then((r) => r.json())
+      .then((data) => {
+        setGifts(data.gifts || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
   }, []);
 
-  const tierColors = {
+  useEffect(() => {
+    loadGifts();
+  }, [loadGifts]);
+
+  const handleClaim = async (giftId: string, title: string) => {
+    if (!isAuthenticated) {
+      toast.error("Sign in required to claim gifts");
+      return;
+    }
+    setClaiming(giftId);
+    try {
+      const res = await fetch("/api/trivia/claim-gift", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ giftId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success(`Claimed: ${title}!`, {
+        description: `Admin will contact you via WhatsApp. Points spent: ${data.pointsSpent} FP.`,
+      });
+      loadGifts(); // Refresh to show claimed state
+    } catch (e: any) {
+      toast.error("Failed to claim gift", { description: e.message });
+    } finally {
+      setClaiming(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="w-8 h-8 rounded-full border-2 border-transparent border-t-[#F59E0B] animate-spin" />
+      </div>
+    );
+  }
+
+  const tierColors: Record<string, string> = {
     bronze: "#CD7F32",
     silver: "#C0C0C0",
     gold: "#FFD700",
     platinum: "#E5E4E2",
-  };
-
-  const handleClaim = (giftId: string, title: string, points_required: number) => {
-    if (userPoints < points_required) {
-      toast.error("Not enough points", {
-        description: `You need ${points_required - userPoints} more points to claim this gift.`,
-      });
-      return;
-    }
-    setClaimedGifts((prev) => {
-      const next = new Set(prev);
-      if (next.has(giftId)) {
-        next.delete(giftId);
-        toast("Removed from claimed");
-      } else {
-        next.add(giftId);
-        toast.success(`Claimed: ${title}!`, {
-          description: "Admin will contact you via WhatsApp to arrange delivery.",
-        });
-      }
-      return next;
-    });
   };
 
   return (
@@ -1133,26 +1032,35 @@ function RewardsView({ userPoints }: { userPoints: number }) {
               <Gift size={16} className="text-[#F59E0B]" />
               <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B]">Real Gifts</p>
             </div>
-            <p className="text-2xl font-extrabold text-white">{userPoints.toLocaleString()} pts</p>
-            <p className="text-[11px] text-[#94A3B8] mt-0.5">Available to redeem</p>
-          </div>
-          <div className="text-right">
-            <p className="text-[10px] uppercase tracking-wider text-[#94A3B8]">Claimed</p>
-            <p className="text-2xl font-extrabold text-[#22C55E]">{claimedGifts.size}</p>
+            <p className="text-2xl font-extrabold text-white">
+              {isAuthenticated ? userPoints.toLocaleString() : "—"} FP
+            </p>
+            <p className="text-[11px] text-[#94A3B8] mt-0.5">
+              {isAuthenticated ? "Available to redeem" : "Sign in to view your points"}
+            </p>
           </div>
         </div>
       </div>
 
-      <p className="text-[11px] text-[#94A3B8] px-1">
-        Earn points by playing trivia, then redeem them for real physical gifts.
-        Admin will contact you on WhatsApp to arrange delivery.
-      </p>
+      {!isAuthenticated && (
+        <div className="bg-[#38BDF8]/8 border border-[#38BDF8]/20 rounded-xl p-3 text-center">
+          <p className="text-xs text-[#A09DB1]">
+            Sign in to redeem gifts. Your claims persist across devices.
+          </p>
+          <a
+            href="/auth/signin"
+            className="inline-block mt-2 px-4 py-2 rounded-lg bg-[#38BDF8] text-slate-950 text-xs font-bold"
+          >
+            Sign In
+          </a>
+        </div>
+      )}
 
       {/* Gifts grid */}
       <div className="grid grid-cols-2 gap-3">
-        {gifts.length > 0 ? gifts.map((gift, i) => {
-          const canClaim = userPoints >= gift.points_required;
-          const isClaimed = claimedGifts.has(gift.id);
+        {gifts.map((gift, i) => {
+          const canClaim = isAuthenticated && userPoints >= gift.pointsRequired && !gift.claimed && gift.stock > 0;
+          const isClaimed = gift.claimed;
           return (
             <motion.div
               key={gift.id}
@@ -1162,7 +1070,7 @@ function RewardsView({ userPoints }: { userPoints: number }) {
               className="bg-[#1C1929] border border-white/[0.06] rounded-2xl overflow-hidden"
             >
               <div className="relative h-24">
-                <img src={gift.image_url} alt={gift.title} className="w-full h-full object-cover" />
+                <img src={gift.imageUrl} alt={gift.title} className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#1C1929] via-transparent to-transparent" />
                 <span
                   className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider"
@@ -1179,42 +1087,55 @@ function RewardsView({ userPoints }: { userPoints: number }) {
                 <p className="text-[10px] text-[#94A3B8] line-clamp-2 mb-2">{gift.description}</p>
                 <div className="flex items-center gap-1 mb-2">
                   <Zap size={10} className="text-[#F59E0B]" />
-                  <span className="text-[11px] font-bold text-[#F59E0B]">{gift.points_required.toLocaleString()} pts</span>
+                  <span className="text-[11px] font-bold text-[#F59E0B]">{gift.pointsRequired.toLocaleString()} FP</span>
                 </div>
-                <button
-                  onClick={() => handleClaim(gift.id, gift.title, gift.points_required)}
-                  disabled={!canClaim}
-                  className={`w-full py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
-                    isClaimed
-                      ? "bg-[#22C55E]/15 text-[#22C55E] border border-[#22C55E]/30"
-                      : canClaim
-                      ? "bg-[#F59E0B] text-slate-950 hover:bg-[#E59E0B]"
-                      : "bg-white/[0.04] text-[#475569] cursor-not-allowed"
-                  }`}
-                >
-                  {isClaimed ? "✓ Claimed" : canClaim ? "Redeem" : `${gift.points_required - userPoints} more pts`}
-                </button>
+                {isClaimed ? (
+                  <div className="w-full py-2 rounded-lg bg-[#22C55E]/15 border border-[#22C55E]/30 text-[#22C55E] text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1">
+                    <CheckCircle2 size={11} /> Claimed
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleClaim(gift.id, gift.title)}
+                    disabled={!canClaim || claiming === gift.id}
+                    className={`w-full py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                      claiming === gift.id
+                        ? "bg-white/[0.04] text-[#94A3B8]"
+                        : canClaim
+                        ? "bg-[#F59E0B] text-slate-950 hover:bg-[#E59E0B]"
+                        : "bg-white/[0.04] text-[#475569] cursor-not-allowed"
+                    }`}
+                  >
+                    {claiming === gift.id ? "Claiming..." :
+                      isClaimed ? "✓ Claimed" :
+                      canClaim ? "Redeem" :
+                      !isAuthenticated ? "Sign in" :
+                      gift.stock <= 0 ? "Out of stock" :
+                      `${gift.pointsRequired - userPoints} more FP`}
+                  </button>
+                )}
               </div>
             </motion.div>
           );
-        }) : (
-          <div className="col-span-2 text-center py-12">
-            <Gift size={32} className="mx-auto text-[#475569] mb-2" />
-            <p className="text-sm text-[#94A3B8]">No gifts available yet.</p>
-            <p className="text-[10px] text-[#64748B] mt-1">Admins can add gifts from the Admin panel.</p>
-          </div>
-        )}
+        })}
       </div>
+    </div>
+  );
+}
 
-      {/* Earn more CTA */}
-      <div className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4 text-center mt-2">
-        <p className="text-[11px] text-[#94A3B8] mb-2">Need more points to claim a gift?</p>
-        <button
-          onClick={() => toast("Switch to Play tab", { description: "Play trivia to earn more points!" })}
-          className="px-5 py-2 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-bold transition-all"
-        >
-          Play Trivia to Earn
-        </button>
+// ─── COMPETE TAB (placeholder — same as before) ──────────────────────────────
+
+function CompeteView() {
+  return (
+    <div className="space-y-3">
+      <div className="bg-gradient-to-br from-[#1C1929] to-[#2B254E] border border-[#7C3AED]/20 rounded-2xl p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Trophy size={16} className="text-[#F59E0B]" />
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B]">Church vs Church</p>
+        </div>
+        <p className="text-sm font-bold text-white mb-1">Compete with other churches</p>
+        <p className="text-[11px] text-[#A09DB1] leading-relaxed">
+          Church competitions are coming soon. Your Faith Points will count toward your church's score.
+        </p>
       </div>
     </div>
   );

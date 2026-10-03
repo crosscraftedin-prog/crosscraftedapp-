@@ -3,6 +3,7 @@ import { Geist } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
+import { Providers } from "@/components/crosscrafted/Providers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -12,7 +13,7 @@ const geistSans = Geist({
 export const metadata: Metadata = {
   title: "crosscrafted — Grow in Faith, Together",
   description:
-    "Your all-in-one Christian community platform — Bible trivia, apologetics, church directory, marketplace, prayer wall, and more. Built to strengthen faith and connect believers across India.",
+    "Your all-in-one Christian community platform — Bible trivia, apologetics, church directory, marketplace, and more. Built to strengthen faith and connect believers across India.",
   keywords: [
     "CrossCrafted",
     "Christian community",
@@ -50,7 +51,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} antialiased bg-[#12101A] text-white`}
       >
-        {children}
+        <Providers>
+          {children}
+        </Providers>
         <Toaster />
         <SonnerToaster position="top-center" />
       </body>

@@ -29,7 +29,7 @@ const FEATURES = [
     icon: Award,
     color: "#38BDF8",
     title: "Bible Trivia Challenge",
-    desc: "Test your Bible knowledge across 4 difficulty levels — Beginners, Intermediate, Skilled, Expert. Choose Full Bible, New Testament, Old Testament, or Apologetics. 800+ questions, points system, and prizes!",
+    desc: "Test your Bible knowledge across 4 difficulty levels — Beginners, Intermediate, Skilled, Expert. Choose Full Bible, New Testament, Old Testament, or Apologetics. Earn Faith Points for new questions, unlock rewards, and compete with other churches!",
     view: "trivia",
   },
   {
@@ -168,7 +168,7 @@ export default function LandingHero({ onEnterApp }: Props) {
             className="grid grid-cols-4 gap-6 pt-8 border-t border-white/[0.04] max-w-lg mx-auto"
           >
             <div>
-              <p className="text-xl font-extrabold text-[#F39B9B]">800+</p>
+              <p className="text-xl font-extrabold text-[#F39B9B]">25+</p>
               <p className="text-[10px] text-[#726E88] font-bold uppercase tracking-wider mt-0.5">Quiz Questions</p>
             </div>
             <div>
@@ -285,7 +285,7 @@ export default function LandingHero({ onEnterApp }: Props) {
               </div>
               <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">How Well Do You Know the Bible?</h2>
               <p className="text-sm text-[#A09DB1] leading-relaxed">
-                4 difficulty levels, 4 categories, 800+ questions, points and prizes
+                4 difficulty levels, 4 categories, growing question pool, Faith Points and real rewards
               </p>
               <div className="grid grid-cols-2 gap-3 pt-2">
                 {TRIVIA_LEVELS.map((lvl) => (

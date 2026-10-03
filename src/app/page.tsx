@@ -32,6 +32,7 @@ import ListYourEntity from "@/components/crosscrafted/ListYourEntity";
 import BibleView from "@/components/crosscrafted/BibleView";
 import BiblePlansView from "@/components/crosscrafted/BiblePlansView";
 import AdminView from "@/components/crosscrafted/AdminView";
+import HeaderUserSection from "@/components/crosscrafted/HeaderUserSection";
 import { type Translation } from "@/lib/bible-data";
 
 type View =
@@ -148,12 +149,7 @@ export default function Home() {
             <h1 className="text-base md:text-lg font-black tracking-tight text-white">crosscrafted</h1>
           </button>
           <div className="hidden md:flex items-center gap-3">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.06]">
-              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#F39B9B] to-[#9786E3] flex items-center justify-center text-[10px] font-bold text-slate-950">
-                G
-              </div>
-              <span className="text-sm text-[#94A3B8]">Guest</span>
-            </div>
+            <HeaderUserSection />
             <button
               onClick={goHome}
               className="p-2 rounded-xl hover:bg-white/5 transition-colors"
@@ -171,9 +167,7 @@ export default function Home() {
           </div>
           {/* Mobile: minimal right side */}
           <div className="md:hidden flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#F39B9B] to-[#9786E3] flex items-center justify-center text-[10px] font-bold text-slate-950">
-              G
-            </div>
+            <HeaderUserSection mobile />
             <button
               onClick={goHome}
               className="w-8 h-8 rounded-full flex items-center justify-center bg-white/[0.06]"
