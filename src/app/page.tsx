@@ -17,6 +17,8 @@ import {
   HeartHandshake,
   BookMarked,
   ListChecks,
+  Grid,
+  X,
 } from "lucide-react";
 import LandingHero from "@/components/crosscrafted/LandingHero";
 import ChurchesView from "@/components/crosscrafted/ChurchesView";
@@ -55,27 +57,41 @@ const SIDEBAR_LINKS: { id: View; icon: typeof Search; label: string }[] = [
   { id: "apologetics", icon: ListChecks, label: "Apologetics" },
   { id: "list-church", icon: Building2, label: "List Church" },
   { id: "shop", icon: Store, label: "Marketplace" },
+  { id: "list-business", icon: Store, label: "List Business" },
   { id: "prayer-wall", icon: HeartHandshake, label: "Prayer Wall" },
 ];
 
-// Mobile bottom nav — Bible takes the first slot (top priority).
+// Mobile bottom nav — 4 quick-access slots + a "More" button that opens the full menu.
+// The 4 quick slots are the most-used features; everything else lives behind "More".
 const MOBILE_NAV: { id: View; icon: typeof Search; label: string }[] = [
   { id: "bible", icon: BookOpen, label: "Bible" },
   { id: "churches", icon: Search, label: "Churches" },
   { id: "trivia", icon: Award, label: "Trivia" },
   { id: "shop", icon: Store, label: "Shop" },
-  { id: "prayer-wall", icon: Heart, label: "Prayer" },
+];
+
+// Views that are NOT in the quick-access bottom nav (shown in the "More" sheet).
+const MOBILE_MORE_VIEWS: { id: View; icon: typeof Search; label: string }[] = [
+  { id: "bible-plans", icon: BookMarked, label: "Reading Plans" },
+  { id: "events", icon: Calendar, label: "Events" },
+  { id: "apologetics", icon: ListChecks, label: "Apologetics" },
+  { id: "prayer-wall", icon: HeartHandshake, label: "Prayer Wall" },
+  { id: "list-church", icon: Building2, label: "List Church" },
+  { id: "list-business", icon: Store, label: "List Business" },
+  { id: "small-groups", icon: UsersRound, label: "Small Groups" },
 ];
 
 export default function Home() {
   const [view, setView] = useState<View>("landing");
   const [headerVisible, setHeaderVisible] = useState(true);
+  const [showMoreSheet, setShowMoreSheet] = useState(false);
   const lastScrollY = useRef(0);
 
   // Navigate to a new view, also resetting header + scroll position.
   const navigate = (next: View) => {
     setView(next);
     setHeaderVisible(true);
+    setShowMoreSheet(false);
     lastScrollY.current = 0;
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "auto" });
@@ -239,7 +255,7 @@ export default function Home() {
         </main>
       </div>
 
-      {/* Mobile Bottom Nav */}
+      {/* Mobile Bottom Nav — 4 quick slots + "More" button */}
       <nav className="md:hidden fixed bottom-4 left-4 right-4 z-50 rounded-[20px] bg-[#111827]/80 backdrop-blur-xl border border-white/[0.08] shadow-[0_12px_40px_rgba(0,0,0,0.6)]">
         <div className="flex items-center justify-around h-14 px-1">
           {MOBILE_NAV.map(({ id, icon: Icon, label }) => {
@@ -279,8 +295,120 @@ export default function Home() {
               </button>
             );
           })}
+
+          {/* "More" button — opens a sheet with all other views */}
+          <button
+            onClick={() => setShowMoreSheet(true)}
+            className="flex flex-col items-center justify-center relative py-1"
+          >
+            <div className="relative flex items-center justify-center">
+              <Grid
+                size={20}
+                strokeWidth={1.6}
+                className="text-[#94A3B8] hover:text-white transition-colors"
+              />
+              {/* Active dot if current view is in the "More" list */}
+              {MOBILE_MORE_VIEWS.some((v) => v.id === view) && (
+                <motion.div
+                  layoutId="mobile-nav-indicator"
+                  className="absolute -bottom-1 w-1 h-1 rounded-full bg-[#38BDF8] shadow-[0_0_8px_#38BDF8]"
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+              )}
+            </div>
+            <span
+              className={`text-[9px] font-bold tracking-wide mt-1 transition-all ${
+                MOBILE_MORE_VIEWS.some((v) => v.id === view)
+                  ? "text-white font-extrabold"
+                  : "text-[#94A3B8]"
+              }`}
+            >
+              More
+            </span>
+          </button>
         </div>
       </nav>
+
+      {/* Mobile "More" sheet — full navigation menu */}
+      <AnimatePresence>
+        {showMoreSheet && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="md:hidden fixed inset-0 bg-black/70 backdrop-blur-md z-[60] flex items-end"
+            onClick={(e) => e.target === e.currentTarget && setShowMoreSheet(false)}
+          >
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 32, stiffness: 380 }}
+              className="bg-[#1C1929] border-t border-white/[0.08] rounded-t-[28px] w-full max-h-[80vh] overflow-y-auto"
+            >
+              <div className="sticky top-0 bg-[#1C1929] flex items-center justify-between p-5 pb-3 border-b border-white/[0.04]">
+                <div>
+                  <h2 className="text-lg font-extrabold text-white">All Sections</h2>
+                  <p className="text-[11px] text-[#94A3B8] mt-0.5">Tap any to navigate</p>
+                </div>
+                <button
+                  onClick={() => setShowMoreSheet(false)}
+                  className="w-9 h-9 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-white/80 hover:text-white"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-5 grid grid-cols-3 gap-3">
+                {/* Show the 4 quick-access views too, so users have everything in one place */}
+                {[...MOBILE_NAV, ...MOBILE_MORE_VIEWS].map(({ id, icon: Icon, label }) => {
+                  const active = view === id;
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => goView(id)}
+                      className={`flex flex-col items-center gap-2 p-3 rounded-2xl border transition-all ${
+                        active
+                          ? "bg-[#7C3AED]/15 border-[#7C3AED]/40"
+                          : "bg-white/[0.03] border-white/[0.06] hover:bg-white/[0.06]"
+                      }`}
+                    >
+                      <div
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                          active ? "bg-[#7C3AED]/20" : "bg-white/[0.04]"
+                        }`}
+                      >
+                        <Icon
+                          size={18}
+                          strokeWidth={active ? 2.4 : 1.8}
+                          className={active ? "text-[#A78BFA]" : "text-[#94A3B8]"}
+                        />
+                      </div>
+                      <span
+                        className={`text-[10px] font-bold text-center leading-tight ${
+                          active ? "text-white" : "text-[#94A3B8]"
+                        }`}
+                      >
+                        {label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Back to landing */}
+              <div className="px-5 pb-6 pt-2 border-t border-white/[0.04]">
+                <button
+                  onClick={() => navigate("landing")}
+                  className="w-full py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold transition-all flex items-center justify-center gap-2"
+                >
+                  <HomeIcon size={14} /> Back to Home Page
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
