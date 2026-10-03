@@ -19,6 +19,7 @@ import {
   ListChecks,
   Grid,
   X,
+  Shield,
 } from "lucide-react";
 import LandingHero from "@/components/crosscrafted/LandingHero";
 import ChurchesView from "@/components/crosscrafted/ChurchesView";
@@ -30,6 +31,7 @@ import ShopView from "@/components/crosscrafted/ShopView";
 import ListYourEntity from "@/components/crosscrafted/ListYourEntity";
 import BibleView from "@/components/crosscrafted/BibleView";
 import BiblePlansView from "@/components/crosscrafted/BiblePlansView";
+import AdminView from "@/components/crosscrafted/AdminView";
 import { type Translation } from "@/lib/bible-data";
 
 type View =
@@ -44,7 +46,8 @@ type View =
   | "shop"
   | "list-church"
   | "list-business"
-  | "small-groups";
+  | "small-groups"
+  | "admin";
 
 // Bible is the main feature — placed at the top of the sidebar.
 const SIDEBAR_LINKS: { id: View; icon: typeof Search; label: string }[] = [
@@ -59,6 +62,7 @@ const SIDEBAR_LINKS: { id: View; icon: typeof Search; label: string }[] = [
   { id: "shop", icon: Store, label: "Marketplace" },
   { id: "list-business", icon: Store, label: "List Business" },
   { id: "prayer-wall", icon: HeartHandshake, label: "Prayer Wall" },
+  { id: "admin", icon: Shield, label: "Admin" },
 ];
 
 // Mobile bottom nav — 4 quick-access slots + a "More" button that opens the full menu.
@@ -79,6 +83,7 @@ const MOBILE_MORE_VIEWS: { id: View; icon: typeof Search; label: string }[] = [
   { id: "list-church", icon: Building2, label: "List Church" },
   { id: "list-business", icon: Store, label: "List Business" },
   { id: "small-groups", icon: UsersRound, label: "Small Groups" },
+  { id: "admin", icon: Shield, label: "Admin" },
 ];
 
 export default function Home() {
@@ -250,6 +255,7 @@ export default function Home() {
               {view === "list-church" && <ListYourEntity variant="church" />}
               {view === "list-business" && <ListYourEntity variant="business" />}
               {view === "small-groups" && <ComingSoonView title="Small Groups" />}
+              {view === "admin" && <AdminView />}
             </motion.div>
           </AnimatePresence>
         </main>
