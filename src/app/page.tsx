@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
   Calendar,
-  BookMarked,
   UsersRound,
   Award,
   BookOpen,
@@ -16,6 +15,8 @@ import {
   LogOut,
   Home as HomeIcon,
   HeartHandshake,
+  BookMarked,
+  ListChecks,
 } from "lucide-react";
 import LandingHero from "@/components/crosscrafted/LandingHero";
 import ChurchesView from "@/components/crosscrafted/ChurchesView";
@@ -25,9 +26,14 @@ import EventsView from "@/components/crosscrafted/EventsView";
 import ApologeticsView from "@/components/crosscrafted/ApologeticsView";
 import ShopView from "@/components/crosscrafted/ShopView";
 import ListYourEntity from "@/components/crosscrafted/ListYourEntity";
+import BibleView from "@/components/crosscrafted/BibleView";
+import BiblePlansView from "@/components/crosscrafted/BiblePlansView";
+import { type Translation } from "@/lib/bible-data";
 
 type View =
   | "landing"
+  | "bible"
+  | "bible-plans"
   | "churches"
   | "events"
   | "trivia"
@@ -36,25 +42,27 @@ type View =
   | "shop"
   | "list-church"
   | "list-business"
-  | "bible-plans"
   | "small-groups";
 
+// Bible is the main feature — placed at the top of the sidebar.
 const SIDEBAR_LINKS: { id: View; icon: typeof Search; label: string }[] = [
+  { id: "bible", icon: BookOpen, label: "Bible" },
+  { id: "bible-plans", icon: BookMarked, label: "Reading Plans" },
   { id: "churches", icon: Search, label: "Churches" },
   { id: "events", icon: Calendar, label: "Events" },
-  { id: "bible-plans", icon: BookMarked, label: "Bible Plans" },
   { id: "small-groups", icon: UsersRound, label: "Small Groups" },
   { id: "trivia", icon: Award, label: "Bible Trivia" },
-  { id: "apologetics", icon: BookOpen, label: "Apologetics" },
+  { id: "apologetics", icon: ListChecks, label: "Apologetics" },
   { id: "list-church", icon: Building2, label: "List Church" },
   { id: "shop", icon: Store, label: "Marketplace" },
   { id: "prayer-wall", icon: HeartHandshake, label: "Prayer Wall" },
 ];
 
+// Mobile bottom nav — Bible takes the first slot (top priority).
 const MOBILE_NAV: { id: View; icon: typeof Search; label: string }[] = [
+  { id: "bible", icon: BookOpen, label: "Bible" },
   { id: "churches", icon: Search, label: "Churches" },
   { id: "trivia", icon: Award, label: "Trivia" },
-  { id: "apologetics", icon: BookOpen, label: "Apologetics" },
   { id: "shop", icon: Store, label: "Shop" },
   { id: "prayer-wall", icon: Heart, label: "Prayer" },
 ];
@@ -210,6 +218,13 @@ export default function Home() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18 }}
             >
+              {view === "bible" && <BibleView />}
+              {view === "bible-plans" && (
+                <BiblePlansView
+                  translation="kjv"
+                  onOpenChapter={() => goView("bible")}
+                />
+              )}
               {view === "churches" && <ChurchesView />}
               {view === "events" && <EventsView />}
               {view === "trivia" && <TriviaView />}
@@ -218,7 +233,6 @@ export default function Home() {
               {view === "shop" && <ShopView />}
               {view === "list-church" && <ListYourEntity variant="church" />}
               {view === "list-business" && <ListYourEntity variant="business" />}
-              {view === "bible-plans" && <ComingSoonView title="Bible Plans" />}
               {view === "small-groups" && <ComingSoonView title="Small Groups" />}
             </motion.div>
           </AnimatePresence>

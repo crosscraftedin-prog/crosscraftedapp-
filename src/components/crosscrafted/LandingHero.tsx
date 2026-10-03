@@ -19,18 +19,18 @@ type Props = {
 
 const FEATURES = [
   {
-    icon: Award,
+    icon: BookOpen,
     color: "#7C3AED",
+    title: "Holy Bible",
+    desc: "Read the entire Bible — all 66 books — in KJV or WEB translation. Search by keyword, bookmark verses, and follow daily reading plans. Available in 11 Indian language UIs.",
+    view: "bible",
+  },
+  {
+    icon: Award,
+    color: "#38BDF8",
     title: "Bible Trivia Challenge",
     desc: "Test your Bible knowledge across 4 difficulty levels — Beginners, Intermediate, Skilled, Expert. Choose Full Bible, New Testament, Old Testament, or Apologetics. 800+ questions, points system, and prizes!",
     view: "trivia",
-  },
-  {
-    icon: BookOpen,
-    color: "#38BDF8",
-    title: "Apologetics Blog",
-    desc: "Ask questions, share answers, and defend the faith with biblical and logical reasoning. Explore topics like God's existence, the problem of evil, resurrection evidence, and science & faith.",
-    view: "apologetics",
   },
   {
     icon: Search,
@@ -93,13 +93,13 @@ export default function LandingHero({ onEnterApp }: Props) {
             <h1 className="text-base font-black tracking-tight">crosscrafted</h1>
           </div>
           <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-[#94A3B8]">
+            <button onClick={() => onEnterApp("bible")} className="hover:text-white transition-colors">Bible</button>
             <button onClick={() => onEnterApp("churches")} className="hover:text-white transition-colors">Churches</button>
             <button onClick={() => onEnterApp("trivia")} className="hover:text-white transition-colors">Trivia</button>
-            <button onClick={() => onEnterApp("apologetics")} className="hover:text-white transition-colors">Apologetics</button>
             <button onClick={() => onEnterApp("shop")} className="hover:text-white transition-colors">Marketplace</button>
           </nav>
           <button
-            onClick={() => onEnterApp("churches")}
+            onClick={() => onEnterApp("bible")}
             className="px-5 py-2.5 bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all hover:-translate-y-px"
           >
             Enter App
@@ -148,10 +148,10 @@ export default function LandingHero({ onEnterApp }: Props) {
             className="flex flex-wrap justify-center gap-4 pt-2"
           >
             <button
-              onClick={() => onEnterApp("churches")}
+              onClick={() => onEnterApp("bible")}
               className="px-8 py-3.5 bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 font-extrabold rounded-2xl text-sm uppercase tracking-wider shadow-lg shadow-[#F39B9B]/20 flex items-center gap-2 transition-all hover:-translate-y-px"
             >
-              <ArrowRight size={18} /> Get Started
+              <ArrowRight size={18} /> Read the Bible
             </button>
             <button
               onClick={() => onEnterApp("trivia")}
@@ -184,6 +184,58 @@ export default function LandingHero({ onEnterApp }: Props) {
               <p className="text-[10px] text-[#726E88] font-bold uppercase tracking-wider mt-0.5">To Use</p>
             </div>
           </motion.div>
+        </div>
+      </section>
+
+      {/* Bible CTA */}
+      <section className="py-16 px-6 max-w-5xl mx-auto w-full">
+        <div className="bg-gradient-to-br from-[#1C1929] to-[#2B254E] border border-[#7C3AED]/20 rounded-3xl p-8 sm:p-12 shadow-2xl">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+            <div className="space-y-4">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#7C3AED]/15 border border-[#7C3AED]/25 text-[#A78BFA] text-xs font-bold">
+                <BookOpen size={12} /> The Holy Bible
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Read God's Word Daily</h2>
+              <p className="text-sm text-[#A09DB1] leading-relaxed">
+                All 66 books, in KJV and WEB translations. Search any verse by keyword,
+                bookmark favorites, and follow daily reading plans — Bible in 90 Days,
+                Gospels in 14 Days, Psalms &amp; Proverbs in 31 Days.
+              </p>
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <div className="bg-white/[0.04] rounded-xl px-3 py-2 border border-white/[0.06]">
+                  <p className="text-xs font-bold text-[#A78BFA]">66 Books</p>
+                  <p className="text-[10px] text-[#94A3B8]">39 OT · 27 NT</p>
+                </div>
+                <div className="bg-white/[0.04] rounded-xl px-3 py-2 border border-white/[0.06]">
+                  <p className="text-xs font-bold text-[#38BDF8]">2 Translations</p>
+                  <p className="text-[10px] text-[#94A3B8]">KJV · WEB</p>
+                </div>
+                <div className="bg-white/[0.04] rounded-xl px-3 py-2 border border-white/[0.06]">
+                  <p className="text-xs font-bold text-[#F59E0B]">4 Plans</p>
+                  <p className="text-[10px] text-[#94A3B8]">14 – 90 days</p>
+                </div>
+                <div className="bg-white/[0.04] rounded-xl px-3 py-2 border border-white/[0.06]">
+                  <p className="text-xs font-bold text-[#22C55E]">11 Langs</p>
+                  <p className="text-[10px] text-[#94A3B8]">Indian UIs</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col items-center justify-center">
+              <button
+                onClick={() => onEnterApp("bible")}
+                className="w-full px-8 py-4 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-extrabold rounded-2xl text-sm uppercase tracking-wider shadow-lg shadow-[#7C3AED]/25 flex items-center justify-center gap-2 transition-all hover:-translate-y-px"
+              >
+                <BookOpen size={16} /> Open the Bible
+              </button>
+              <button
+                onClick={() => onEnterApp("bible-plans")}
+                className="w-full mt-3 px-8 py-3 bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.06] text-[#94A3B8] hover:text-white font-bold rounded-2xl text-xs uppercase tracking-wider transition-all"
+              >
+                Browse Reading Plans
+              </button>
+              <p className="text-xs text-[#726E88] mt-3">Free · Works offline after first read</p>
+            </div>
+          </div>
         </div>
       </section>
 
