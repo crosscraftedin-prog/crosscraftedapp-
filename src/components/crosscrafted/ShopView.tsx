@@ -12,7 +12,6 @@ import {
   Store,
   MapPin,
   Truck,
-  Image as ImageIcon,
   Phone,
   IndianRupee,
 } from "lucide-react";
@@ -23,6 +22,7 @@ import {
   INDIAN_STATES,
   type Product,
 } from "@/lib/crosscrafted-data";
+import ImagePicker from "@/components/crosscrafted/ImagePicker";
 
 const CATEGORIES = ["All", "Bibles", "Books", "Music", "Apparel", "Gifts"];
 
@@ -52,6 +52,7 @@ export default function ShopView() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [openProduct, setOpenProduct] = useState<Product | null>(null);
+  const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -62,7 +63,7 @@ export default function ShopView() {
     vendor: "",
     city: "",
     state: "",
-    cover_image: "",
+    images: [] as string[],
     whatsapp_number: "",
   });
 
@@ -84,7 +85,8 @@ export default function ShopView() {
       rating: 0,
       reviews: 0,
       cover_gradient: Math.floor(Math.random() * CHURCH_GRADIENTS.length),
-      cover_image: formData.cover_image || undefined,
+      cover_image: formData.images[0] || undefined,
+      images: formData.images.length > 0 ? formData.images : undefined,
       in_stock: true,
       whatsapp_number: formData.whatsapp_number,
     };
@@ -98,7 +100,7 @@ export default function ShopView() {
       vendor: "",
       city: "",
       state: "",
-      cover_image: "",
+      images: [],
       whatsapp_number: "",
     });
     setShowCreateModal(false);
@@ -212,7 +214,10 @@ export default function ShopView() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
-              onClick={() => setOpenProduct(product)}
+              onClick={() => {
+                setOpenProduct(product);
+                setActiveImageIdx(0);
+              }}
               className="bg-[#1C1929] border border-white/[0.06] rounded-2xl overflow-hidden cursor-pointer hover:border-white/[0.12] transition-all group"
             >
               <div className="relative h-32">
@@ -304,18 +309,29 @@ export default function ShopView() {
               className="bg-[#1C1929] border border-white/[0.08] rounded-t-[28px] md:rounded-[24px] w-full max-w-lg max-h-[90vh] overflow-y-auto"
             >
               <div className="relative h-56">
-                {openProduct.cover_image ? (
-                  <img
-                    src={openProduct.cover_image}
-                    alt={openProduct.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div
-                    className="w-full h-full"
-                    style={{ background: CHURCH_GRADIENTS[openProduct.cover_gradient] }}
-                  />
-                )}
+                {(() => {
+                  const allImages = openProduct.images && openProduct.images.length > 0
+                    ? openProduct.images
+                    : openProduct.cover_image
+                    ? [openProduct.cover_image]
+                    : [];
+                  const activeImg = allImages[activeImageIdx] || allImages[0];
+                  if (activeImg) {
+                    return (
+                      <img
+                        src={activeImg}
+                        alt={openProduct.name}
+                        className="w-full h-full object-cover"
+                      />
+                    );
+                  }
+                  return (
+                    <div
+                      className="w-full h-full"
+                      style={{ background: CHURCH_GRADIENTS[openProduct.cover_gradient] }}
+                    />
+                  );
+                })()}
                 <div className="absolute inset-0 bg-gradient-to-t from-[#1C1929] via-transparent to-transparent" />
                 <button
                   onClick={() => setOpenProduct(null)}
@@ -323,12 +339,37 @@ export default function ShopView() {
                 >
                   <X size={18} />
                 </button>
+                {/* Image counter badge */}
+                {openProduct.images && openProduct.images.length > 1 && (
+                  <span className="absolute top-3 left-3 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold">
+                    {activeImageIdx + 1} / {openProduct.images.length}
+                  </span>
+                )}
                 {!openProduct.in_stock && (
                   <div className="absolute bottom-3 left-3 px-3 py-1 rounded-full bg-[#EF4444]/90 text-white text-[10px] font-bold uppercase tracking-wider">
                     Out of Stock
                   </div>
                 )}
               </div>
+
+              {/* Thumbnail strip */}
+              {openProduct.images && openProduct.images.length > 1 && (
+                <div className="px-5 pt-3 flex gap-2 overflow-x-auto pb-1">
+                  {openProduct.images.map((img, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setActiveImageIdx(idx)}
+                      className={`relative w-14 h-14 rounded-lg overflow-hidden border-2 shrink-0 transition-all ${
+                        idx === activeImageIdx
+                          ? "border-[#7C3AED] opacity-100"
+                          : "border-transparent opacity-60 hover:opacity-100"
+                      }`}
+                    >
+                      <img src={img} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <div className="p-5 space-y-4">
                 <div>
@@ -561,23 +602,12 @@ export default function ShopView() {
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
-                    <ImageIcon size={10} className="inline mr-0.5" /> Product Image URL
-                  </label>
-                  <input
-                    type="url"
-                    value={formData.cover_image}
-                    onChange={(e) => setFormData({ ...formData, cover_image: e.target.value })}
-                    className="neo-input text-sm"
-                    placeholder="https://example.com/photo.jpg"
-                  />
-                  {formData.cover_image && (
-                    <div className="mt-2 rounded-xl overflow-hidden h-24 border border-white/[0.06]">
-                      <img src={formData.cover_image} alt="preview" className="w-full h-full object-cover" />
-                    </div>
-                  )}
-                </div>
+                <ImagePicker
+                  images={formData.images}
+                  onChange={(images) => setFormData({ ...formData, images })}
+                  max={5}
+                  label="Product Photos"
+                />
                 <div>
                   <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
                     <Phone size={10} className="inline mr-0.5" /> WhatsApp Number *

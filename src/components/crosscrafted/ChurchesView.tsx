@@ -15,7 +15,6 @@ import {
   ShieldCheck,
   Search,
   Trash2,
-  Image as ImageIcon,
   Phone,
 } from "lucide-react";
 import {
@@ -26,6 +25,7 @@ import {
   type Church,
   type ServiceTime,
 } from "@/lib/crosscrafted-data";
+import ImagePicker from "@/components/crosscrafted/ImagePicker";
 import { toast } from "sonner";
 
 type Props = {
@@ -43,6 +43,7 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
   const [openChurch, setOpenChurch] = useState<Church | null>(
     CHURCHES.find((c) => c.id === initialOpenChurchId) || null
   );
+  const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [formData, setFormData] = useState<{
     name: string;
     description: string;
@@ -51,7 +52,7 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
     city: string;
     languages: string[];
     denomination: string;
-    cover_image: string;
+    images: string[];
     whatsapp_number: string;
     service_times: ServiceTime[];
   }>({
@@ -62,7 +63,7 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
     city: "",
     languages: [],
     denomination: "",
-    cover_image: "",
+    images: [],
     whatsapp_number: "",
     service_times: [{ language: "English", day: "Sunday", time: "" }],
   });
@@ -143,7 +144,8 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
       city: formData.city,
       languages: formData.languages,
       denomination: formData.denomination || "Non-denominational",
-      cover_image: formData.cover_image || undefined,
+      cover_image: formData.images[0] || undefined,
+      images: formData.images.length > 0 ? formData.images : undefined,
       whatsapp_number: formData.whatsapp_number || undefined,
       service_times: validServices,
       followers_count: 0,
@@ -159,7 +161,7 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
       city: "",
       languages: [],
       denomination: "",
-      cover_image: "",
+      images: [],
       whatsapp_number: "",
       service_times: [{ language: "English", day: "Sunday", time: "" }],
     });
@@ -286,7 +288,10 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
-              onClick={() => setOpenChurch(church)}
+              onClick={() => {
+                setOpenChurch(church);
+                setActiveImageIdx(0);
+              }}
               className="rounded-2xl overflow-hidden cursor-pointer group border border-white/[0.06] hover:border-white/[0.12] transition-all bg-[#1C1929]"
             >
               <div className="relative h-[200px]">
@@ -437,18 +442,29 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
               className="bg-[#1C1929] border border-white/[0.08] rounded-t-[28px] md:rounded-[24px] w-full max-w-lg max-h-[90vh] overflow-y-auto"
             >
               <div className="relative h-48 md:h-56">
-                {openChurch.cover_image ? (
-                  <img
-                    src={openChurch.cover_image}
-                    alt={openChurch.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div
-                    className="w-full h-full"
-                    style={{ background: CHURCH_GRADIENTS[openChurch.cover_gradient % CHURCH_GRADIENTS.length] }}
-                  />
-                )}
+                {(() => {
+                  const allImages = openChurch.images && openChurch.images.length > 0
+                    ? openChurch.images
+                    : openChurch.cover_image
+                    ? [openChurch.cover_image]
+                    : [];
+                  const activeImg = allImages[activeImageIdx] || allImages[0];
+                  if (activeImg) {
+                    return (
+                      <img
+                        src={activeImg}
+                        alt={openChurch.name}
+                        className="w-full h-full object-cover"
+                      />
+                    );
+                  }
+                  return (
+                    <div
+                      className="w-full h-full"
+                      style={{ background: CHURCH_GRADIENTS[openChurch.cover_gradient % CHURCH_GRADIENTS.length] }}
+                    />
+                  );
+                })()}
                 <div className="absolute inset-0 bg-gradient-to-t from-[#1C1929] via-transparent to-transparent" />
                 <button
                   onClick={() => setOpenChurch(null)}
@@ -456,6 +472,12 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
                 >
                   <X size={18} />
                 </button>
+                {/* Image counter */}
+                {openChurch.images && openChurch.images.length > 1 && (
+                  <span className="absolute top-3 left-3 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold">
+                    {activeImageIdx + 1} / {openChurch.images.length}
+                  </span>
+                )}
                 <div className="absolute bottom-4 left-4 right-4">
                   <div className="flex items-center gap-2 mb-1">
                     <h2 className="text-2xl font-extrabold text-white">{openChurch.name}</h2>
@@ -470,6 +492,25 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
                   <p className="text-xs text-white/70">{openChurch.denomination}</p>
                 </div>
               </div>
+
+              {/* Thumbnail strip */}
+              {openChurch.images && openChurch.images.length > 1 && (
+                <div className="px-5 pt-3 flex gap-2 overflow-x-auto pb-1">
+                  {openChurch.images.map((img, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setActiveImageIdx(idx)}
+                      className={`relative w-14 h-14 rounded-lg overflow-hidden border-2 shrink-0 transition-all ${
+                        idx === activeImageIdx
+                          ? "border-[#A855F7] opacity-100"
+                          : "border-transparent opacity-60 hover:opacity-100"
+                      }`}
+                    >
+                      <img src={img} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <div className="p-5 space-y-4">
                 <div className="grid grid-cols-2 gap-3">
@@ -685,23 +726,12 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
-                    <ImageIcon size={10} className="inline mr-0.5" /> Cover Image URL
-                  </label>
-                  <input
-                    type="url"
-                    value={formData.cover_image}
-                    onChange={(e) => setFormData({ ...formData, cover_image: e.target.value })}
-                    className="neo-input text-sm"
-                    placeholder="https://example.com/church-photo.jpg"
-                  />
-                  {formData.cover_image && (
-                    <div className="mt-2 rounded-xl overflow-hidden h-24 border border-white/[0.06]">
-                      <img src={formData.cover_image} alt="preview" className="w-full h-full object-cover" />
-                    </div>
-                  )}
-                </div>
+                <ImagePicker
+                  images={formData.images}
+                  onChange={(images) => setFormData({ ...formData, images })}
+                  max={5}
+                  label="Church Photos"
+                />
 
                 {/* Multi-row service times */}
                 <div>

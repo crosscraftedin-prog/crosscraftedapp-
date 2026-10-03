@@ -15,10 +15,10 @@ import {
   Send,
   Plus,
   Trash2,
-  Image as ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { INDIAN_STATES, LANGUAGES, type ServiceTime } from "@/lib/crosscrafted-data";
+import ImagePicker from "@/components/crosscrafted/ImagePicker";
 
 type Props = {
   variant: "church" | "business";
@@ -38,7 +38,7 @@ export default function ListYourEntity({ variant }: Props) {
     service_times: string;
     denomination: string;
     languages: string[];
-    cover_image: string;
+    images: string[];
     whatsapp_number: string;
     serviceRows: ServiceTime[];
   }>({
@@ -53,7 +53,7 @@ export default function ListYourEntity({ variant }: Props) {
     service_times: "",
     denomination: "",
     languages: [],
-    cover_image: "",
+    images: [],
     whatsapp_number: "",
     serviceRows: [{ language: "English", day: "Sunday", time: "" }],
   });
@@ -130,7 +130,7 @@ export default function ListYourEntity({ variant }: Props) {
               service_times: "",
               denomination: "",
               languages: [],
-              cover_image: "",
+              images: [],
               whatsapp_number: "",
               serviceRows: [{ language: "English", day: "Sunday", time: "" }],
             });
@@ -322,24 +322,13 @@ export default function ListYourEntity({ variant }: Props) {
               </p>
             </div>
 
-            {/* Cover Image */}
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
-                <ImageIcon size={10} className="inline mr-0.5" /> Cover Image URL
-              </label>
-              <input
-                type="url"
-                value={formData.cover_image}
-                onChange={(e) => setFormData({ ...formData, cover_image: e.target.value })}
-                className="neo-input text-sm"
-                placeholder="https://example.com/church-photo.jpg"
-              />
-              {formData.cover_image && (
-                <div className="mt-2 rounded-xl overflow-hidden h-24 border border-white/[0.06]">
-                  <img src={formData.cover_image} alt="preview" className="w-full h-full object-cover" />
-                </div>
-              )}
-            </div>
+            {/* Church Photos */}
+            <ImagePicker
+              images={formData.images}
+              onChange={(images) => setFormData({ ...formData, images })}
+              max={5}
+              label="Church Photos"
+            />
 
             {/* WhatsApp */}
             <div>
@@ -360,24 +349,13 @@ export default function ListYourEntity({ variant }: Props) {
           </>
         ) : (
           <>
-            {/* Cover Image for business */}
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
-                <ImageIcon size={10} className="inline mr-0.5" /> Cover Image URL
-              </label>
-              <input
-                type="url"
-                value={formData.cover_image}
-                onChange={(e) => setFormData({ ...formData, cover_image: e.target.value })}
-                className="neo-input text-sm"
-                placeholder="https://example.com/business-photo.jpg"
-              />
-              {formData.cover_image && (
-                <div className="mt-2 rounded-xl overflow-hidden h-24 border border-white/[0.06]">
-                  <img src={formData.cover_image} alt="preview" className="w-full h-full object-cover" />
-                </div>
-              )}
-            </div>
+            {/* Business Photos */}
+            <ImagePicker
+              images={formData.images}
+              onChange={(images) => setFormData({ ...formData, images })}
+              max={5}
+              label="Business Photos"
+            />
             <div>
               <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
                 <Phone size={10} className="inline mr-0.5" /> WhatsApp Number *

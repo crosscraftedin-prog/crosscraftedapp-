@@ -19,6 +19,7 @@ export type Church = {
   followers_count: number;
   cover_gradient: number;
   cover_image?: string;
+  images?: string[];
   status: "verified" | "pending";
   denomination: string;
   whatsapp_number?: string;
@@ -41,6 +42,7 @@ export type EventItem = {
   attendees: number;
   cover_gradient: number;
   cover_image?: string;
+  images?: string[];
   church: string;
   whatsapp_number?: string;
 };
@@ -106,6 +108,7 @@ export type Product = {
   reviews: number;
   cover_gradient: number;
   cover_image?: string;
+  images?: string[];
   in_stock: boolean;
   whatsapp_number?: string;
 };
@@ -217,6 +220,11 @@ export const CHURCHES: Church[] = [
     followers_count: 1240,
     cover_gradient: 0,
     cover_image: "https://images.unsplash.com/photo-1520637836862-4d197d17c91a?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    images: [
+      "https://images.unsplash.com/photo-1520637836862-4d197d17c91a?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+      "https://images.unsplash.com/photo-1516223298848-69b6c3c7a2d5?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+      "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    ],
     status: "verified",
     denomination: "Non-denominational",
     whatsapp_number: "+919876543210",
@@ -239,6 +247,11 @@ export const CHURCHES: Church[] = [
     followers_count: 2180,
     cover_gradient: 1,
     cover_image: "https://images.unsplash.com/photo-1516223298848-69b6c3c7a2d5?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    images: [
+      "https://images.unsplash.com/photo-1516223298848-69b6c3c7a2d5?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+      "https://images.unsplash.com/photo-1438032005730-c779502df39b?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+      "https://images.unsplash.com/photo-1473773508845-188df298d2d1?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    ],
     status: "verified",
     denomination: "Pentecostal",
     whatsapp_number: "+919876543211",
@@ -678,6 +691,11 @@ export const PRODUCTS: Product[] = [
     reviews: 234,
     cover_gradient: 0,
     cover_image: "https://images.unsplash.com/photo-1546484959-f9a381d1330d?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    images: [
+      "https://images.unsplash.com/photo-1546484959-f9a381d1330d?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+      "https://images.unsplash.com/photo-1520637836862-4d197d17c91a?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+      "https://images.unsplash.com/photo-1565728744382-61accd4aa148?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    ],
     in_stock: true,
     whatsapp_number: "+919876543220",
   },
@@ -695,6 +713,11 @@ export const PRODUCTS: Product[] = [
     reviews: 156,
     cover_gradient: 1,
     cover_image: "https://images.unsplash.com/photo-1565728744382-61accd4aa148?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    images: [
+      "https://images.unsplash.com/photo-1565728744382-61accd4aa148?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+      "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+      "https://images.unsplash.com/photo-1496950866446-3253e1470e8e?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    ],
     in_stock: true,
     whatsapp_number: "+919876543221",
   },
