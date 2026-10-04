@@ -186,6 +186,11 @@ model Gift {
   pointsRequired  Int
   tier            String   // "bronze" | "silver" | "gold" | "platinum"
   stock           Int      @default(0)
+  // Variations & attributes (JSON-encoded strings).
+  // variations: [{"name":"Size","options":["S","M","L","XL"]},{"name":"Color","options":["Black","White"]}]
+  // attributes: [{"label":"Material","value":"100% Cotton"}]
+  variations      String   @default("[]")
+  attributes      String   @default("[]")
   isActive        Boolean   @default(true)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -203,6 +208,9 @@ model GiftRedemption {
   giftDbId     String   // references Gift.id (for relation)
   pointsSpent  Int
   status       String   @default("pending") // "pending" | "contacted" | "shipped" | "delivered"
+  // JSON-encoded string of the user's chosen variations at the time of redemption.
+  // e.g. [{"name":"Size","value":"L"},{"name":"Color","value":"Black"}]
+  selectedVariations String @default("[]")
   createdAt    DateTime @default(now())
 
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)

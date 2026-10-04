@@ -95,6 +95,16 @@ export type ApologeticsQuestion = {
   status: "open" | "answered" | "closed";
 };
 
+export type ProductVariation = {
+  name: string;       // e.g. "Size", "Color"
+  options: string[];  // e.g. ["S","M","L","XL"] or ["Black","White"]
+};
+
+export type ProductAttribute = {
+  label: string;  // e.g. "Material"
+  value: string;  // e.g. "100% Cotton"
+};
+
 export type Product = {
   id: string;
   name: string;
@@ -111,6 +121,9 @@ export type Product = {
   images?: string[];
   in_stock: boolean;
   whatsapp_number?: string;
+  // Optional variations (e.g. sizes, colors) and attributes (e.g. material, weight).
+  variations?: ProductVariation[];
+  attributes?: ProductAttribute[];
 };
 
 export type TriviaQuestion = {
@@ -754,6 +767,15 @@ export const PRODUCTS: Product[] = [
     cover_image: "https://images.unsplash.com/photo-1438032005730-c779502df39b?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     in_stock: true,
     whatsapp_number: "+919876543223",
+    variations: [
+      { name: "Size", options: ["S", "M", "L", "XL", "XXL"] },
+      { name: "Color", options: ["Black", "White", "Navy"] },
+    ],
+    attributes: [
+      { label: "Material", value: "100% Combed Cotton" },
+      { label: "Fit", value: "Unisex Regular Fit" },
+      { label: "Care", value: "Machine Wash Cold" },
+    ],
   },
   {
     id: "pr5",

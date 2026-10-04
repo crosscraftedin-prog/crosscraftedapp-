@@ -414,7 +414,11 @@ export async function submitQuiz(
  * Race-condition safe: if two requests try to claim simultaneously,
  * @@unique([userId, giftId]) prevents double-claiming.
  */
-export async function claimGift(userId: string, giftId: string) {
+export async function claimGift(
+  userId: string,
+  giftId: string,
+  selectedVariations: { name: string; value: string }[] = []
+) {
   const gift = await db.gift.findFirst({
     where: { giftId, isActive: true },
   });
@@ -454,7 +458,7 @@ export async function claimGift(userId: string, giftId: string) {
       where: { id: userId },
       data: { totalPoints: { decrement: gift.pointsRequired } },
     }),
-    // Create redemption record
+    // Create redemption record — includes selected variations for fulfilment
     db.giftRedemption.create({
       data: {
         userId,
@@ -462,6 +466,7 @@ export async function claimGift(userId: string, giftId: string) {
         giftDbId: gift.id,
         pointsSpent: gift.pointsRequired,
         status: "pending",
+        selectedVariations: JSON.stringify(selectedVariations || []),
       },
     }),
     // Decrement gift stock
@@ -485,5 +490,6 @@ export async function claimGift(userId: string, giftId: string) {
     giftTitle: gift.title,
     pointsSpent: gift.pointsRequired,
     newTotalPoints: result[0].totalPoints,
+    selectedVariations,
   };
 }

@@ -4,6 +4,18 @@ import { PrismaClient } from "@prisma/client";
 
 const db = new PrismaClient();
 
+// JSON-encoded fields stored as TEXT in SQLite. Always fall back to []
+// if the column is empty / malformed so the client never crashes.
+function safeParseArray(raw: string | null | undefined): any[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 /**
  * GET /api/trivia/gifts
  *
@@ -38,6 +50,8 @@ export async function GET() {
         pointsRequired: g.pointsRequired,
         tier: g.tier,
         stock: g.stock,
+        variations: safeParseArray(g.variations),
+        attributes: safeParseArray(g.attributes),
         claimed: claimedGiftIds.has(g.giftId),
       })),
       userPoints: user?.totalPoints || 0,

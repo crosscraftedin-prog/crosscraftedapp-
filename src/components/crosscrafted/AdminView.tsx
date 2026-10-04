@@ -26,6 +26,12 @@ import {
   Gift,
   Send,
   LogIn,
+  Tag,
+  Palette,
+  Package,
+  Mail,
+  Truck,
+  CheckCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -53,6 +59,7 @@ type AdminTab =
   | "apologetics"
   | "competitions"
   | "announcements"
+  | "redemptions"
   | "analytics";
 
 const TABS: { id: AdminTab; icon: typeof Shield; label: string }[] = [
@@ -64,6 +71,7 @@ const TABS: { id: AdminTab; icon: typeof Shield; label: string }[] = [
   { id: "apologetics", icon: HelpCircle, label: "Apologetics" },
   { id: "competitions", icon: Trophy, label: "Competitions" },
   { id: "announcements", icon: Megaphone, label: "Announcements" },
+  { id: "redemptions", icon: Package, label: "Redemptions" },
   { id: "analytics", icon: BarChart3, label: "Analytics" },
 ];
 
@@ -198,6 +206,7 @@ export default function AdminView() {
           {activeTab === "apologetics" && <ApologeticsTab />}
           {activeTab === "competitions" && <CompetitionsTab />}
           {activeTab === "announcements" && <AnnouncementsTab />}
+          {activeTab === "redemptions" && <RedemptionsTab />}
           {activeTab === "analytics" && <AnalyticsTab />}
         </motion.div>
       </AnimatePresence>
@@ -762,6 +771,8 @@ function GiftsManagement() {
     points_required: string;
     tier: "bronze" | "silver" | "gold" | "platinum";
     stock: string;
+    variations: { name: string; options: string[] }[];
+    attributes: { label: string; value: string }[];
   }>({
     title: "",
     description: "",
@@ -769,14 +780,14 @@ function GiftsManagement() {
     points_required: "",
     tier: "bronze",
     stock: "10",
+    variations: [],
+    attributes: [],
   });
 
-  // Load gifts from DATABASE (not localStorage)
   const fetchGifts = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/gifts");
       const data = await res.json();
-      // Map DB format to component format
       const mapped = (data.gifts || []).map((g: any) => ({
         id: g.id,
         title: g.title,
@@ -786,6 +797,8 @@ function GiftsManagement() {
         tier: g.tier,
         stock: g.stock,
         isAdmin: g.isAdmin,
+        variations: Array.isArray(g.variations) ? g.variations : [],
+        attributes: Array.isArray(g.attributes) ? g.attributes : [],
       }));
       setGifts(mapped);
     } catch {
@@ -807,6 +820,8 @@ function GiftsManagement() {
       points_required: "",
       tier: "bronze",
       stock: "10",
+      variations: [],
+      attributes: [],
     });
     setEditingId(null);
     setShowAddForm(false);
@@ -818,6 +833,10 @@ function GiftsManagement() {
       toast.error("Please fill in title, points, and add at least 1 image");
       return;
     }
+    if (form.variations.some((v) => v.name.trim() && v.options.length === 0)) {
+      toast.error("Add at least 1 option for each variation name");
+      return;
+    }
 
     const giftData = {
       title: form.title.trim(),
@@ -826,11 +845,12 @@ function GiftsManagement() {
       pointsRequired: Number(form.points_required),
       tier: form.tier,
       stock: Number(form.stock) || 0,
+      variations: form.variations.filter((v) => v.name.trim() && v.options.length > 0),
+      attributes: form.attributes.filter((a) => a.label.trim() && a.value.trim()),
     };
 
     try {
       if (editingId) {
-        // Update existing gift
         const res = await fetch("/api/admin/gifts", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -839,7 +859,6 @@ function GiftsManagement() {
         if (!res.ok) throw new Error("Failed to update");
         toast.success("Gift updated!", { description: "Changes are live in Trivia > Rewards." });
       } else {
-        // Add new gift
         const res = await fetch("/api/admin/gifts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -872,6 +891,18 @@ function GiftsManagement() {
       points_required: String(gift.points_required),
       tier: gift.tier,
       stock: String(gift.stock),
+      variations: Array.isArray(gift.variations) && gift.variations.length > 0
+        ? gift.variations.map((v: any) => ({
+            name: v.name || "",
+            options: Array.isArray(v.options) ? v.options : [],
+          }))
+        : [],
+      attributes: Array.isArray(gift.attributes) && gift.attributes.length > 0
+        ? gift.attributes.map((a: any) => ({
+            label: a.label || "",
+            value: a.value || "",
+          }))
+        : [],
     });
     setShowAddForm(true);
     setTimeout(() => {
@@ -959,7 +990,6 @@ function GiftsManagement() {
         </p>
       )}
 
-      {/* Add/Edit Gift Form */}
       <AnimatePresence>
         {showAddForm && (
           <motion.form
@@ -1003,13 +1033,181 @@ function GiftsManagement() {
               />
             </div>
 
-            {/* Image upload */}
             <ImagePicker
               images={form.images}
               onChange={(images) => setForm({ ...form, images })}
               max={3}
               label="Gift Photos *"
             />
+
+            {/* Variations (sizes, colors, etc.) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8]">
+                  <Tag size={11} /> Variations
+                  <span className="text-[9px] text-[#475569] normal-case tracking-normal">(sizes, colors...)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setForm({
+                      ...form,
+                      variations: [...form.variations, { name: "", options: [] }],
+                    })
+                  }
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#F59E0B]/15 text-[#F59E0B] text-[10px] font-bold hover:bg-[#F59E0B]/25 transition-all"
+                >
+                  <Plus size={10} /> Add
+                </button>
+              </div>
+
+              {form.variations.length === 0 && (
+                <p className="text-[10px] text-[#475569] px-1 py-1.5 italic">
+                  No variations. Add a "Size" or "Color" so users can pick when claiming.
+                </p>
+              )}
+
+              {form.variations.map((v, vIdx) => (
+                <div
+                  key={vIdx}
+                  className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-2.5 space-y-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={v.name}
+                      onChange={(e) => {
+                        const next = [...form.variations];
+                        next[vIdx] = { ...next[vIdx], name: e.target.value };
+                        setForm({ ...form, variations: next });
+                      }}
+                      className="neo-input text-xs flex-1"
+                      placeholder="Variation name (e.g. Size, Color)"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          variations: form.variations.filter((_, i) => i !== vIdx),
+                        })
+                      }
+                      className="w-7 h-7 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] flex items-center justify-center hover:bg-[#EF4444]/25"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 items-center">
+                    {v.options.map((opt, oIdx) => (
+                      <span
+                        key={oIdx}
+                        className="flex items-center gap-1 pl-2 pr-1 py-1 rounded-md bg-[#F59E0B]/10 border border-[#F59E0B]/20 text-[10px] font-semibold text-[#F59E0B]"
+                      >
+                        {opt}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = [...form.variations];
+                            next[vIdx].options = next[vIdx].options.filter((_, i) => i !== oIdx);
+                            setForm({ ...form, variations: next });
+                          }}
+                          className="w-4 h-4 rounded-full bg-[#F59E0B]/20 hover:bg-[#F59E0B]/40 flex items-center justify-center"
+                        >
+                          <X size={9} />
+                        </button>
+                      </span>
+                    ))}
+                    <input
+                      type="text"
+                      placeholder="Add option + Enter"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const target = e.target as HTMLInputElement;
+                          const val = target.value.trim();
+                          if (!val) return;
+                          const next = [...form.variations];
+                          next[vIdx] = {
+                            ...next[vIdx],
+                            options: [...next[vIdx].options, val],
+                          };
+                          setForm({ ...form, variations: next });
+                          target.value = "";
+                        }
+                      }}
+                      className="bg-transparent border border-dashed border-white/[0.12] rounded-md px-2 py-1 text-[10px] text-white outline-none focus:border-[#F59E0B]/50 flex-1 min-w-[100px]"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Attributes (material, fit, weight, etc.) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8]">
+                  <Palette size={11} /> Attributes
+                  <span className="text-[9px] text-[#475569] normal-case tracking-normal">(material, weight...)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setForm({
+                      ...form,
+                      attributes: [...form.attributes, { label: "", value: "" }],
+                    })
+                  }
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#9786E3]/15 text-[#9786E3] text-[10px] font-bold hover:bg-[#9786E3]/25 transition-all"
+                >
+                  <Plus size={10} /> Add
+                </button>
+              </div>
+
+              {form.attributes.length === 0 && (
+                <p className="text-[10px] text-[#475569] px-1 py-1.5 italic">
+                  No attributes. Add specs like "Material: 100% Cotton".
+                </p>
+              )}
+
+              {form.attributes.map((a, aIdx) => (
+                <div key={aIdx} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={a.label}
+                    onChange={(e) => {
+                      const next = [...form.attributes];
+                      next[aIdx] = { ...next[aIdx], label: e.target.value };
+                      setForm({ ...form, attributes: next });
+                    }}
+                    className="neo-input text-xs w-[40%]"
+                    placeholder="Label (e.g. Material)"
+                  />
+                  <input
+                    type="text"
+                    value={a.value}
+                    onChange={(e) => {
+                      const next = [...form.attributes];
+                      next[aIdx] = { ...next[aIdx], value: e.target.value };
+                      setForm({ ...form, attributes: next });
+                    }}
+                    className="neo-input text-xs flex-1"
+                    placeholder="Value (e.g. 100% Cotton)"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        attributes: form.attributes.filter((_, i) => i !== aIdx),
+                      })
+                    }
+                    className="w-7 h-7 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] flex items-center justify-center hover:bg-[#EF4444]/25 shrink-0"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              ))}
+            </div>
 
             <div className="grid grid-cols-3 gap-3">
               <div>
@@ -1056,7 +1254,6 @@ function GiftsManagement() {
               </div>
             </div>
 
-            {/* Tier preview */}
             <div className="flex items-center gap-2 p-2 rounded-xl bg-white/[0.02] border border-white/[0.04]">
               <span
                 className="px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider"
@@ -1088,7 +1285,6 @@ function GiftsManagement() {
         )}
       </AnimatePresence>
 
-      {/* Gifts grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
         {gifts.map((g) => {
           const admin = g.isAdmin;
@@ -1115,6 +1311,30 @@ function GiftsManagement() {
               </div>
               <p className="text-xs font-bold text-white line-clamp-1">{g.title}</p>
               <p className="text-[9px] text-[#A09DB1] line-clamp-2 mt-0.5 mb-1">{g.description}</p>
+
+              {((g.variations?.length || 0) > 0 || (g.attributes?.length || 0) > 0) && (
+                <div className="flex flex-wrap gap-0.5 mb-1.5">
+                  {g.variations?.map((v: any, vIdx: number) => (
+                    <span
+                      key={`v-${vIdx}`}
+                      className="px-1 py-0.5 rounded-md bg-[#F59E0B]/10 text-[#F59E0B] text-[8px] font-bold uppercase tracking-wide"
+                      title={`${v.name}: ${v.options?.length || 0} options`}
+                    >
+                      {v.name}: {(v.options || []).length}
+                    </span>
+                  ))}
+                  {g.attributes?.map((a: any, aIdx: number) => (
+                    <span
+                      key={`a-${aIdx}`}
+                      className="px-1 py-0.5 rounded-md bg-[#9786E3]/10 text-[#9786E3] text-[8px] font-bold uppercase tracking-wide"
+                      title={`${a.label}: ${a.value}`}
+                    >
+                      {a.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] font-bold text-[#F59E0B]">{g.points_required.toLocaleString()} pts</span>
                 <div className="flex items-center gap-1">
@@ -1386,6 +1606,247 @@ function AnalyticsTab() {
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── REDEMPTIONS (claimed gifts fulfilment dashboard) ──────────────────────
+
+const REDEMPTION_STATUSES = [
+  { id: "pending",   label: "Pending",   color: "#F59E0B", icon: Clock },
+  { id: "contacted", label: "Contacted",  color: "#38BDF8", icon: Mail },
+  { id: "shipped",   label: "Shipped",    color: "#9786E3", icon: Truck },
+  { id: "delivered", label: "Delivered",  color: "#22C55E", icon: CheckCircle },
+] as const;
+
+function RedemptionsTab() {
+  const [redemptions, setRedemptions] = useState<any[]>([]);
+  const [counts, setCounts] = useState({ total: 0, pending: 0, contacted: 0, shipped: 0, delivered: 0 });
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<string>("all");
+  const [updating, setUpdating] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const url = filter === "all" ? "/api/admin/redemptions" : `/api/admin/redemptions?status=${filter}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      setRedemptions(data.redemptions || []);
+      setCounts(data.counts || { total: 0, pending: 0, contacted: 0, shipped: 0, delivered: 0 });
+    } catch {
+      toast.error("Failed to load redemptions");
+    } finally {
+      setLoading(false);
+    }
+  }, [filter]);
+
+  useEffect(() => {
+    setLoading(true);
+    load();
+  }, [load]);
+
+  const updateStatus = async (redemptionId: string, status: string) => {
+    setUpdating(redemptionId);
+    try {
+      const res = await fetch("/api/admin/redemptions", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ redemptionId, status }),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+      toast.success(`Marked as ${status}`);
+      load();
+    } catch {
+      toast.error("Failed to update status");
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const formatTimeAgo = (iso: string) => {
+    const d = new Date(iso);
+    const diff = Date.now() - d.getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ago`;
+  };
+
+  const stats = [
+    { label: "Total", value: counts.total, color: "#A855F7", icon: Package },
+    { label: "Pending", value: counts.pending, color: "#F59E0B", icon: Clock },
+    { label: "Contacted", value: counts.contacted, color: "#38BDF8", icon: Mail },
+    { label: "Shipped", value: counts.shipped, color: "#9786E3", icon: Truck },
+    { label: "Delivered", value: counts.delivered, color: "#22C55E", icon: CheckCircle },
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="w-8 h-8 rounded-full border-2 border-transparent border-t-[#F59E0B] animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <AdminSectionHeader title="Gift Redemptions" count={counts.total} color="#F59E0B" />
+
+      {/* Stats grid */}
+      <div className="grid grid-cols-5 gap-2">
+        {stats.map((s) => (
+          <div
+            key={s.label}
+            className="bg-[#1C1929] border border-white/[0.06] rounded-xl p-2 text-center"
+          >
+            <s.icon size={12} className="mx-auto mb-1" style={{ color: s.color }} />
+            <p className="text-base font-extrabold text-white">{s.value}</p>
+            <p className="text-[8px] text-[#94A3B8] uppercase tracking-wider">{s.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Filter pills */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
+        {["all", ...REDEMPTION_STATUSES.map((s) => s.id)].map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all ${
+              filter === f
+                ? "bg-[#F59E0B] text-slate-950"
+                : "bg-white/[0.04] text-[#94A3B8] hover:text-white border border-white/[0.06]"
+            }`}
+          >
+            {f}
+            {f !== "all" && (
+              <span className="ml-1 opacity-70">
+                {(counts as any)[f] || 0}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Redemptions list */}
+      {redemptions.length === 0 ? (
+        <div className="bg-[#1C1929] border border-dashed border-white/[0.12] rounded-2xl p-8 text-center">
+          <Package size={28} className="mx-auto text-[#475569] mb-2" />
+          <p className="text-sm text-[#94A3B8]">No redemptions yet.</p>
+          <p className="text-[10px] text-[#64748B] mt-1">
+            When players claim gifts from Trivia → Rewards, they&apos;ll appear here with the
+            size/color they picked.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {redemptions.map((r) => {
+            const statusInfo = REDEMPTION_STATUSES.find((s) => s.id === r.status) || REDEMPTION_STATUSES[0];
+            const StatusIcon = statusInfo.icon;
+            return (
+              <div
+                key={r.id}
+                className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-3 flex gap-3"
+              >
+                {/* Gift image */}
+                <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 border border-white/[0.06]">
+                  {r.giftImage ? (
+                    <img src={r.giftImage} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-white/[0.04]">
+                      <Gift size={20} className="text-[#475569]" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Main info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2 mb-0.5">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-bold text-white line-clamp-1">{r.giftTitle}</h3>
+                      <p className="text-[10px] text-[#94A3B8] truncate">
+                        {r.userName} · {r.userEmail || "no email"}
+                      </p>
+                    </div>
+                    <span
+                      className="px-1.5 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider flex items-center gap-1 shrink-0"
+                      style={{ backgroundColor: `${statusInfo.color}25`, color: statusInfo.color }}
+                    >
+                      <StatusIcon size={9} /> {statusInfo.label}
+                    </span>
+                  </div>
+
+                  {/* Selected variations */}
+                  {Array.isArray(r.selectedVariations) && r.selectedVariations.length > 0 ? (
+                    <div className="flex flex-wrap gap-1 my-1.5">
+                      {r.selectedVariations.map((v: any, vIdx: number) => (
+                        <span
+                          key={vIdx}
+                          className="px-1.5 py-0.5 rounded-md bg-[#F59E0B]/10 border border-[#F59E0B]/20 text-[#F59E0B] text-[9px] font-bold"
+                        >
+                          {v.name}: <span className="text-white">{v.value}</span>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[9px] text-[#64748B] italic my-1">No variations selected</p>
+                  )}
+
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[9px] text-[#64748B]">
+                      {formatTimeAgo(r.createdAt)} · {r.pointsSpent.toLocaleString()} FP spent
+                    </p>
+
+                    {/* Status update buttons */}
+                    <div className="flex gap-0.5">
+                      {REDEMPTION_STATUSES.map((s) => {
+                        const SIcon = s.icon;
+                        const isCurrent = r.status === s.id;
+                        return (
+                          <button
+                            key={s.id}
+                            onClick={() => updateStatus(r.id, s.id)}
+                            disabled={isCurrent || updating === r.id}
+                            title={`Mark as ${s.label}`}
+                            className={`w-6 h-6 rounded-md flex items-center justify-center transition-all border ${
+                              isCurrent
+                                ? "opacity-40 cursor-default"
+                                : "hover:bg-white/[0.08] border-white/[0.06]"
+                            }`}
+                            style={
+                              isCurrent
+                                ? { backgroundColor: `${s.color}25`, color: s.color, borderColor: `${s.color}40` }
+                                : { color: s.color, borderColor: `${s.color}30`, backgroundColor: `${s.color}10` }
+                            }
+                          >
+                            {updating === r.id ? (
+                              <div className="w-3 h-3 rounded-full border border-transparent border-t-current animate-spin" />
+                            ) : (
+                              <SIcon size={11} />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Help footer */}
+      <div className="bg-[#F59E0B]/8 border border-[#F59E0B]/20 rounded-xl p-3">
+        <p className="text-[10px] text-[#A09DB1] leading-relaxed">
+          <span className="font-bold text-[#F59E0B]">Workflow:</span> When a player redeems a gift,
+          it appears here as <b>Pending</b>. Contact them via WhatsApp (use their email/username),
+          then mark as <b>Contacted</b> → <b>Shipped</b> → <b>Delivered</b>. The size/color they
+          selected is shown so you know what to ship.
+        </p>
       </div>
     </div>
   );
