@@ -580,8 +580,13 @@ export default function TriviaView() {
                       let cls = "w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all border ";
 
                       if (selectedAnswer === null) {
+                        // Not answered yet — normal state
                         cls += "bg-white/[0.03] border-white/[0.06] text-[#A09DB1] hover:bg-white/[0.06] hover:text-white";
+                      } else if (isSelected) {
+                        // Selected answer — highlight it
+                        cls += "bg-[#7C3AED]/20 border-[#7C3AED]/50 text-white";
                       } else {
+                        // Not selected after answering — dim
                         cls += "bg-white/[0.02] border-white/[0.04] text-[#64748B]";
                       }
 
@@ -593,10 +598,19 @@ export default function TriviaView() {
                           className={cls}
                         >
                           <span className="flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold bg-white/[0.06] text-[#94A3B8]">
+                            <span
+                              className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold ${
+                                isSelected
+                                  ? "bg-[#7C3AED] text-white"
+                                  : "bg-white/[0.06] text-[#94A3B8]"
+                              }`}
+                            >
                               {String.fromCharCode(65 + idx)}
                             </span>
                             {opt}
+                            {isSelected && (
+                              <Check size={14} className="ml-auto text-[#A78BFA]" />
+                            )}
                           </span>
                         </button>
                       );
