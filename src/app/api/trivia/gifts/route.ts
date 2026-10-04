@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
-import { db } from "@/lib/db";
+import { PrismaClient } from "@prisma/client";
+
+const db = new PrismaClient();
 
 /**
  * GET /api/trivia/gifts

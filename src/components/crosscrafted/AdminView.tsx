@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Shield,
@@ -24,6 +25,7 @@ import {
   Clock,
   Gift,
   Send,
+  LogIn,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -42,9 +44,6 @@ import {
 } from "@/lib/crosscrafted-data";
 import { getAllGifts, getAdminGifts, addGift, updateGift, removeGift, isAdminGift } from "@/lib/gifts-store";
 import ImagePicker from "@/components/crosscrafted/ImagePicker";
-
-const ADMIN_PASSWORD = "crosscrafted2025"; // demo password — replace with real auth
-const ADMIN_SESSION_KEY = "crosscrafted_admin_session";
 
 type AdminTab =
   | "dashboard"
@@ -70,42 +69,23 @@ const TABS: { id: AdminTab; icon: typeof Shield; label: string }[] = [
 ];
 
 export default function AdminView() {
-  const [authed, setAuthed] = useState(false);
-  const [password, setPassword] = useState("");
-  const [showLogin, setShowLogin] = useState(true);
+  const { data: session, status } = useSession();
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
 
-  // Check existing session
-  useEffect(() => {
-    const session = localStorage.getItem(ADMIN_SESSION_KEY);
-    if (session === "active") {
-      setAuthed(true);
-      setShowLogin(false);
-    }
-  }, []);
+  const isAuthenticated = status === "authenticated" && !!session?.user;
+  const isAdmin = isAuthenticated && (session?.user as any)?.role === "admin";
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password === ADMIN_PASSWORD) {
-      setAuthed(true);
-      setShowLogin(false);
-      localStorage.setItem(ADMIN_SESSION_KEY, "active");
-      toast.success("Welcome, Admin!", { description: "You have full access to manage CrossCrafted." });
-    } else {
-      toast.error("Wrong password", { description: "Contact the dev team if you forgot it." });
-    }
-  };
+  // Loading state
+  if (status === "loading") {
+    return (
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <div className="w-8 h-8 rounded-full border-2 border-transparent border-t-[#7C3AED] animate-spin" />
+      </div>
+    );
+  }
 
-  const handleLogout = () => {
-    setAuthed(false);
-    setShowLogin(true);
-    setPassword("");
-    localStorage.removeItem(ADMIN_SESSION_KEY);
-    toast("Logged out of admin");
-  };
-
-  // Login screen
-  if (!authed) {
+  // Not signed in — show login prompt
+  if (!isAuthenticated) {
     return (
       <div className="max-w-md mx-auto px-4 py-12">
         <motion.div
@@ -118,37 +98,23 @@ export default function AdminView() {
               <Shield size={28} className="text-[#A78BFA]" />
             </div>
             <h1 className="text-2xl font-extrabold text-white">Admin Access</h1>
-            <p className="text-sm text-[#A09DB1] mt-1">Sign in to manage CrossCrafted</p>
+            <p className="text-sm text-[#A09DB1] mt-1">Sign in with an admin account</p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
-                <Lock size={10} className="inline mr-0.5" /> Admin Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="neo-input text-sm"
-                placeholder="Enter admin password"
-                autoFocus
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all hover:-translate-y-px"
-              style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)" }}
-            >
-              Sign In
-            </button>
-          </form>
+          <a
+            href="/auth/signin"
+            className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all hover:-translate-y-px flex items-center justify-center gap-2"
+            style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)" }}
+          >
+            <LogIn size={16} /> Sign In
+          </a>
 
-          <div className="mt-6 p-3 rounded-xl bg-[#F59E0B]/8 border border-[#F59E0B]/20">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B] mb-1">Demo Password</p>
-            <p className="text-xs text-[#A09DB1] font-mono">crosscrafted2025</p>
-            <p className="text-[10px] text-[#64748B] mt-1">
-              In production, replace with NextAuth + role-based access.
+          <div className="mt-6 p-3 rounded-xl bg-[#38BDF8]/8 border border-[#38BDF8]/20">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-[#38BDF8] mb-1">Admin Access</p>
+            <p className="text-[11px] text-[#A09DB1] leading-relaxed">
+              Admin authorization is verified server-side via your authenticated session role.
+              Only users with the <span className="font-bold text-white">admin</span> role in the database
+              can access this panel.
             </p>
           </div>
         </motion.div>
@@ -156,7 +122,33 @@ export default function AdminView() {
     );
   }
 
-  // Admin dashboard
+  // Signed in but NOT admin
+  if (!isAdmin) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-12">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-br from-[#1C1929] to-[#2B254E] border border-[#EF4444]/20 rounded-3xl p-8 text-center"
+        >
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#EF4444]/15 border border-[#EF4444]/30 mb-4">
+            <Lock size={28} className="text-[#EF4444]" />
+          </div>
+          <h1 className="text-2xl font-extrabold text-white mb-2">Access Denied</h1>
+          <p className="text-sm text-[#A09DB1] mb-4">
+            You're signed in as <span className="font-bold text-white">{session?.user?.name || session?.user?.email}</span>,
+            but your account doesn't have admin privileges.
+          </p>
+          <p className="text-[11px] text-[#64748B]">
+            Admin access is granted by setting <code className="text-[#A78BFA]">role = "admin"</code> in the
+            database User table. Contact the site administrator if you believe this is an error.
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Admin dashboard — user is authenticated AND has admin role
   return (
     <div className="max-w-[1100px] mx-auto px-4 py-5">
       {/* Header */}
@@ -167,15 +159,9 @@ export default function AdminView() {
           </div>
           <div>
             <h1 className="text-lg font-extrabold text-white">Admin Panel</h1>
-            <p className="text-[10px] text-[#94A3B8]">Manage all of CrossCrafted</p>
+            <p className="text-[10px] text-[#94A3B8]">Signed in as {session?.user?.name || session?.user?.email}</p>
           </div>
         </div>
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold transition-all"
-        >
-          <X size={14} /> Logout
-        </button>
       </div>
 
       {/* Tabs */}

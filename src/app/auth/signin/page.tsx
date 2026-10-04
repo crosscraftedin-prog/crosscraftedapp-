@@ -10,6 +10,8 @@ export default function SignInPage() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
+  // Dev login is only shown when NOT in production
+  const showDevLogin = process.env.NODE_ENV !== "production";
 
   const handleDevLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,7 +61,8 @@ export default function SignInPage() {
             <div className="flex-1 h-px bg-white/[0.08]" />
           </div>
 
-          {/* Dev Credentials Login — for testing without Google OAuth */}
+          {/* Dev Credentials Login — only shown in development, NOT in production */}
+          {showDevLogin ? (
           <form onSubmit={handleDevLogin} className="space-y-3">
             <div>
               <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
@@ -96,6 +99,14 @@ export default function SignInPage() {
               <ArrowRight size={14} />
             </button>
           </form>
+          ) : (
+            <div className="bg-[#F59E0B]/8 border border-[#F59E0B]/20 rounded-xl p-3 text-center">
+              <p className="text-[11px] text-[#A09DB1] leading-relaxed">
+                Production mode — use Google Sign In above.
+                Dev login is disabled in production for security.
+              </p>
+            </div>
+          )}
 
           <div className="bg-[#38BDF8]/8 border border-[#38BDF8]/20 rounded-xl p-3">
             <div className="flex items-center gap-1.5 mb-1">

@@ -20,6 +20,7 @@ const db = new PrismaClient();
  * There is no duplicate auth system.
  */
 
+const isProduction = process.env.NODE_ENV === "production";
 const hasGoogleCreds = !!(
   process.env.GOOGLE_CLIENT_ID &&
   process.env.GOOGLE_CLIENT_SECRET
@@ -36,44 +37,45 @@ if (hasGoogleCreds) {
   );
 }
 
-// Dev-only credentials provider — always available so testing works
-// even without Google OAuth configured. In production with Google enabled,
-// this provides a fallback for dev/testing.
-providers.push(
-  CredentialsProvider({
-    name: "Dev Login",
-    credentials: {
-      email: { label: "Email", type: "email", placeholder: "test@crosscrafted.app" },
-      name: { label: "Name", type: "text", placeholder: "Test Player" },
-    },
-    async authorize(credentials) {
-      if (!credentials?.email) return null;
-      const email = credentials.email.trim().toLowerCase();
-      const name = credentials.name?.trim() || email.split("@")[0];
+// Dev-only credentials provider — DISABLED in production.
+// In production, only Google OAuth is available.
+if (!isProduction) {
+  providers.push(
+    CredentialsProvider({
+      name: "Dev Login",
+      credentials: {
+        email: { label: "Email", type: "email", placeholder: "test@crosscrafted.app" },
+        name: { label: "Name", type: "text", placeholder: "Test Player" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email) return null;
+        const email = credentials.email.trim().toLowerCase();
+        const name = credentials.name?.trim() || email.split("@")[0];
 
-      // Find or create user
-      let user = await db.user.findUnique({ where: { email } });
-      if (!user) {
-        user = await db.user.create({
-          data: {
-            email,
-            name,
-            role: "user",
-            totalPoints: 0,
-          },
-        });
-        console.log(`[auth] Created new dev user: ${email}`);
-      }
+        // Find or create user
+        let user = await db.user.findUnique({ where: { email } });
+        if (!user) {
+          user = await db.user.create({
+            data: {
+              email,
+              name,
+              role: "user",
+              totalPoints: 0,
+            },
+          });
+          console.log(`[auth] Created new dev user: ${email}`);
+        }
 
-      return {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        image: user.image,
-      };
-    },
-  })
-);
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          image: user.image,
+        };
+      },
+    })
+  );
+}
 
 export const authOptions: NextAuthOptions = {
   // Note: No adapter when using Credentials + JWT. The Credentials provider

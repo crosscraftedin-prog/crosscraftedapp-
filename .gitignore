@@ -30,8 +30,18 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files — NEVER commit secrets
+.env
+.env.*
+.env.local
+.env.production
+!.env.example
+
+# database — local SQLite only, never production
+db/*.db
+db/*.db-journal
+db/*.db-wal
+db/*.db-shm
 
 # vercel
 .vercel

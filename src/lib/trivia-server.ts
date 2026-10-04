@@ -428,16 +428,18 @@ export async function claimGift(userId: string, giftId: string) {
     throw new Error("User not found");
   }
 
-  if (user.totalPoints < gift.pointsRequired) {
-    throw new Error(`Not enough points. Need ${gift.pointsRequired}, have ${user.totalPoints}`);
-  }
-
-  // Check existing redemption
+  // Check existing redemption FIRST (before checking points)
+  // This gives a clean "already claimed" error instead of "not enough points"
   const existing = await db.giftRedemption.findUnique({
     where: { userId_giftId: { userId, giftId } },
   });
   if (existing) {
     throw new Error("You have already claimed this gift");
+  }
+
+  // THEN check points
+  if (user.totalPoints < gift.pointsRequired) {
+    throw new Error(`Not enough points. Need ${gift.pointsRequired}, have ${user.totalPoints}`);
   }
 
   // Check stock
