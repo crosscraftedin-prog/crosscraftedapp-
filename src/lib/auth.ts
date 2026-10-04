@@ -37,9 +37,13 @@ if (hasGoogleCreds) {
   );
 }
 
-// Dev-only credentials provider — DISABLED in production.
+// Dev-only credentials provider — DISABLED in production by default.
 // In production, only Google OAuth is available.
-if (!isProduction) {
+// To enable dev login on a staging/Vercel deployment for testing, set:
+//   NEXT_PUBLIC_ALLOW_DEV_LOGIN=true
+// in the Vercel env vars. This is opt-in and off by default for security.
+const allowDevLoginInProd = process.env.NEXT_PUBLIC_ALLOW_DEV_LOGIN === "true";
+if (!isProduction || allowDevLoginInProd) {
   providers.push(
     CredentialsProvider({
       name: "Dev Login",
@@ -52,6 +56,17 @@ if (!isProduction) {
         const email = credentials.email.trim().toLowerCase();
         const name = credentials.name?.trim() || email.split("@")[0];
 
+        // Bootstrap admin: if BOOTSTRAP_ADMIN_EMAIL env var matches the
+        // logging-in email, auto-promote them to admin role. This lets you
+        // set up the first admin on a fresh Vercel deployment without DB
+        // access. The env var can be removed/changed after the first admin
+        // exists. Multiple emails can be comma-separated.
+        const bootstrapEmails = (process.env.BOOTSTRAP_ADMIN_EMAIL || "")
+          .split(",")
+          .map((e) => e.trim().toLowerCase())
+          .filter(Boolean);
+        const shouldBeAdmin = bootstrapEmails.includes(email);
+
         // Find or create user
         let user = await db.user.findUnique({ where: { email } });
         if (!user) {
@@ -59,11 +74,18 @@ if (!isProduction) {
             data: {
               email,
               name,
-              role: "user",
+              role: shouldBeAdmin ? "admin" : "user",
               totalPoints: 0,
             },
           });
-          console.log(`[auth] Created new dev user: ${email}`);
+          console.log(`[auth] Created new dev user: ${email} (role: ${user.role})`);
+        } else if (shouldBeAdmin && user.role !== "admin") {
+          // Existing user — promote to admin if bootstrap email matches
+          user = await db.user.update({
+            where: { id: user.id },
+            data: { role: "admin" },
+          });
+          console.log(`[auth] Promoted ${email} to admin (bootstrap)`);
         }
 
         return {

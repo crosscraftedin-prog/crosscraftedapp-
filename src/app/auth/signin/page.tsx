@@ -10,8 +10,14 @@ export default function SignInPage() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
-  // Dev login is only shown when NOT in production
-  const showDevLogin = process.env.NODE_ENV !== "production";
+  // Dev login is shown when:
+  //   - NOT in production (local dev), OR
+  //   - ALLOW_DEV_LOGIN=true env var is set (opt-in for staging/testing on Vercel)
+  // This keeps production secure by default while letting admins enable dev login
+  // temporarily via Vercel env vars to test new features.
+  const showDevLogin =
+    process.env.NODE_ENV !== "production" ||
+    process.env.NEXT_PUBLIC_ALLOW_DEV_LOGIN === "true";
 
   const handleDevLogin = async (e: React.FormEvent) => {
     e.preventDefault();
