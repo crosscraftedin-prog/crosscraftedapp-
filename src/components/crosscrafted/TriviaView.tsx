@@ -665,14 +665,20 @@ export default function TriviaView() {
                         <div className="bg-[#7C3AED]/8 border border-[#7C3AED]/20 rounded-xl p-3">
                           <div className="flex items-center gap-1.5 mb-1">
                             <Sparkles size={12} className="text-[#A78BFA]" />
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-[#A78BFA]">Explanation</p>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-[#A78BFA]">
+                              {gameMode === "EARN_POINTS" ? "Answer Locked" : "Answer Selected"}
+                            </p>
                           </div>
                           <p className="text-xs text-[#A09DB1] leading-relaxed">
-                            {currentQuestion.scriptureReference && (
-                              <span className="font-bold text-white">{currentQuestion.scriptureReference}: </span>
-                            )}
-                            {currentQuestion.question}
+                            {gameMode === "EARN_POINTS"
+                              ? "Your answer is locked. The correct answer and explanation will be revealed after you submit the quiz."
+                              : "Your answer is selected. Click Next to continue."}
                           </p>
+                          {currentQuestion.scriptureReference && (
+                            <p className="text-[10px] text-[#64748B] mt-1">
+                              Related Scripture: {currentQuestion.scriptureReference}
+                            </p>
+                          )}
                         </div>
                         <button
                           onClick={advanceQuestion}
