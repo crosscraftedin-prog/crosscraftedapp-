@@ -10,6 +10,8 @@ type StreakData = {
   lastActiveDate: string; // YYYY-MM-DD
   totalDays: number; // total active days ever
   history: string[]; // list of YYYY-MM-DD dates (last 60 kept)
+  freezesAvailable: number; // streak freezes available
+  freezesUsed: number; // total freezes ever used
 };
 
 const STORAGE_KEY = "crosscrafted_streaks";
@@ -44,9 +46,9 @@ function getAllStreaks(): Record<StreakActivity, StreakData> {
 
 function defaultStreaks(): Record<StreakActivity, StreakData> {
   return {
-    bible_reading: { currentStreak: 0, bestStreak: 0, lastActiveDate: "", totalDays: 0, history: [] },
-    trivia_play: { currentStreak: 0, bestStreak: 0, lastActiveDate: "", totalDays: 0, history: [] },
-    prayer_share: { currentStreak: 0, bestStreak: 0, lastActiveDate: "", totalDays: 0, history: [] },
+    bible_reading: { currentStreak: 0, bestStreak: 0, lastActiveDate: "", totalDays: 0, history: [], freezesAvailable: 1, freezesUsed: 0 },
+    trivia_play: { currentStreak: 0, bestStreak: 0, lastActiveDate: "", totalDays: 0, history: [], freezesAvailable: 1, freezesUsed: 0 },
+    prayer_share: { currentStreak: 0, bestStreak: 0, lastActiveDate: "", totalDays: 0, history: [], freezesAvailable: 1, freezesUsed: 0 },
   };
 }
 
@@ -90,8 +92,17 @@ export function recordStreak(activity: StreakActivity): StreakInfo {
     // First ever activity
     data.currentStreak = 1;
   } else {
-    // Streak broken — restart at 1
-    data.currentStreak = 1;
+    // Streak might be broken — check for freeze
+    if (data.freezesAvailable > 0) {
+      // Use a freeze — streak continues!
+      data.freezesAvailable -= 1;
+      data.freezesUsed += 1;
+      data.currentStreak += 1;
+      // Note: freeze is used silently; the user sees their streak continue
+    } else {
+      // No freeze — streak broken, restart at 1
+      data.currentStreak = 1;
+    }
   }
 
   data.bestStreak = Math.max(data.bestStreak, data.currentStreak);
@@ -174,3 +185,20 @@ export const STREAK_LABELS: Record<StreakActivity, { singular: string; plural: s
   trivia_play: { singular: "day", plural: "days", verb: "playing trivia" },
   prayer_share: { singular: "day", plural: "days", verb: "sharing prayers" },
 };
+
+/**
+ * Add a streak freeze to a specific activity (e.g., from daily spin reward).
+ */
+export function addStreakFreeze(activity: StreakActivity): void {
+  const all = getAllStreaks();
+  all[activity].freezesAvailable += 1;
+  saveStreaks(all);
+}
+
+/**
+ * Get the number of available freezes for all activities.
+ */
+export function getTotalFreezes(): number {
+  const all = getAllStreaks();
+  return Object.values(all).reduce((sum, d) => sum + d.freezesAvailable, 0);
+}

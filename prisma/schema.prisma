@@ -7,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -33,6 +33,10 @@ model User {
   quizSessions      TriviaQuizSession[]
   pointTransactions TriviaPointTransaction[]
   giftRedemptions   GiftRedemption[]
+  dailyChallengeAttempts DailyChallengeAttempt[]
+  dailySpins        DailySpin[]
+  badges            UserBadge[]
+  streakFreezes     StreakFreeze[]
 
   posts Post[]
 }
@@ -220,4 +224,85 @@ model Post {
   updatedAt DateTime @updatedAt
 
   author User @relation(fields: [authorId], references: [id])
+}
+
+// ─── DAILY CHALLENGE ──────────────────────────────────────────────────────
+// One curated question per day. All users see the same question.
+// Gives 2x FP if answered correctly. Can only answer once.
+
+model DailyChallenge {
+  id            String   @id @default(cuid())
+  challengeDate String   @unique // YYYY-MM-DD
+  questionId    String   // references TriviaQuestion.questionId
+  multiplier    Int      @default(2) // 2x FP
+  createdAt     DateTime @default(now())
+
+  attempts      DailyChallengeAttempt[]
+
+  @@index([challengeDate])
+}
+
+model DailyChallengeAttempt {
+  id              String   @id @default(cuid())
+  userId          String
+  challengeId     String
+  selectedAnswer  Int
+  isCorrect       Boolean
+  pointsAwarded   Int      @default(0)
+  answeredAt      DateTime @default(now())
+
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge       DailyChallenge  @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, challengeId]) // one attempt per user per day
+  @@index([userId])
+}
+
+// ─── DAILY SPIN / TREASURE CHEST ──────────────────────────────────────────
+// Once-per-day random reward. Variable ratio reinforcement (addictive).
+
+model DailySpin {
+  id           String   @id @default(cuid())
+  userId       String
+  rewardType   String   // "fp_5" | "fp_10" | "fp_25" | "fp_50" | "fp_100" | "streak_freeze" | "double_fp"
+  rewardValue  Int      @default(0)
+  spinDate     String   // YYYY-MM-DD
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, spinDate]) // one spin per day
+  @@index([userId])
+}
+
+// ─── BADGES / ACHIEVEMENTS ────────────────────────────────────────────────
+
+model UserBadge {
+  id          String   @id @default(cuid())
+  userId      String
+  badgeId     String   // e.g. "first_streak", "bible_scholar", "perfect_score"
+  badgeName   String
+  badgeIcon   String   // emoji
+  badgeDescription String
+  unlockedAt  DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+}
+
+// ─── STREAK FREEZE ────────────────────────────────────────────────────────
+
+model StreakFreeze {
+  id          String   @id @default(cuid())
+  userId      String
+  activity    String   // "bible_reading" | "trivia_play" | "prayer_share"
+  freezeDate  String   // YYYY-MM-DD
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, activity, freezeDate])
+  @@index([userId])
 }

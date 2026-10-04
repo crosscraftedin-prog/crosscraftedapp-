@@ -39,6 +39,8 @@ import {
   type TriviaQuestion,
 } from "@/lib/crosscrafted-data";
 import StreakBadge from "@/components/crosscrafted/StreakBadge";
+import GamificationPanel from "@/components/crosscrafted/GamificationPanel";
+import LevelUpAnimation from "@/components/crosscrafted/LevelUpAnimation";
 import { useTriviaApi } from "@/lib/trivia-api";
 
 const TIMER_SECONDS: Record<string, number> = {
@@ -376,9 +378,13 @@ export default function TriviaView() {
       <AnimatePresence mode="wait">
         {activeTab === "play" && (
           <motion.div key="play" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <LevelUpAnimation totalPoints={session?.user?.totalPoints || 0} />
             {gameState === "setup" && (
               <div className="space-y-5">
                 <StreakBadge activity="trivia_play" />
+
+                {/* Daily Challenge + Spin + Badges */}
+                <GamificationPanel isAuthenticated={isAuthenticated} />
 
                 {/* Mode toggle */}
                 <div>
