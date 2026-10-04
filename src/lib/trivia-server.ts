@@ -467,13 +467,13 @@ export async function claimGift(userId: string, giftId: string) {
       where: { id: gift.id },
       data: { stock: { decrement: 1 } },
     }),
-    // Create transaction record
+    // Create transaction record (giftId stored in reason since the model
+    // doesn't have a giftId field — avoids schema migration)
     db.triviaPointTransaction.create({
       data: {
         userId,
-        giftId: gift.giftId,
         points: -gift.pointsRequired,
-        reason: "GIFT_REDEMPTION",
+        reason: `GIFT_REDEMPTION:${gift.giftId}:${gift.title}`,
       },
     }),
   ]);
