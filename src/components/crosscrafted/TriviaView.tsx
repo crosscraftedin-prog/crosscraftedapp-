@@ -187,12 +187,32 @@ export default function TriviaView() {
   };
 
   const handleAnswer = (answerIdx: number) => {
-    if (selectedAnswer !== null) return;
+    if (showExplanation) return; // Can't change after confirming
     setSelectedAnswer(answerIdx);
     setShowExplanation(true);
 
     const q = questions[currentQ];
-    setAnswers((prev) => [...prev, { questionId: q.id, selectedAnswer: answerIdx }]);
+    // Update or add the answer for this question
+    setAnswers((prev) => {
+      const existingIdx = prev.findIndex((a) => a.questionId === q.id);
+      if (existingIdx >= 0) {
+        // Update existing answer
+        const updated = [...prev];
+        updated[existingIdx] = { questionId: q.id, selectedAnswer: answerIdx };
+        return updated;
+      }
+      // Add new answer
+      return [...prev, { questionId: q.id, selectedAnswer: answerIdx }];
+    });
+  };
+
+  // Let user change their answer before seeing the explanation
+  const changeAnswer = () => {
+    setSelectedAnswer(null);
+    setShowExplanation(false);
+    // Remove the answer for this question so it can be re-added
+    const q = questions[currentQ];
+    setAnswers((prev) => prev.filter((a) => a.questionId !== q.id));
   };
 
   const advanceQuestion = () => {
@@ -577,31 +597,31 @@ export default function TriviaView() {
                   <div className="space-y-2">
                     {currentQuestion.options.map((opt, idx) => {
                       const isSelected = idx === selectedAnswer;
-                      let cls = "w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all border ";
+                      let cls = "w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all border-2 ";
 
                       if (selectedAnswer === null) {
                         // Not answered yet — normal state
                         cls += "bg-white/[0.03] border-white/[0.06] text-[#A09DB1] hover:bg-white/[0.06] hover:text-white";
                       } else if (isSelected) {
-                        // Selected answer — highlight it
-                        cls += "bg-[#7C3AED]/20 border-[#7C3AED]/50 text-white";
+                        // Selected answer — strong highlight
+                        cls += "bg-[#7C3AED] border-[#7C3AED] text-white";
                       } else {
                         // Not selected after answering — dim
-                        cls += "bg-white/[0.02] border-white/[0.04] text-[#64748B]";
+                        cls += "bg-white/[0.02] border-white/[0.04] text-[#64748B] opacity-50";
                       }
 
                       return (
                         <button
                           key={idx}
                           onClick={() => handleAnswer(idx)}
-                          disabled={selectedAnswer !== null}
+                          disabled={showExplanation}
                           className={cls}
                         >
                           <span className="flex items-center gap-2">
                             <span
                               className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold ${
                                 isSelected
-                                  ? "bg-[#7C3AED] text-white"
+                                  ? "bg-white/30 text-white"
                                   : "bg-white/[0.06] text-[#94A3B8]"
                               }`}
                             >
@@ -609,13 +629,23 @@ export default function TriviaView() {
                             </span>
                             {opt}
                             {isSelected && (
-                              <Check size={14} className="ml-auto text-[#A78BFA]" />
+                              <Check size={14} className="ml-auto text-white" />
                             )}
                           </span>
                         </button>
                       );
                     })}
                   </div>
+
+                  {/* Change answer button — lets user pick a different answer before confirming */}
+                  {selectedAnswer !== null && !showExplanation && (
+                    <button
+                      onClick={changeAnswer}
+                      className="mt-2 text-[11px] text-[#94A3B8] hover:text-white transition-colors"
+                    >
+                      ← Change answer
+                    </button>
+                  )}
 
                   <AnimatePresence>
                     {showExplanation && (
