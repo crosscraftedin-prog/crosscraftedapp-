@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -42,7 +42,6 @@ import {
   type ApologeticsQuestion,
   type TriviaGift,
 } from "@/lib/crosscrafted-data";
-import { getAllGifts, getAdminGifts, addGift, updateGift, removeGift, isAdminGift } from "@/lib/gifts-store";
 import ImagePicker from "@/components/crosscrafted/ImagePicker";
 
 type AdminTab =
@@ -752,7 +751,8 @@ function CompetitionsTab() {
 // ─── GIFTS MANAGEMENT ────────────────────────────────────────────────────
 
 function GiftsManagement() {
-  const [gifts, setGifts] = useState<TriviaGift[]>([]);
+  const [gifts, setGifts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<{
@@ -771,10 +771,33 @@ function GiftsManagement() {
     stock: "10",
   });
 
-  // Load merged gifts (default + admin-added) on mount
-  useEffect(() => {
-    setGifts(getAllGifts());
+  // Load gifts from DATABASE (not localStorage)
+  const fetchGifts = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/gifts");
+      const data = await res.json();
+      // Map DB format to component format
+      const mapped = (data.gifts || []).map((g: any) => ({
+        id: g.id,
+        title: g.title,
+        description: g.description,
+        image_url: g.imageUrl,
+        points_required: g.pointsRequired,
+        tier: g.tier,
+        stock: g.stock,
+        isAdmin: g.isAdmin,
+      }));
+      setGifts(mapped);
+    } catch {
+      toast.error("Failed to load gifts");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchGifts();
+  }, [fetchGifts]);
 
   const resetForm = () => {
     setForm({
@@ -789,7 +812,7 @@ function GiftsManagement() {
     setShowAddForm(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.title.trim() || !form.points_required || form.images.length === 0) {
       toast.error("Please fill in title, points, and add at least 1 image");
@@ -799,30 +822,43 @@ function GiftsManagement() {
     const giftData = {
       title: form.title.trim(),
       description: form.description.trim(),
-      image_url: form.images[0], // first image is the cover
-      points_required: Number(form.points_required),
+      imageUrl: form.images[0],
+      pointsRequired: Number(form.points_required),
       tier: form.tier,
       stock: Number(form.stock) || 0,
     };
 
-    if (editingId && isAdminGift(editingId)) {
-      // Update existing admin gift
-      updateGift(editingId, giftData);
-      toast.success("Gift updated!", { description: "Changes are live in Trivia > Rewards." });
-    } else {
-      // Add new gift
-      addGift(giftData);
-      toast.success("Gift added!", {
-        description: "It's now visible in Trivia > Rewards for players to redeem.",
-      });
+    try {
+      if (editingId) {
+        // Update existing gift
+        const res = await fetch("/api/admin/gifts", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ giftId: editingId, ...giftData }),
+        });
+        if (!res.ok) throw new Error("Failed to update");
+        toast.success("Gift updated!", { description: "Changes are live in Trivia > Rewards." });
+      } else {
+        // Add new gift
+        const res = await fetch("/api/admin/gifts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(giftData),
+        });
+        if (!res.ok) throw new Error("Failed to add");
+        toast.success("Gift added!", {
+          description: "It's now visible in Trivia > Rewards for players to redeem.",
+        });
+      }
+      fetchGifts();
+      resetForm();
+    } catch {
+      toast.error("Failed to save gift");
     }
-
-    setGifts(getAllGifts());
-    resetForm();
   };
 
-  const handleEdit = (gift: TriviaGift) => {
-    if (!isAdminGift(gift.id)) {
+  const handleEdit = (gift: any) => {
+    if (!gift.isAdmin) {
       toast("Default gifts can't be edited", {
         description: "Only gifts you've added from the admin panel can be modified.",
       });
@@ -838,31 +874,47 @@ function GiftsManagement() {
       stock: String(gift.stock),
     });
     setShowAddForm(true);
-    // Scroll to form
     setTimeout(() => {
       document.getElementById("gift-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 100);
   };
 
-  const handleRemove = (id: string) => {
-    if (!isAdminGift(id)) {
+  const handleRemove = async (id: string) => {
+    const gift = gifts.find((g) => g.id === id);
+    if (!gift?.isAdmin) {
       toast("Default gifts can't be removed", {
         description: "Only gifts you've added from the admin panel can be deleted.",
       });
       return;
     }
-    removeGift(id);
-    setGifts(getAllGifts());
-    toast("Gift removed", { description: "Players can no longer redeem this gift." });
+    try {
+      const res = await fetch("/api/admin/gifts", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ giftId: id }),
+      });
+      if (!res.ok) throw new Error("Failed to delete");
+      toast("Gift removed", { description: "Players can no longer redeem this gift." });
+      fetchGifts();
+    } catch {
+      toast.error("Failed to remove gift");
+    }
   };
 
-  const handleStockChange = (id: string, delta: number) => {
-    if (!isAdminGift(id)) return;
+  const handleStockChange = async (id: string, delta: number) => {
     const gift = gifts.find((g) => g.id === id);
-    if (!gift) return;
+    if (!gift?.isAdmin) return;
     const newStock = Math.max(0, gift.stock + delta);
-    updateGift(id, { stock: newStock });
-    setGifts(getAllGifts());
+    try {
+      await fetch("/api/admin/gifts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ giftId: id, stock: newStock }),
+      });
+      fetchGifts();
+    } catch {
+      toast.error("Failed to update stock");
+    }
   };
 
   const tierColors: Record<string, string> = {
@@ -872,7 +924,15 @@ function GiftsManagement() {
     platinum: "#E5E4E2",
   };
 
-  const adminCount = gifts.filter((g) => isAdminGift(g.id)).length;
+  const adminCount = gifts.filter((g) => g.isAdmin).length;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="w-8 h-8 rounded-full border-2 border-transparent border-t-[#F59E0B] animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -1031,7 +1091,7 @@ function GiftsManagement() {
       {/* Gifts grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
         {gifts.map((g) => {
-          const admin = isAdminGift(g.id);
+          const admin = g.isAdmin;
           return (
             <div
               key={g.id}
