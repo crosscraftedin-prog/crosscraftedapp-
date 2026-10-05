@@ -3,19 +3,33 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Shield, Mail, User, ArrowRight, Sparkles, AlertCircle } from "lucide-react";
+import {
+  Mail,
+  User,
+  ArrowRight,
+  Sparkles,
+  AlertCircle,
+  Lock,
+} from "lucide-react";
 
 function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(
     searchParams.get("error")
   );
+  const [info, setInfo] = useState<string | null>(null);
 
   const handleGoogleSignIn = async () => {
     setError(null);
-    setLoading(true);
+    setInfo(null);
+    setGoogleLoading(true);
     const supabase = createClient();
 
     const { error } = await supabase.auth.signInWithOAuth({
@@ -27,9 +41,74 @@ function SignInForm() {
 
     if (error) {
       setError(error.message);
+      setGoogleLoading(false);
+    }
+    // Successful sign-in redirects to /auth/callback, then back to /.
+  };
+
+  const handleEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setInfo(null);
+
+    if (!email.trim() || !password) {
+      setError("Please enter your email and password.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+
+    setLoading(true);
+    const supabase = createClient();
+
+    try {
+      if (mode === "signup") {
+        // Sign up with email + password + optional name (stored in user_metadata)
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim().toLowerCase(),
+          password,
+          options: {
+            data: {
+              full_name: name.trim() || email.split("@")[0],
+              name: name.trim() || email.split("@")[0],
+            },
+          },
+        });
+
+        if (error) throw error;
+
+        // Check if email confirmation is required
+        if (data.user && data.session === null) {
+          setInfo(
+            "Check your inbox — we sent you a confirmation link. Click it to verify your email, then sign in."
+          );
+          setMode("signin");
+        } else if (data.session) {
+          // Signed in immediately (email confirmation disabled in Supabase)
+          router.push("/");
+          router.refresh();
+        }
+      } else {
+        // Sign in with email + password
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email.trim().toLowerCase(),
+          password,
+        });
+
+        if (error) throw error;
+
+        if (data.user) {
+          router.push("/");
+          router.refresh();
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || "Something went wrong. Please try again.");
+    } finally {
       setLoading(false);
     }
-    // Successful sign-in will redirect to /auth/callback, then back to /.
   };
 
   return (
@@ -51,10 +130,17 @@ function SignInForm() {
             </div>
           )}
 
+          {info && (
+            <div className="bg-[#22C55E]/10 border border-[#22C55E]/30 rounded-xl p-3 flex items-start gap-2">
+              <Sparkles size={14} className="text-[#22C55E] mt-0.5 shrink-0" />
+              <p className="text-[11px] text-[#22C55E] leading-relaxed">{info}</p>
+            </div>
+          )}
+
           {/* Google Sign In */}
           <button
             onClick={handleGoogleSignIn}
-            disabled={loading}
+            disabled={googleLoading || loading}
             className="w-full py-3 rounded-xl bg-white text-slate-950 font-bold text-sm flex items-center justify-center gap-2 hover:bg-gray-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg width="18" height="18" viewBox="0 0 24 24">
@@ -63,8 +149,91 @@ function SignInForm() {
               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
             </svg>
-            {loading ? "Redirecting..." : "Continue with Google"}
+            {googleLoading ? "Redirecting..." : "Continue with Google"}
           </button>
+
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-white/[0.08]" />
+            <span className="text-[10px] text-[#64748B] uppercase tracking-wider">
+              or {mode === "signin" ? "sign in" : "sign up"} with email
+            </span>
+            <div className="flex-1 h-px bg-white/[0.08]" />
+          </div>
+
+          {/* Email + Password Form */}
+          <form onSubmit={handleEmailSubmit} className="space-y-3">
+            {mode === "signup" && (
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                  <User size={10} className="inline mr-0.5" /> Name (optional)
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="neo-input text-sm"
+                  placeholder="Your name"
+                />
+              </div>
+            )}
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                <Mail size={10} className="inline mr-0.5" /> Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="neo-input text-sm"
+                placeholder="you@example.com"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                <Lock size={10} className="inline mr-0.5" /> Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="neo-input text-sm"
+                placeholder={mode === "signup" ? "At least 6 characters" : "Your password"}
+                required
+                minLength={6}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading || googleLoading}
+              className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all hover:-translate-y-px disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)" }}
+            >
+              {loading
+                ? (mode === "signup" ? "Creating account..." : "Signing in...")
+                : (mode === "signup" ? "Create account" : "Sign in")}
+              <ArrowRight size={14} />
+            </button>
+          </form>
+
+          {/* Toggle Sign in / Sign up */}
+          <div className="text-center pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                setMode(mode === "signin" ? "signup" : "signin");
+                setError(null);
+                setInfo(null);
+              }}
+              className="text-[11px] text-[#94A3B8] hover:text-white transition-colors"
+            >
+              {mode === "signin" ? (
+                <>Don&apos;t have an account? <span className="text-[#A78BFA] font-bold">Sign up</span></>
+              ) : (
+                <>Already have an account? <span className="text-[#A78BFA] font-bold">Sign in</span></>
+              )}
+            </button>
+          </div>
 
           <div className="bg-[#38BDF8]/8 border border-[#38BDF8]/20 rounded-xl p-3">
             <div className="flex items-center gap-1.5 mb-1">
@@ -72,8 +241,7 @@ function SignInForm() {
               <p className="text-[10px] font-bold uppercase tracking-wider text-[#38BDF8]">Faith Points</p>
             </div>
             <p className="text-[11px] text-[#A09DB1] leading-relaxed">
-              Sign in with Google to earn and track Faith Points securely. Your points
-              are stored server-side — no more localStorage farming!
+              Sign in to earn and track Faith Points securely. Your points are stored server-side — no more localStorage farming!
             </p>
           </div>
         </div>
