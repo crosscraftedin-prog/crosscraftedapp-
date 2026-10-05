@@ -1,13 +1,13 @@
 // CrossCrafted Prisma Schema
 // Production database: PostgreSQL (Supabase)
-// For local dev testing, temporarily switch provider to "sqlite"
+// Local dev also uses PostgreSQL so the schema matches production.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
