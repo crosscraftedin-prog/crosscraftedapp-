@@ -2,6 +2,7 @@
 
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import {
   Mail,
@@ -115,11 +116,16 @@ function SignInForm() {
     <div className="min-h-screen bg-[#12101A] flex items-center justify-center p-6">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#F39B9B] mb-4">
-            <span className="text-slate-950 font-black text-2xl">+</span>
-          </div>
-          <h1 className="text-2xl font-extrabold text-white">crosscrafted</h1>
-          <p className="text-sm text-[#A09DB1] mt-1">Sign in to track your Faith Points</p>
+          <Image
+            src="/believ-logo.png"
+            alt="Believ"
+            width={64}
+            height={64}
+            className="rounded-2xl mb-4 mx-auto"
+            priority
+          />
+          <h1 className="text-2xl font-extrabold text-white">Believ</h1>
+          <p className="text-sm text-[#A09DB1] mt-1">Believe. Connect. Grow. — Sign in to track your Faith Points</p>
         </div>
 
         <div className="bg-[#1C1929] border border-white/[0.08] rounded-3xl p-6 space-y-4">

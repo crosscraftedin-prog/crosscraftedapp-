@@ -1210,8 +1210,8 @@ export type TriviaGift = {
 export const TRIVIA_GIFTS: TriviaGift[] = [
   {
     id: "g1",
-    title: "CrossCrafted T-Shirt",
-    description: "Premium cotton tee with the CrossCrafted logo. Available in S, M, L, XL. Choose your size at checkout.",
+    title: "Believ T-Shirt",
+    description: "Premium cotton tee with the Believ logo. Available in S, M, L, XL. Choose your size at checkout.",
     image_url: "https://images.unsplash.com/photo-1438032005730-c779502df39b?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
     points_required: 500,
     tier: "bronze",
@@ -1291,7 +1291,7 @@ export const TRIVIA_COMPETITIONS: TriviaCompetition[] = [
     end_date: inDays(9),
     prize: "₹25,000 cash + Trophy + Personalized Bibles",
     prize_image: "https://images.unsplash.com/photo-1546484959-f9a381d1330d?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
-    organizer: "CrossCrafted + Grace City Church",
+    organizer: "Believ + Grace City Church",
     status: "upcoming",
     participants: [
       { church_id: "c1", church_name: "Grace City Church", score: 0, players: 5 },
@@ -1305,9 +1305,9 @@ export const TRIVIA_COMPETITIONS: TriviaCompetition[] = [
       "Inter-state competition for churches in Tamil Nadu, Kerala, Karnataka, and Telangana. 7-day trivia marathon. Categories: Full Bible, NT, OT, Apologetics.",
     start_date: inDays(-3),
     end_date: inDays(4),
-    prize: "₹50,000 + Featured spot on CrossCrafted home page",
+    prize: "₹50,000 + Featured spot on Believ home page",
     prize_image: "https://images.unsplash.com/photo-1565728744382-61accd4aa148?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
-    organizer: "CrossCrafted",
+    organizer: "Believ",
     status: "live",
     participants: [
       { church_id: "c1", church_name: "Grace City Church", score: 4280, players: 12 },
@@ -1320,10 +1320,10 @@ export const TRIVIA_COMPETITIONS: TriviaCompetition[] = [
     id: "comp3",
     title: "Mumbai Revival Trivia Challenge",
     description:
-      "Solo player competition for individuals across Maharashtra. Top 10 players win worship album bundles and CrossCrafted merchandise.",
+      "Solo player competition for individuals across Maharashtra. Top 10 players win worship album bundles and Believ merchandise.",
     start_date: inDays(-30),
     end_date: inDays(-1),
-    prize: "Worship Album Bundle + CrossCrafted T-Shirts",
+    prize: "Worship Album Bundle + Believ T-Shirts",
     prize_image: "https://images.unsplash.com/photo-1513475382585-d06e58bcb5c0?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
     organizer: "New Life Fellowship",
     status: "ended",
@@ -1336,7 +1336,7 @@ export const TRIVIA_COMPETITIONS: TriviaCompetition[] = [
 
 // Player invitations - share links for inviting friends/groups
 export function generateInviteLink(competitionId: string, playerName: string): string {
-  const invite = `Hey! ${playerName} invited you to join a Bible Trivia competition on CrossCrafted. Play now: https://crosscrafted.app/trivia?comp=${competitionId}&invited_by=${encodeURIComponent(playerName)}`;
+  const invite = `Hey! ${playerName} invited you to join a Bible Trivia competition on Believ. Play now: https://crosscrafted.app/trivia?comp=${competitionId}&invited_by=${encodeURIComponent(playerName)}`;
   return invite;
 }
 

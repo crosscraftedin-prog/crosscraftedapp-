@@ -570,7 +570,7 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
                 {openChurch.whatsapp_number && (
                   <a
                     href={`https://wa.me/${openChurch.whatsapp_number.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
-                      `Hello ${openChurch.name}! I found you on CrossCrafted and would like to know more about your services.`
+                      `Hello ${openChurch.name}! I found you on Believ and would like to know more about your services.`
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"

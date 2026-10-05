@@ -79,9 +79,9 @@ export default function LevelUpAnimation({ totalPoints }: { totalPoints: number 
 
   const shareLevelUp = () => {
     if (!newTier) return;
-    const text = `🎉 I just reached ${newTier.title} ${newTier.icon} on CrossCrafted! Play Bible Trivia and level up too!`;
+    const text = `🎉 I just reached ${newTier.title} ${newTier.icon} on Believ! Play Bible Trivia and level up too!`;
     if (navigator.share) {
-      navigator.share({ title: "CrossCrafted Level Up!", text });
+      navigator.share({ title: "Believ Level Up!", text });
     } else {
       navigator.clipboard.writeText(text);
       toast.success("Copied! Share with friends!");
@@ -187,7 +187,7 @@ export default function LevelUpAnimation({ totalPoints }: { totalPoints: number 
                     ? "✝️ Spiritual Disciple! Growing strong!"
                     : newTier.minPoints >= 100
                     ? "📖 Bible Student! Keep studying!"
-                    : "🌱 Welcome to CrossCrafted!"}
+                    : "🌱 Welcome to Believ!"}
                 </p>
               </div>
 

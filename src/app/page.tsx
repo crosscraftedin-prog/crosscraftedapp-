@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -138,15 +139,16 @@ export default function Home() {
       >
         <div className="flex justify-between items-center h-12 md:h-14 px-4 md:px-5">
           <button onClick={goHome} className="flex items-center gap-2">
-            {/* Stacked Cards Logo Icon */}
-            <div className="relative w-8 h-8 shrink-0">
-              <div className="absolute inset-0 rounded-lg bg-[#2B254E] border border-white/[0.05] shadow-sm transform -rotate-12 translate-x-[-1px] translate-y-[1px]" />
-              <div className="absolute inset-0 rounded-lg bg-[#F39B9B] shadow-sm flex items-center justify-center">
-                <span className="text-slate-950 font-black text-sm select-none">+</span>
-                <span className="absolute top-0.5 right-0.5 text-[#9786E3] text-[6px] select-none">★</span>
-              </div>
-            </div>
-            <h1 className="text-base md:text-lg font-black tracking-tight text-white">crosscrafted</h1>
+            {/* Believ Logo */}
+            <Image
+              src="/believ-logo.png"
+              alt="Believ"
+              width={32}
+              height={32}
+              className="rounded-lg shrink-0"
+              priority
+            />
+            <h1 className="text-base md:text-lg font-black tracking-tight text-white">Believ</h1>
           </button>
           <div className="hidden md:flex items-center gap-3">
             <HeaderUserSection />
@@ -422,7 +424,7 @@ function ComingSoonView({ title }: { title: string }) {
       <h2 className="text-xl font-extrabold text-white mb-2">{title}</h2>
       <p className="text-sm text-[#A09DB1] max-w-sm mx-auto">
         This section is coming soon. We're building {title.toLowerCase()} with the same care and
-        prayer as everything else on crosscrafted. Check back shortly — or explore Churches, Trivia,
+        prayer as everything else on Believ. Check back shortly — or explore Churches, Trivia,
         Apologetics, and more in the meantime!
       </p>
     </div>

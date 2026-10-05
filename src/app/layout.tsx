@@ -11,11 +11,17 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "crosscrafted — Grow in Faith, Together",
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (process.env.NODE_ENV === "production"
+      ? "https://crosscraftedapp.vercel.app"
+      : "http://localhost:3000")
+  ),
+  title: "Believ — Believe. Connect. Grow.",
   description:
     "Your all-in-one Christian community platform — Bible trivia, apologetics, church directory, marketplace, and more. Built to strengthen faith and connect believers across India.",
   keywords: [
-    "CrossCrafted",
+    "Believ",
     "Christian community",
     "Bible trivia",
     "church directory India",
@@ -23,21 +29,24 @@ export const metadata: Metadata = {
     "prayer wall",
     "Christian marketplace",
   ],
-  authors: [{ name: "CrossCrafted Team" }],
+  authors: [{ name: "Believ Team" }],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: "/believ-logo.png",
+    apple: "/believ-logo.png",
   },
   openGraph: {
-    title: "crosscrafted — Grow in Faith, Together",
+    title: "Believ — Believe. Connect. Grow.",
     description:
       "Your all-in-one Christian community platform — Bible trivia, apologetics, church directory, marketplace, and more.",
-    siteName: "crosscrafted",
+    siteName: "Believ",
     type: "website",
+    images: ["/believ-logo.png"],
   },
   twitter: {
     card: "summary_large_image",
-    title: "crosscrafted",
-    description: "Grow in Faith, Together",
+    title: "Believ",
+    description: "Believe. Connect. Grow.",
+    images: ["/believ-logo.png"],
   },
 };
 
@@ -48,14 +57,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className="dark">
-      <body
-        className={`${geistSans.variable} antialiased bg-[#12101A] text-white`}
-      >
+      <body className="geist_a71539c9-module__T19VSG__variable antialiased bg-[#12101A] text-white">
         <Providers>
           {children}
+          <Toaster />
+          <SonnerToaster position="top-center" />
         </Providers>
-        <Toaster />
-        <SonnerToaster position="top-center" />
       </body>
     </html>
   );

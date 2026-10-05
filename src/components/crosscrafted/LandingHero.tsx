@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
@@ -83,14 +84,15 @@ export default function LandingHero({ onEnterApp }: Props) {
       <header className="sticky top-0 z-40 bg-[#12101A]/80 backdrop-blur-xl border-b border-white/[0.04]">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="relative w-8 h-8">
-              <div className="absolute inset-0 rounded-lg bg-[#2B254E] border border-white/[0.05] transform -rotate-12 translate-x-[-1px] translate-y-[1px]" />
-              <div className="absolute inset-0 rounded-lg bg-[#F39B9B] flex items-center justify-center">
-                <span className="text-slate-950 font-black text-sm select-none">+</span>
-                <span className="absolute top-0.5 right-0.5 text-[#9786E3] text-[6px] select-none">★</span>
-              </div>
-            </div>
-            <h1 className="text-base font-black tracking-tight">crosscrafted</h1>
+            <Image
+              src="/believ-logo.png"
+              alt="Believ"
+              width={32}
+              height={32}
+              className="rounded-lg"
+              priority
+            />
+            <h1 className="text-base font-black tracking-tight">Believ</h1>
           </div>
           <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-[#94A3B8]">
             <button onClick={() => onEnterApp("bible")} className="hover:text-white transition-colors">Bible</button>
@@ -126,7 +128,7 @@ export default function LandingHero({ onEnterApp }: Props) {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight leading-tight"
           >
-            crosscrafted <br />
+            Believ <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#F39B9B] to-[#9786E3]">
               Grow in Faith, Together
             </span>
@@ -334,14 +336,14 @@ export default function LandingHero({ onEnterApp }: Props) {
           <div className="absolute -bottom-12 -left-12 w-28 h-28 bg-[#9786E3]/5 blur-2xl rounded-full" />
           <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight relative">"Iron sharpens iron"</h2>
           <p className="text-xs sm:text-sm text-[#A09DB1] max-w-lg mx-auto leading-relaxed relative">
-            Join the crosscrafted community — explore churches, test your Bible knowledge, list your business, and grow in faith together.
+            Join the Believ community — explore churches, test your Bible knowledge, list your business, and grow in faith together.
           </p>
           <div className="pt-2 relative">
             <button
               onClick={() => onEnterApp("churches")}
               className="px-8 py-3.5 bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 font-extrabold rounded-2xl text-xs uppercase tracking-widest shadow-lg transition-all inline-flex items-center gap-2 hover:-translate-y-px"
             >
-              Enter crosscrafted <ArrowRight size={16} strokeWidth={2.5} />
+              Enter Believ <ArrowRight size={16} strokeWidth={2.5} />
             </button>
           </div>
         </div>
@@ -351,12 +353,14 @@ export default function LandingHero({ onEnterApp }: Props) {
       <footer className="border-t border-white/[0.04] mt-12">
         <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="relative w-6 h-6">
-              <div className="absolute inset-0 rounded-md bg-[#F39B9B] flex items-center justify-center">
-                <span className="text-slate-950 font-black text-[10px] select-none">+</span>
-              </div>
-            </div>
-            <span className="text-sm font-bold text-[#94A3B8]">crosscrafted</span>
+            <Image
+              src="/believ-logo.png"
+              alt="Believ"
+              width={24}
+              height={24}
+              className="rounded-md"
+            />
+            <span className="text-sm font-bold text-[#94A3B8]">Believ</span>
           </div>
           <p className="text-xs text-[#726E88]">Built with faith, for the body of Christ. Soli Deo Gloria.</p>
         </div>

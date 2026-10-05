@@ -127,7 +127,7 @@ export default function EventsView() {
   };
 
   const shareEvent = (e: EventItem) => {
-    const text = `Check out "${e.title}" on CrossCrafted — ${formatDate(e.date).weekday} ${e.date} at ${e.location}, ${e.city}!`;
+    const text = `Check out "${e.title}" on Believ — ${formatDate(e.date).weekday} ${e.date} at ${e.location}, ${e.city}!`;
     navigator.clipboard.writeText(text);
     toast.success("Event link copied!");
   };

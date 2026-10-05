@@ -279,10 +279,10 @@ export default function TriviaView() {
 
   const shareResults = async () => {
     if (!submitResult) return;
-    const text = `Bible Trivia ${gameMode === "EARN_POINTS" ? "(Earn Points)" : "(Practice)"}!\n\nCorrect: ${submitResult.correctCount}/${submitResult.totalQuestions}\n${gameMode === "EARN_POINTS" ? `Points earned: ${submitResult.totalPointsEarned} FP\n` : ""}Level: ${selectedLevel?.label} | Category: ${selectedCategory?.label}\n\nPlay now on CrossCrafted!`;
+    const text = `Bible Trivia ${gameMode === "EARN_POINTS" ? "(Earn Points)" : "(Practice)"}!\n\nCorrect: ${submitResult.correctCount}/${submitResult.totalQuestions}\n${gameMode === "EARN_POINTS" ? `Points earned: ${submitResult.totalPointsEarned} FP\n` : ""}Level: ${selectedLevel?.label} | Category: ${selectedCategory?.label}\n\nPlay now on Believ!`;
     if (navigator.share) {
       try {
-        await navigator.share({ title: "CrossCrafted Bible Trivia", text });
+        await navigator.share({ title: "Believ Bible Trivia", text });
         return;
       } catch {}
     }
@@ -291,11 +291,11 @@ export default function TriviaView() {
   };
 
   const inviteFriend = async () => {
-    const text = `Hey! Come play Bible Trivia with me on CrossCrafted. ${gameMode === "EARN_POINTS" ? "Earn Faith Points for new questions you answer correctly!" : ""}`;
+    const text = `Hey! Come play Bible Trivia with me on Believ. ${gameMode === "EARN_POINTS" ? "Earn Faith Points for new questions you answer correctly!" : ""}`;
     const url = `${window.location.origin}/`;
     if (navigator.share) {
       try {
-        await navigator.share({ title: "Join me on CrossCrafted", text, url });
+        await navigator.share({ title: "Join me on Believ", text, url });
         return;
       } catch {}
     }
