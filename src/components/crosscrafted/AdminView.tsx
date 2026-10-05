@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSupabaseUser } from "@/lib/supabase/use-user";
 import {
   Shield,
   LayoutDashboard,
@@ -76,14 +76,11 @@ const TABS: { id: AdminTab; icon: typeof Shield; label: string }[] = [
 ];
 
 export default function AdminView() {
-  const { data: session, status } = useSession();
+  const { user, isAuthenticated, isAdmin, loading } = useSupabaseUser();
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
 
-  const isAuthenticated = status === "authenticated" && !!session?.user;
-  const isAdmin = isAuthenticated && (session?.user as any)?.role === "admin";
-
   // Loading state
-  if (status === "loading") {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[40vh]">
         <div className="w-8 h-8 rounded-full border-2 border-transparent border-t-[#7C3AED] animate-spin" />
@@ -143,7 +140,7 @@ export default function AdminView() {
           </div>
           <h1 className="text-2xl font-extrabold text-white mb-2">Access Denied</h1>
           <p className="text-sm text-[#A09DB1] mb-4">
-            You're signed in as <span className="font-bold text-white">{session?.user?.name || session?.user?.email}</span>,
+            You're signed in as <span className="font-bold text-white">{user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email}</span>,
             but your account doesn't have admin privileges.
           </p>
           <p className="text-[11px] text-[#64748B]">
@@ -166,7 +163,7 @@ export default function AdminView() {
           </div>
           <div>
             <h1 className="text-lg font-extrabold text-white">Admin Panel</h1>
-            <p className="text-[10px] text-[#94A3B8]">Signed in as {session?.user?.name || session?.user?.email}</p>
+            <p className="text-[10px] text-[#94A3B8]">Signed in as {user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email}</p>
           </div>
         </div>
       </div>

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getAuthUser } from "@/lib/auth-server";
 
 const db = new PrismaClient();
 
@@ -49,19 +48,19 @@ const RARITY_COLORS: Record<string, string> = {
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const authUser = await getAuthUser();
+    if (!authUser) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
 
     const today = todayStr();
     const existingSpin = await db.dailySpin.findUnique({
-      where: { userId_spinDate: { userId: session.user.id, spinDate: today } },
+      where: { userId_spinDate: { userId: authUser.id, spinDate: today } },
     });
 
     // Get last 7 spins for history
     const recentSpins = await db.dailySpin.findMany({
-      where: { userId: session.user.id },
+      where: { userId: authUser.id },
       orderBy: { createdAt: "desc" },
       take: 7,
     });
@@ -90,11 +89,11 @@ export async function GET() {
 
 export async function POST() {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const authUser = await getAuthUser();
+    if (!authUser) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
-    const userId = session.user.id;
+    const userId = authUser.id;
     const today = todayStr();
 
     // Check if already spun today

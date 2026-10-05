@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
+import { useSupabaseUser } from "@/lib/supabase/use-user";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Award,
@@ -87,7 +87,7 @@ type SubmitResult = {
 };
 
 export default function TriviaView() {
-  const { data: session } = useSession();
+  const { user, isAuthenticated, points: userPoints } = useSupabaseUser();
   const api = useTriviaApi();
 
   const [selectedLevel, setSelectedLevel] = useState<(typeof QUIZ_LEVELS)[number] | null>(null);
@@ -106,8 +106,6 @@ export default function TriviaView() {
   const [answers, setAnswers] = useState<{ questionId: string; selectedAnswer: number }[]>([]);
   const [newCount, setNewCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
-
-  const isAuthenticated = !!session?.user;
 
   // Timer effect
   useEffect(() => {
@@ -325,14 +323,14 @@ export default function TriviaView() {
           <h1 className="text-xl font-bold text-white">Bible Trivia</h1>
           <p className="text-xs text-[#94A3B8] mt-0.5">
             {isAuthenticated
-              ? `Verified: ${session?.user?.totalPoints || 0} FP`
+              ? `Verified: ${userPoints || 0} FP`
               : "Sign in to earn Faith Points"}
           </p>
         </div>
         {isAuthenticated && (
           <div className="flex items-center gap-1 px-3 py-2 rounded-xl bg-[#F59E0B]/10 border border-[#F59E0B]/25">
             <Trophy size={14} className="text-[#F59E0B]" />
-            <span className="text-xs font-bold text-[#F59E0B]">{session?.user?.totalPoints || 0} FP</span>
+            <span className="text-xs font-bold text-[#F59E0B]">{userPoints || 0} FP</span>
           </div>
         )}
       </div>
@@ -380,7 +378,7 @@ export default function TriviaView() {
       <AnimatePresence mode="wait">
         {activeTab === "play" && (
           <motion.div key="play" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <LevelUpAnimation totalPoints={session?.user?.totalPoints || 0} />
+            <LevelUpAnimation totalPoints={userPoints || 0} />
             {gameState === "setup" && (
               <div className="space-y-5">
                 <StreakBadge activity="trivia_play" />
@@ -831,7 +829,7 @@ export default function TriviaView() {
 
         {activeTab === "leaderboard" && <LeaderboardTab />}
         {activeTab === "stats" && <StatsTab isAuthenticated={isAuthenticated} />}
-        {activeTab === "rewards" && <RewardsTab isAuthenticated={isAuthenticated} userPoints={session?.user?.totalPoints || 0} />}
+        {activeTab === "rewards" && <RewardsTab isAuthenticated={isAuthenticated} userPoints={userPoints || 0} />}
         {activeTab === "compete" && <CompeteView />}
       </AnimatePresence>
     </div>

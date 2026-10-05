@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getAuthUser } from "@/lib/auth-server";
 
 const db = new PrismaClient();
 
@@ -33,11 +32,11 @@ const BADGE_DEFINITIONS = [
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const authUser = await getAuthUser();
+    if (!authUser) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
-    const userId = session.user.id;
+    const userId = authUser.id;
 
     const userBadges = await db.userBadge.findMany({
       where: { userId },
@@ -62,11 +61,11 @@ export async function GET() {
 
 export async function POST() {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const authUser = await getAuthUser();
+    if (!authUser) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
-    const userId = session.user.id;
+    const userId = authUser.id;
 
     const user = await db.user.findUnique({ where: { id: userId } });
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });

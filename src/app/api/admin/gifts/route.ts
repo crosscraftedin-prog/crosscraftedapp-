@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getAuthUser } from "@/lib/auth-server";
 
 const db = new PrismaClient();
 
@@ -44,11 +43,10 @@ function normalizeAttributes(input: any): any[] {
 }
 
 async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return null;
-  const user = await db.user.findUnique({ where: { id: session.user.id }, select: { role: true } });
-  if (user?.role !== "admin") return null;
-  return session.user.id;
+  const authUser = await getAuthUser();
+  if (!authUser) return null;
+  if (authUser.role !== "admin") return null;
+  return authUser.id;
 }
 
 export async function GET() {
