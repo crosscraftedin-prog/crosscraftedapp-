@@ -39,9 +39,8 @@ const ALL_LANGUAGES: Lang[] = [
   { code: "as", name: "Assamese" },
 ];
 
-const BATCH_SIZE = 2; // 2 questions per call (very small to stay under token limits)
-const DELAY_MS = 6000; // 6s between successful calls
-const RATE_LIMIT_DELAY_MS = 30000; // 30s pause after a 429 failure
+const BATCH_SIZE = 5; // 5 questions per call (ZAI can handle this)
+const DELAY_MS = 3000; // 3s between calls
 
 type Question = {
   id: string;
@@ -225,8 +224,8 @@ async function processLanguage(
       process.stdout.write(`❌ ${lastError?.message?.slice(0, 80)}\n`);
       failed += batch.length;
       // Wait 30s after a 429 rate limit error before next batch
-      console.log(`   ⏸️  Pausing ${RATE_LIMIT_DELAY_MS / 1000}s for rate limit to reset...`);
-      await new Promise((r) => setTimeout(r, RATE_LIMIT_DELAY_MS));
+      console.log(`   ⏸️  Pausing 30s for rate limit to reset...`);
+      await new Promise((r) => setTimeout(r, 30000));
       continue;
     }
 
