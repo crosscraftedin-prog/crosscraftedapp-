@@ -45,9 +45,9 @@ export async function GET(
       return NextResponse.json({ error: "Invalid language code" }, { status: 400 });
     }
 
-    // Find the comic chapter
+    // Find the comic chapter — only PUBLISHED chapters are visible to users
     const comicChapter = await db.comicChapter.findFirst({
-      where: { bookId, chapter, isActive: true },
+      where: { bookId, chapter, isActive: true, status: "published" },
       include: {
         panels: {
           orderBy: { sortOrder: "asc" },

@@ -15,7 +15,7 @@ const db = new PrismaClient();
 export async function GET() {
   try {
     const chapters = await db.comicChapter.findMany({
-      where: { isActive: true },
+      where: { isActive: true, status: "published" },
       orderBy: [{ bookId: "asc" }, { chapter: "asc" }],
       select: {
         id: true,
