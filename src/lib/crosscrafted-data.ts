@@ -160,10 +160,18 @@ export type Business = {
   website?: string;
   phone?: string;
   email?: string;
+  hours?: string;               // free-text business hours for now (e.g. "Mon-Sat 9am-7pm")
+  services?: string[];         // list of services the business offers
+  social?: { label: string; url: string }[]; // optional social links (Instagram, Facebook, etc.)
+  rating?: number;              // average rating (1-5) — only set if real reviews exist
+  reviews?: number;             // review count — only set if real reviews exist
   cover_gradient: number;
-  status?: "pending" | "approved" | "rejected";
+  status?: "pending" | "approved" | "rejected" | "suspended";
   featured?: boolean;
+  verified?: boolean;           // shown as ✓ Verified badge when true
   productIds?: string[];        // IDs of Marketplace products associated with this business
+  ownerId?: string;             // userId of the business owner (server-side enforced)
+  createdAt?: string;           // ISO timestamp for "Newest" sorting
 };
 
 export type TriviaQuestion = {
@@ -337,28 +345,34 @@ export const MARKETPLACE_CATEGORIES = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Single source of truth for Business Directory categories.
-// Used by the ListYourEntity (business variant) form, the future Business
-// Directory browse page, and admin category management. Do NOT duplicate.
+// Used by the BusinessDirectoryView filter row, the ListYourEntity (business
+// variant) form, and admin category management. Do NOT duplicate.
 export const BUSINESS_CATEGORIES = [
+  "Christian Bookstores",
+  "Bibles & Christian Books",
   "Christian Clothing",
-  "Christian Books & Bibles",
+  "Christian Gifts & Merchandise",
   "Christian Wedding Services",
-  "Christian Caterers",
+  "Wedding Caterers",
   "Christian Event Planners",
   "Christian Photographers",
+  "Christian Videographers",
+  "Christian Bakers",
   "Christian Home Bakers",
-  "Christian Gifts",
-  "Christian Music",
+  "Christian Restaurants & Cafes",
+  "Christian Schools & Education",
+  "Christian Counselling",
+  "Christian Travel Services",
   "Christian Media",
+  "Christian Music",
+  "Church Supplies",
   "Christian Designers",
-  "Christian Education",
-  "Christian Schools",
-  "Christian Travel",
-  "Christian Counseling",
-  "Christian Printing",
-  "Christian Technology",
-  "Christian Services",
-  "Other",
+  "Christian Printers",
+  "Christian IT & Digital Services",
+  "Christian Marketing",
+  "Christian Real Estate",
+  "Christian Professionals",
+  "Other Christian Businesses",
 ] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1120,6 +1134,170 @@ export const PRODUCTS: Product[] = [
       { label: "Weight", value: "320 GSM" },
       { label: "Brand", value: "Believ" },
     ],
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHRISTIAN BUSINESS DIRECTORY — mock data
+// (Mock data for now — when a real Prisma Business model is added, this array
+//  maps 1:1 to it. New listings created via ListYourEntity get prepended to
+//  this list in component state, with status="pending" so they don't appear
+//  in the public directory until "approved".)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
+
+export const BUSINESSES: Business[] = [
+  {
+    id: "b1",
+    name: "Grace Christian Caterers",
+    description: "Christian catering for weddings, receptions, and church events. Multi-cuisine menus, hygienic preparation, and dedicated service teams. Serving Hyderabad and surrounding areas for over 10 years.",
+    category: "Wedding Caterers",
+    country: "India",
+    state: "Telangana",
+    city: "Hyderabad",
+    address: "Plot 12, Hitech City Road, Madhapur, Hyderabad, Telangana 500081",
+    languages: ["English", "Telugu", "Hindi"],
+    cover_image: "https://images.unsplash.com/photo-1555244162-803834f70033?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    whatsapp_number: "+919876544001",
+    phone: "+9140665544001",
+    email: "hello@gracecaterers.example",
+    website: "https://gracecaterers.example",
+    hours: "Mon-Sat 9:00 AM - 7:00 PM",
+    services: ["Wedding Catering", "Reception Catering", "Church Event Catering", "Custom Menus"],
+    rating: 4.8,
+    reviews: 124,
+    cover_gradient: 0,
+    status: "approved",
+    verified: true,
+    featured: true,
+    createdAt: _daysAgo(120),
+  },
+  {
+    id: "b2",
+    name: "Word of Life Christian Bookstore",
+    description: "Your one-stop Christian bookstore for Bibles (ESV, NIV, KJV, Telugu, Hindi), devotionals, Bible study guides, Christian living books, and children's Bible stories. Special orders welcome.",
+    category: "Christian Bookstores",
+    country: "India",
+    state: "Karnataka",
+    city: "Bengaluru",
+    address: "Shop 4, Brigade Road, Bengaluru, Karnataka 560001",
+    languages: ["English", "Kannada", "Hindi"],
+    cover_image: "https://images.unsplash.com/photo-1521587760476-6c12a4b040da?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    whatsapp_number: "+919876544002",
+    phone: "+918022554002",
+    email: "orders@wordoflifebooks.example",
+    website: "https://wordoflifebooks.example",
+    hours: "Mon-Sat 10:00 AM - 8:30 PM, Sun closed",
+    services: ["Bibles", "Christian Books", "Devotionals", "Children's Books", "Special Orders"],
+    rating: 4.9,
+    reviews: 89,
+    cover_gradient: 1,
+    status: "approved",
+    verified: true,
+    featured: true,
+    productIds: ["pr1", "pr5"], // links to ESV Study Bible + Romans Bible Study Guide in Marketplace
+    createdAt: _daysAgo(95),
+  },
+  {
+    id: "b3",
+    name: "Holy Moments Photography",
+    description: "Christian wedding and event photography. Pre-wedding shoots, candid coverage, church events, baptisms, and dedication ceremonies. Cinematic editing and same-day teaser delivery.",
+    category: "Christian Photographers",
+    country: "India",
+    state: "Tamil Nadu",
+    city: "Chennai",
+    address: "Studio 7, T. Nagar, Chennai, Tamil Nadu 600017",
+    languages: ["English", "Tamil"],
+    cover_image: "https://images.unsplash.com/photo-1519225421980-715cb0215aed?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    whatsapp_number: "+919876544003",
+    phone: "+914422554003",
+    email: "book@holymomentsphoto.example",
+    website: "https://holymomentsphoto.example",
+    hours: "Mon-Sat 9:00 AM - 8:00 PM",
+    services: ["Wedding Photography", "Pre-Wedding Shoots", "Church Events", "Baptism Coverage", "Cinematic Films"],
+    rating: 4.7,
+    reviews: 56,
+    cover_gradient: 2,
+    status: "approved",
+    verified: true,
+    featured: false,
+    createdAt: _daysAgo(60),
+  },
+  {
+    id: "b4",
+    name: "Manna Home Bakers",
+    description: "Christian home bakery specializing in custom celebration cakes for birthdays, weddings, and church events. Eggless options available. Made-to-order with 48 hours notice.",
+    category: "Christian Home Bakers",
+    country: "India",
+    state: "Maharashtra",
+    city: "Mumbai",
+    address: "Flat 3B, Andheri West, Mumbai, Maharashtra 400058",
+    languages: ["English", "Hindi", "Marathi"],
+    cover_image: "https://images.unsplash.com/photo-1578985545062-69928b1d9790?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    whatsapp_number: "+919876544004",
+    phone: "+912240055004",
+    email: "orders@mannabakers.example",
+    hours: "Mon-Sat 8:00 AM - 6:00 PM",
+    services: ["Custom Cakes", "Eggless Cakes", "Cupcakes", "Wedding Cakes", "Church Event Desserts"],
+    rating: 4.9,
+    reviews: 78,
+    cover_gradient: 3,
+    status: "approved",
+    verified: true,
+    featured: false,
+    createdAt: _daysAgo(45),
+  },
+  {
+    id: "b5",
+    name: "CrossThread Christian Apparel",
+    description: "Christian clothing brand designing faith-inspired T-shirts, hoodies, and accessories. Custom designs for churches, youth groups, and worship teams. Bulk orders welcome.",
+    category: "Christian Clothing",
+    country: "India",
+    state: "Tamil Nadu",
+    city: "Chennai",
+    address: "Unit 5, Guindy Industrial Estate, Chennai, Tamil Nadu 600032",
+    languages: ["English", "Tamil"],
+    cover_image: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    whatsapp_number: "+919876543223",
+    phone: "+914422554005",
+    email: "hello@crossthread.example",
+    website: "https://crossthread.example",
+    hours: "Mon-Sat 10:00 AM - 7:00 PM",
+    services: ["Christian T-Shirts", "Hoodies", "Custom Church Apparel", "Bulk Orders", "Youth Group Designs"],
+    rating: 4.6,
+    reviews: 24,
+    cover_gradient: 4,
+    status: "approved",
+    verified: true,
+    featured: true,
+    productIds: ["pr4"], // links to Faith Over Fear T-Shirt in Marketplace
+    createdAt: _daysAgo(30),
+  },
+  {
+    id: "b6",
+    name: "Redeemer Christian School",
+    description: "CBSE-affiliated Christian school offering education from pre-K to 12th grade. Christ-centered values integrated into the curriculum. Daily morning assembly, weekly chapel, and character-building programs.",
+    category: "Christian Schools & Education",
+    country: "India",
+    state: "Telangana",
+    city: "Hyderabad",
+    address: "Survey 32, Kondapur, Hyderabad, Telangana 500084",
+    languages: ["English"],
+    cover_image: "https://images.unsplash.com/photo-1580582932707-520aed937b7b?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    whatsapp_number: "+919876544006",
+    phone: "+914023005006",
+    email: "admissions@redeemerschool.example",
+    website: "https://redeemerschool.example",
+    hours: "Mon-Fri 8:30 AM - 3:30 PM (Office 9-5)",
+    services: ["Pre-K to 12th", "CBSE Curriculum", "Christian Values", "Weekly Chapel", "Sports & Arts"],
+    rating: 4.7,
+    reviews: 145,
+    cover_gradient: 5,
+    status: "approved",
+    verified: true,
+    featured: false,
+    createdAt: _daysAgo(15),
   },
 ];
 

@@ -9,6 +9,7 @@ import {
   Award,
   BookOpen,
   Store,
+  Building2,
   Heart,
   Sparkles,
   LogOut,
@@ -33,6 +34,7 @@ import AdminView from "@/components/crosscrafted/AdminView";
 import HeaderUserSection from "@/components/crosscrafted/HeaderUserSection";
 import LanguageSwitcher from "@/components/crosscrafted/LanguageSwitcher";
 import ComicView from "@/components/crosscrafted/ComicView";
+import BusinessDirectoryView from "@/components/crosscrafted/BusinessDirectoryView";
 import { toast } from "sonner";
 import { type Translation } from "@/lib/bible-data";
 
@@ -48,7 +50,8 @@ type View =
   | "apologetics"
   | "shop"
   | "list-church"
-  | "list-business"
+  | "list-business" // kept for backward-compat route (the ListYourEntity form)
+  | "business-directory" // public browse page
   | "small-groups"
   | "admin";
 
@@ -65,7 +68,7 @@ const SIDEBAR_LINKS: { id: View; icon: typeof Search; label: string }[] = [
   { id: "trivia", icon: Award, label: "Bible Trivia" },
   { id: "apologetics", icon: ListChecks, label: "Apologetics" },
   { id: "shop", icon: Store, label: "Marketplace" },
-  { id: "list-business", icon: Store, label: "List Business" },
+  { id: "business-directory", icon: Building2, label: "Business Directory" },
   { id: "prayer-wall", icon: HeartHandshake, label: "Prayer Wall" },
   { id: "admin", icon: Shield, label: "Admin" },
 ];
@@ -87,7 +90,7 @@ const MOBILE_MORE_VIEWS: { id: View; icon: typeof Search; label: string }[] = [
   { id: "events", icon: Calendar, label: "Events" },
   { id: "apologetics", icon: ListChecks, label: "Apologetics" },
   { id: "prayer-wall", icon: HeartHandshake, label: "Prayer Wall" },
-  { id: "list-business", icon: Store, label: "List Business" },
+  { id: "business-directory", icon: Building2, label: "Business Directory" },
   { id: "admin", icon: Shield, label: "Admin" },
 ];
 
@@ -294,6 +297,9 @@ export default function Home() {
               {view === "shop" && <ShopView />}
               {view === "list-church" && <ListYourEntity variant="church" />}
               {view === "list-business" && <ListYourEntity variant="business" />}
+              {view === "business-directory" && (
+                <BusinessDirectoryView onListBusiness={() => goView("list-business")} />
+              )}
               {view === "small-groups" && <ComingSoonView title="Small Groups" />}
               {view === "admin" && <AdminView />}
             </motion.div>
