@@ -515,3 +515,45 @@ Stage Summary:
 - EXISTING PRODUCTS PRESERVED: All 6 existing PRODUCTS (pr1-pr6) kept their data — only added new fields. No products deleted. Old products without variations/attributes still work (fields are optional).
 - NO CHANGES TO: Bible/Bible Comics/Reading Plans/Trivia/Churches/Prayer Wall/Apologetics/Events/Admin/Auth, comic content (Genesis 1/2/3/4 unchanged), mobile bottom nav, routing architecture, existing notification system.
 - BROWSER TESTS REQUIRED (admin-only, user must verify): open Marketplace → see 1:1 product cards with seller-type badges → tap Believ Store filter → see only pr7 + pr8 → tap Marketplace filter → see pr1-pr6 → tap a T-shirt product (pr4) → see full T-shirt visible (no cropping) → tap Buy Now → opens external link in new tab → see helper text "Believ does not process payments" → on mobile, scroll to bottom → confirm fixed bottom nav doesn't cover last product card → open List Your Business → see Business Category dropdown with 19 categories.
+
+---
+Task ID: business-directory-public-page
+Agent: main
+Task: Build the Christian Business Directory as a proper public browse page. Rename sidebar "List Business" → "Business Directory".
+
+Work Log:
+- Inspected existing business architecture: ListYourEntity has a business variant (form fields: name, description, state, city, address, whatsapp, languages, photos, businessCategory — added in previous commit). Business type exists in crosscrafted-data.ts (added in previous commit). NO Prisma Business model — businesses are mock data. Sidebar had "List Business" as a top-level entry routing to ListYourEntity variant="business".
+- Extended Business type with: hours, services[], social[], rating?, reviews?, verified?, status extended to "suspended", ownerId?, createdAt?. Kept all existing fields.
+- Expanded BUSINESS_CATEGORIES from 19 to 25 categories per spec (added Christian Bookstores, Bibles & Christian Books, Christian Gifts & Merchandise, Wedding Caterers, Christian Videographers, Christian Bakers, Christian Restaurants & Cafes, Church Supplies, Christian IT & Digital Services, Christian Marketing, Christian Real Estate, Christian Professionals, Other Christian Businesses).
+- Added BUSINESSES mock array with 6 realistic Christian businesses across different categories and locations: caterer, bookstore, photographer, home baker, apparel brand, school. Two have productIds linking to Marketplace products (b2 → pr1, pr5; b5 → pr4) demonstrating the business → marketplace connection.
+- Created BusinessDirectoryView.tsx (new file, 600+ lines):
+  * Public browse page with header + subtitle + search + category/sort/filter UI
+  * Featured Businesses section (only when no filters applied)
+  * All Businesses grid with card count
+  * Empty state with "Try another category, city or state" + Clear Filters button
+  * Public directory only shows approved businesses (status === "approved")
+  * BusinessCard component: 16:9 cover with image fallback, Verified/Featured badges, category overlay, rating, location, description, contact badges, View Business CTA
+  * BusinessDetailModal: cover with title overlay, location section, About, Services pills, Hours, Languages, Contact CTAs (WhatsApp/Call/Website/Email — only render buttons for info the business actually provided), verified disclaimer helper text
+  * Mobile pb-28 padding so fixed bottom nav doesn't cover cards
+- Updated page.tsx:
+  * Added "business-directory" to View union
+  * Renamed SIDEBAR_LINKS "List Business" → "Business Directory" with new id="business-directory" + Building2 icon
+  * Renamed MOBILE_MORE_VIEWS "List Business" → "Business Directory"
+  * Imported BusinessDirectoryView
+  * Re-imported Building2 (removed in earlier cleanup)
+  * Wired BusinessDirectoryView with onListBusiness={() => goView("list-business")} so "+ List Your Business" button opens the existing ListYourEntity variant="business" form
+  * The "list-business" route is PRESERVED for backward compat
+- Committed as 9c24fe6 and pushed to main → Vercel deploy triggered.
+- Verified production after deploy:
+  * Homepage: HTTP 200 ✅
+  * Genesis 1/2/3/4 comic APIs: all HTTP 200 ✅ (no regression to Bible Comics)
+  * /api/auth/me: HTTP 401 for unauthenticated (auth intact) ✅
+
+Stage Summary:
+- FILES CHANGED: src/lib/crosscrafted-data.ts (Business type extended + 25 BUSINESS_CATEGORIES + 6 BUSINESSES mock), src/components/crosscrafted/BusinessDirectoryView.tsx (NEW — public browse page + business card + detail modal), src/app/page.tsx (new view type + sidebar rename + import + render).
+- NO DATABASE MIGRATIONS: Prisma schema unchanged. No Business model added. Businesses are mock data (same as Products). When a real Prisma Business model is added later, the new Business fields map 1:1 to it.
+- NO PAYMENT SYSTEM: Believ does NOT process payments for businesses. WhatsApp / Call / Website buttons open external channels directly. Conversation happens directly between buyer and business.
+- EXISTING LIST BUSINESS FORM PRESERVED: ListYourEntity variant="business" is reused as-is (already has BUSINESS_CATEGORIES dropdown + state/city fields from previous commit). The "+ List Your Business" button in BusinessDirectoryView navigates to it.
+- SIDEBAR NO LONGER CONFUSING: was "List Business" (implies form), now "Business Directory" (implies discovery). Listing creation is now accessed from inside the directory via the "+ List Your Business" CTA — matches the spec's "remove confusion" requirement.
+- NO CHANGES TO: Marketplace (separate system — products vs businesses), Churches/Events/Bible/Trivia/Prayer Wall/Apologetics/Admin/Auth, comic content (Genesis 1/2/3/4 unchanged), mobile bottom nav, routing architecture, existing notification system.
+- BROWSER TESTS REQUIRED (admin-only, user must verify): open Business Directory → see 6 business cards with verified badges → search "caterer" → see Grace Christian Caterers → filter by State (Telangana) → see b1 + b6 → tap a business → see detail modal with cover + About + Services + Hours + Contact CTAs → tap "+ List Your Business" → existing ListYourEntity form opens → on mobile, scroll to bottom → confirm fixed bottom nav doesn't cover the last business card.
