@@ -20,6 +20,7 @@ export function useSupabaseUser() {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<"user" | "admin" | null>(null);
   const [points, setPoints] = useState<number>(0);
+  const [profileCompleted, setProfileCompleted] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export function useSupabaseUser() {
               const data = JSON.parse(text);
               setRole(data.role || "user");
               setPoints(data.totalPoints || 0);
+              setProfileCompleted(data.profileCompleted ?? false);
             }
           }
         } catch {
@@ -54,6 +56,7 @@ export function useSupabaseUser() {
             const data = await res.json();
             setRole(data.role || "user");
             setPoints(data.totalPoints || 0);
+            setProfileCompleted(data.profileCompleted ?? false);
           }
         } catch {
           // ignore
@@ -61,6 +64,7 @@ export function useSupabaseUser() {
       } else {
         setRole(null);
         setPoints(0);
+        setProfileCompleted(false);
       }
       setLoading(false);
     });
@@ -72,6 +76,7 @@ export function useSupabaseUser() {
     user,
     role,
     points,
+    profileCompleted,
     loading,
     isAuthenticated: !!user,
     isAdmin: role === "admin",

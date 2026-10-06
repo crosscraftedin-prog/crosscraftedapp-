@@ -59,6 +59,7 @@ export async function getAuthUser() {
     image: dbUser.image,
     role: dbUser.role,
     totalPoints: dbUser.totalPoints,
+    profileCompleted: (dbUser as any).profileCompleted ?? false,
   };
 }
 

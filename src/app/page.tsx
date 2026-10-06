@@ -36,12 +36,15 @@ import LanguageSwitcher from "@/components/crosscrafted/LanguageSwitcher";
 import ComicView from "@/components/crosscrafted/ComicView";
 import BusinessDirectoryView from "@/components/crosscrafted/BusinessDirectoryView";
 import AppHomeView from "@/components/crosscrafted/AppHomeView";
+import OnboardingView from "@/components/crosscrafted/OnboardingView";
 import { toast } from "sonner";
 import { type Translation } from "@/lib/bible-data";
+import { useSupabaseUser } from "@/lib/supabase/use-user";
 
 type View =
   | "landing"
-  | "home" // App Home dashboard (default after Enter App)
+  | "onboarding" // Profile setup flow (shown when !profileCompleted)
+  | "home" // App Home dashboard (default after Enter App + onboarding)
   | "bible"
   | "bible-plans"
   | "comic"
@@ -99,6 +102,7 @@ const MOBILE_MORE_VIEWS: { id: View; icon: typeof Search; label: string }[] = [
 
 export default function Home() {
   const [view, setView] = useState<View>("landing");
+  const { isAuthenticated, profileCompleted, loading: authLoading } = useSupabaseUser();
   const [headerVisible, setHeaderVisible] = useState(true);
   const [showMoreSheet, setShowMoreSheet] = useState(false);
   const lastScrollY = useRef(0);
@@ -133,13 +137,35 @@ export default function Home() {
     return () => window.removeEventListener("scroll", onScroll);
   }, [view]);
 
-  const enterApp = (v: string) => navigate(v as View);
+  // ─── ONBOARDING REDIRECT ───
+  useEffect(() => {
+    if (authLoading) return;
+    if (isAuthenticated && !profileCompleted && view !== "onboarding" && view !== "landing") {
+      navigate("onboarding");
+    }
+    if (isAuthenticated && profileCompleted && view === "onboarding") {
+      navigate("home");
+    }
+  }, [isAuthenticated, profileCompleted, authLoading]);
+
+  const enterApp = (v: string) => {
+    if (isAuthenticated && !profileCompleted) {
+      navigate("onboarding");
+    } else {
+      navigate(v as View);
+    }
+  };
   const goHome = () => navigate("landing");
   const goView = (v: View) => navigate(v);
 
   // Landing view — full screen
   if (view === "landing") {
     return <LandingHero onEnterApp={enterApp} />;
+  }
+
+  // Onboarding view — full screen, shown when !profileCompleted
+  if (view === "onboarding") {
+    return <OnboardingView onComplete={() => navigate("home")} />;
   }
 
   // App view with sidebar + bottom nav

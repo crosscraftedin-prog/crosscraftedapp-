@@ -29,6 +29,27 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // ─── PROFILE / ONBOARDING FIELDS ───
+  // Added for Koino signup/onboarding flow. All optional so existing users
+  // are not forced to migrate. profileCompleted gates the onboarding flow:
+  // if false, the user is redirected to /onboarding after signin.
+  username         String?  @unique // unique constraint at DB level
+  dateOfBirth      DateTime?
+  gender           String?  // "male" | "female" | "prefer_not_to_say"
+  state            String?  // Indian state — used for church/event/business discovery
+  city             String?  // City within the state
+  mobileNumber     String?  // Optional — verified only when claiming a prize
+  mobileVerified   Boolean  @default(false)
+  faithStatus      String?  // "follows_jesus" | "exploring" | "new_to_christianity" | "prefer_not_to_say"
+  faithJourney     String?  // "growing" | "new_to_jesus" | "exploring_christianity" | "looking_for_church" | "learn_and_connect"
+  profileCompleted Boolean  @default(false)
+  // WhatsApp Channel — track prompt shown + clicked (NOT whether user actually
+  // followed, since we can't verify that). Used for analytics only.
+  whatsappChannelPromptShown Boolean @default(false)
+  whatsappChannelClicked    Boolean @default(false)
+  // Signup method — "google" | "email" (set by the auth callback)
+  signupMethod     String?  // "google" | "email"
+
   // Relations
   accounts          Account[]
   sessions          Session[]
