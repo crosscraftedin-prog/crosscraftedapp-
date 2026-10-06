@@ -34,6 +34,7 @@ import {
   Truck,
   CheckCircle,
   BookOpen,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -201,7 +202,7 @@ export default function AdminView() {
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.15 }}
         >
-          {activeTab === "dashboard" && <DashboardTab />}
+          {activeTab === "dashboard" && <DashboardTab onNavigate={setActiveTab} />}
           {activeTab === "churches" && <ChurchesTab />}
           {activeTab === "events" && <EventsTab />}
           {activeTab === "marketplace" && <MarketplaceTab />}
@@ -220,14 +221,33 @@ export default function AdminView() {
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────
 
-function DashboardTab() {
-  const stats = [
-    { label: "Churches", value: CHURCHES.length, pending: CHURCHES.filter((c) => c.status === "pending").length, icon: Building2, color: "#A855F7" },
-    { label: "Events", value: EVENTS.length, pending: 0, icon: Calendar, color: "#EC4899" },
-    { label: "Products", value: PRODUCTS.length, pending: 0, icon: Store, color: "#9786E3" },
-    { label: "Prayers", value: PRAYERS.length, pending: 0, icon: HeartHandshake, color: "#F59E0B" },
-    { label: "Questions", value: APOLOGETICS_QUESTIONS.length, pending: APOLOGETICS_QUESTIONS.filter((q) => q.status === "open").length, icon: HelpCircle, color: "#38BDF8" },
-    { label: "Competitions", value: TRIVIA_COMPETITIONS.length, pending: TRIVIA_COMPETITIONS.filter((c) => c.status === "upcoming").length, icon: Trophy, color: "#22C55E" },
+function DashboardTab({ onNavigate }: { onNavigate: (tab: AdminTab) => void }) {
+  // Overview cards — each navigates to its admin section.
+  // HONEST NOTE: Churches/Events/Products/Prayers/Questions/Competitions are
+  // currently backed by mock data (crosscrafted-data.ts arrays), NOT Prisma
+  // models. The counts below reflect the mock dataset. Approve/reject actions
+  // in those tabs update local React state only — they do NOT persist to a
+  // database. See the "Preview Mode" banner on each tab for details.
+  // The ONLY fully DB-backed admin section is Bible Comics (ComicChapter /
+  // ComicPanel Prisma models + 14 admin API routes).
+  const stats: { label: string; value: number; pending: number; icon: typeof Shield; color: string; tab: AdminTab }[] = [
+    { label: "Churches", value: CHURCHES.length, pending: CHURCHES.filter((c) => c.status === "pending").length, icon: Building2, color: "#A855F7", tab: "churches" },
+    { label: "Events", value: EVENTS.length, pending: 0, icon: Calendar, color: "#EC4899", tab: "events" },
+    { label: "Products", value: PRODUCTS.length, pending: 0, icon: Store, color: "#9786E3", tab: "marketplace" },
+    { label: "Prayers", value: PRAYERS.length, pending: 0, icon: HeartHandshake, color: "#F59E0B", tab: "prayers" },
+    { label: "Questions", value: APOLOGETICS_QUESTIONS.length, pending: APOLOGETICS_QUESTIONS.filter((q) => q.status === "open").length, icon: HelpCircle, color: "#38BDF8", tab: "apologetics" },
+    { label: "Competitions", value: TRIVIA_COMPETITIONS.length, pending: TRIVIA_COMPETITIONS.filter((c) => c.status === "upcoming").length, icon: Trophy, color: "#22C55E", tab: "competitions" },
+  ];
+
+  // Quick Actions — each wired to navigate to the correct admin section.
+  // These are REAL navigation actions (not dead buttons).
+  const quickActions: { label: string; color: string; tab: AdminTab; icon: typeof Shield }[] = [
+    { label: "Review Churches", color: "#A855F7", tab: "churches", icon: Building2 },
+    { label: "Moderate Prayers", color: "#F59E0B", tab: "prayers", icon: HeartHandshake },
+    { label: "Answer Questions", color: "#38BDF8", tab: "apologetics", icon: HelpCircle },
+    { label: "Host Competition", color: "#22C55E", tab: "competitions", icon: Trophy },
+    { label: "Post Announcement", color: "#EC4899", tab: "announcements", icon: Megaphone },
+    { label: "View Analytics", color: "#9786E3", tab: "analytics", icon: BarChart3 },
   ];
 
   return (
@@ -236,7 +256,11 @@ function DashboardTab() {
         <h2 className="text-base font-bold text-white mb-3">Overview</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {stats.map((s) => (
-            <div key={s.label} className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4">
+            <button
+              key={s.label}
+              onClick={() => onNavigate(s.tab)}
+              className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4 text-left hover:border-white/[0.15] hover:bg-[#22202F] transition-all group"
+            >
               <div className="flex items-center justify-between mb-2">
                 <div
                   className="w-9 h-9 rounded-xl flex items-center justify-center"
@@ -252,7 +276,10 @@ function DashboardTab() {
               </div>
               <p className="text-2xl font-extrabold text-white">{s.value}</p>
               <p className="text-[10px] text-[#94A3B8] uppercase tracking-wider mt-0.5">{s.label}</p>
-            </div>
+              <p className="text-[9px] text-[#475569] mt-1 group-hover:text-[#64748B] transition-colors">
+                Open {s.label} admin →
+              </p>
+            </button>
           ))}
         </div>
       </div>
@@ -260,21 +287,39 @@ function DashboardTab() {
       <div>
         <h2 className="text-base font-bold text-white mb-3">Quick Actions</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-          {[
-            { label: "Review Churches", color: "#A855F7" },
-            { label: "Moderate Prayers", color: "#F59E0B" },
-            { label: "Answer Questions", color: "#38BDF8" },
-            { label: "Host Competition", color: "#22C55E" },
-            { label: "Post Announcement", color: "#EC4899" },
-            { label: "View Analytics", color: "#9786E3" },
-          ].map((a) => (
-            <div
+          {quickActions.map((a) => (
+            <button
               key={a.label}
-              className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:border-white/[0.12] transition-all cursor-pointer text-center"
+              onClick={() => onNavigate(a.tab)}
+              className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:border-white/[0.15] hover:bg-white/[0.06] transition-all text-center group"
             >
+              <div className="flex items-center justify-center mb-1">
+                <div
+                  className="w-7 h-7 rounded-lg flex items-center justify-center"
+                  style={{ backgroundColor: `${a.color}15`, border: `1px solid ${a.color}30` }}
+                >
+                  <a.icon size={13} style={{ color: a.color }} />
+                </div>
+              </div>
               <p className="text-xs font-bold text-white">{a.label}</p>
-            </div>
+            </button>
           ))}
+        </div>
+      </div>
+
+      {/* Honest architecture status — tells the admin which sections are DB-backed vs. preview */}
+      <div className="bg-[#1C1929] border border-[#F59E0B]/20 rounded-2xl p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <AlertCircle size={14} className="text-[#F59E0B]" />
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B]">Architecture Status</p>
+        </div>
+        <div className="space-y-1.5 text-[11px] text-[#A09DB1] leading-relaxed">
+          <p>
+            <span className="text-[#22C55E] font-bold">● DB-backed:</span> Bible Comics (ComicChapter/ComicPanel Prisma models + 14 admin API routes), Trivia Questions (800+ in DB), Gifts & Redemptions.
+          </p>
+          <p>
+            <span className="text-[#F59E0B] font-bold">● Preview mode:</span> Churches, Events, Marketplace, Prayers, Apologetics, Competitions, Announcements, Analytics — these sections use mock data arrays. Approve/reject/edit actions update local state only and do NOT persist to a database yet. A future task needs Prisma models + admin APIs for each.
+          </p>
         </div>
       </div>
 
@@ -313,6 +358,7 @@ function ChurchesTab() {
 
   return (
     <div className="space-y-4">
+      <PreviewModeBanner section="Churches" />
       <AdminSectionHeader title="Pending Approval" count={pending.length} color="#F59E0B" />
       {pending.length === 0 ? (
         <EmptyState text="No pending churches. All caught up!" />
@@ -382,6 +428,7 @@ function EventsTab() {
 
   return (
     <div className="space-y-3">
+      <PreviewModeBanner section="Events" />
       <AdminSectionHeader title="All Events" count={events.length} color="#EC4899" />
       {events.length === 0 ? (
         <EmptyState text="No events." />
@@ -429,6 +476,7 @@ function MarketplaceTab() {
 
   return (
     <div className="space-y-3">
+      <PreviewModeBanner section="Marketplace" />
       <AdminSectionHeader title="All Products" count={products.length} color="#9786E3" />
       {products.map((p) => (
         <AdminCard
@@ -473,6 +521,7 @@ function PrayersTab() {
 
   return (
     <div className="space-y-3">
+      <PreviewModeBanner section="Prayers" />
       <AdminSectionHeader title="Prayer Requests" count={prayers.length} color="#F59E0B" />
       <div className="bg-[#F59E0B]/8 border border-[#F59E0B]/20 rounded-xl p-3 mb-3">
         <p className="text-[11px] text-[#A09DB1] leading-relaxed">
@@ -550,6 +599,7 @@ function ApologeticsTab() {
 
   return (
     <div className="space-y-3">
+      <PreviewModeBanner section="Apologetics" />
       <AdminSectionHeader title="Apologetics Q&A" count={questions.length} color="#38BDF8" />
       {questions.map((q) => (
         <div key={q.id} className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4">
@@ -636,6 +686,7 @@ function CompetitionsTab() {
 
   return (
     <div className="space-y-4">
+      <PreviewModeBanner section="Competitions" />
       <div className="flex items-center justify-between">
         <AdminSectionHeader title="Trivia Competitions" count={competitions.length} color="#22C55E" />
         <button
@@ -1441,6 +1492,7 @@ function AnnouncementsTab() {
 
   return (
     <div className="space-y-4">
+      <PreviewModeBanner section="Announcements" />
       <AdminSectionHeader title="Site Announcements" count={announcements.length} color="#EC4899" />
       <form onSubmit={post} className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4 space-y-3">
         <div>
@@ -1530,6 +1582,7 @@ function AnalyticsTab() {
 
   return (
     <div className="space-y-4">
+      <PreviewModeBanner section="Analytics" />
       <div>
         <h2 className="text-base font-bold text-white mb-3">Platform Stats</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -1916,6 +1969,34 @@ function EmptyState({ text }: { text: string }) {
     <div className="bg-[#1C1929] border border-dashed border-white/[0.12] rounded-2xl p-8 text-center">
       <Check size={28} className="mx-auto text-[#22C55E] mb-2" />
       <p className="text-sm text-[#94A3B8]">{text}</p>
+    </div>
+  );
+}
+
+// ─── PREVIEW MODE BANNER ────────────────────────────────────────────────────
+// Honest UX: tells the admin that this section uses mock data and actions
+// don't persist to a database yet. Shown on all admin tabs that are NOT
+// backed by real Prisma models + admin APIs.
+// The ONLY tab that does NOT show this is "bible-comics" (BibleComicsAdmin)
+// because it has real ComicChapter/ComicPanel Prisma models + 14 admin API routes.
+
+function PreviewModeBanner({ section }: { section: string }) {
+  return (
+    <div className="bg-[#F59E0B]/8 border border-[#F59E0B]/20 rounded-xl p-3 mb-4">
+      <div className="flex items-start gap-2">
+        <AlertCircle size={14} className="text-[#F59E0B] mt-0.5 shrink-0" />
+        <div className="flex-1">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B] mb-0.5">
+            Preview Mode — {section}
+          </p>
+          <p className="text-[10px] text-[#A09DB1] leading-relaxed">
+            This section uses mock data. Approve/reject/edit/delete actions update local state only
+            and do NOT persist to a database. To make this section production-ready, a Prisma model
+            + admin API routes need to be created. The only fully DB-backed admin section is
+            Bible Comics.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
