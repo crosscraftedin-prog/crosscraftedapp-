@@ -6,10 +6,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
   Calendar,
-  UsersRound,
   Award,
   BookOpen,
-  Building2,
   Store,
   Heart,
   Sparkles,
@@ -57,14 +55,15 @@ type View =
 // Bible is the main feature — placed at the top of the sidebar.
 // Bible Comics and Reading Plans are NOT separate sidebar entries —
 // they are modes inside the Bible hub.
+// Small Groups and List Church are also NOT top-level entries —
+// Small Groups is part of the Churches hub (Groups section inside church profile),
+// and List Your Church is a primary action inside the Churches hub.
 const SIDEBAR_LINKS: { id: View; icon: typeof Search; label: string }[] = [
   { id: "bible", icon: BookOpen, label: "Bible" },
   { id: "churches", icon: Search, label: "Churches" },
   { id: "events", icon: Calendar, label: "Events" },
-  { id: "small-groups", icon: UsersRound, label: "Small Groups" },
   { id: "trivia", icon: Award, label: "Bible Trivia" },
   { id: "apologetics", icon: ListChecks, label: "Apologetics" },
-  { id: "list-church", icon: Building2, label: "List Church" },
   { id: "shop", icon: Store, label: "Marketplace" },
   { id: "list-business", icon: Store, label: "List Business" },
   { id: "prayer-wall", icon: HeartHandshake, label: "Prayer Wall" },
@@ -83,13 +82,12 @@ const MOBILE_NAV: { id: View; icon: typeof Search; label: string }[] = [
 // Views that are NOT in the quick-access bottom nav (shown in the "More" sheet).
 // Note: Bible Comics and Reading Plans are both accessible from inside the
 // Bible view via the READ / BIBLE COMICS / READING PLANS mode switcher.
+// Small Groups and List Church are accessible from inside the Churches hub.
 const MOBILE_MORE_VIEWS: { id: View; icon: typeof Search; label: string }[] = [
   { id: "events", icon: Calendar, label: "Events" },
   { id: "apologetics", icon: ListChecks, label: "Apologetics" },
   { id: "prayer-wall", icon: HeartHandshake, label: "Prayer Wall" },
-  { id: "list-church", icon: Building2, label: "List Church" },
   { id: "list-business", icon: Store, label: "List Business" },
-  { id: "small-groups", icon: UsersRound, label: "Small Groups" },
   { id: "admin", icon: Shield, label: "Admin" },
 ];
 
@@ -284,7 +282,11 @@ export default function Home() {
                   }}
                 />
               )}
-              {view === "churches" && <ChurchesView />}
+              {view === "churches" && (
+                <ChurchesView
+                  onListChurch={() => goView("list-church")}
+                />
+              )}
               {view === "events" && <EventsView />}
               {view === "trivia" && <TriviaView />}
               {view === "prayer-wall" && <PrayerWallView />}

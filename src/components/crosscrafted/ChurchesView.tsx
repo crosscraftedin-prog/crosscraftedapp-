@@ -16,6 +16,7 @@ import {
   Search,
   Trash2,
   Phone,
+  Heart,
 } from "lucide-react";
 import {
   CHURCHES,
@@ -27,16 +28,27 @@ import {
 } from "@/lib/crosscrafted-data";
 import ImagePicker from "@/components/crosscrafted/ImagePicker";
 import { useTranslation } from "@/lib/i18n/LanguageContext";
+import { useSupabaseUser } from "@/lib/supabase/use-user";
 import { toast } from "sonner";
 
 type Props = {
   initialOpenChurchId?: string | null;
+  /** Called when user taps "+ List Your Church" — parent navigates to the dedicated listing page. */
+  onListChurch?: () => void;
 };
 
-export default function ChurchesView({ initialOpenChurchId }: Props) {
+type DiscoverTab = "discover" | "my-churches";
+
+export default function ChurchesView({ initialOpenChurchId, onListChurch }: Props) {
   const t = useTranslation();
+  const { isAuthenticated } = useSupabaseUser();
   const [churches, setChurches] = useState<Church[]>(CHURCHES);
+  // Per-session follow state. NOTE: For now this is component state —
+  // when a ChurchFollow / GroupMember DB model is added, this should
+  // be hydrated from /api/churches/follows on mount and persisted via
+  // /api/churches/[id]/follow (POST/DELETE). Auth-gated below.
   const [followed, setFollowed] = useState<Set<string>>(new Set());
+  const [discoverTab, setDiscoverTab] = useState<DiscoverTab>("discover");
   const [filterState, setFilterState] = useState("");
   const [filterLanguage, setFilterLanguage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -111,6 +123,16 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
   const activeFilters = [filterState, filterLanguage, searchQuery].filter(Boolean).length;
 
   const toggleFollow = (id: string) => {
+    // Auth gate: require login to follow a church.
+    // Following a church must be tied to a user account — without that,
+    // follows cannot persist across sessions or devices, so we block
+    // the action until the user signs in.
+    if (!isAuthenticated) {
+      toast("Sign in required", {
+        description: "Please sign in to follow churches and see them in My Churches.",
+      });
+      return;
+    }
     setFollowed((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -174,7 +196,7 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
   };
 
   return (
-    <div className="max-w-[680px] mx-auto px-4 py-5">
+    <div className="max-w-[680px] mx-auto px-4 py-5 pb-28 md:pb-5">
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <div>
@@ -198,15 +220,54 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
             )}
           </button>
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => {
+              // Primary "List Your Church" CTA — route to the dedicated
+              // full-page listing flow (ListYourEntity variant="church")
+              // when wired by the parent. Fall back to the in-page modal
+              // only if no callback is provided (back-compat).
+              if (onListChurch) {
+                onListChurch();
+              } else {
+                setShowCreateModal(true);
+              }
+            }}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all hover:-translate-y-px"
             style={{ background: "linear-gradient(135deg, #A855F7, #EC4899)" }}
           >
-            <Plus size={14} /> Add Church
+            <Plus size={14} /> List Your Church
           </button>
         </div>
       </div>
 
+      {/* ─── DISCOVER / MY CHURCHES TAB ─── */}
+      <div className="mb-5">
+        <div className="flex p-1 bg-white/[0.04] border border-white/[0.06] rounded-2xl">
+          <button
+            onClick={() => setDiscoverTab("discover")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-bold transition-all ${
+              discoverTab === "discover"
+                ? "bg-gradient-to-r from-[#7C3AED] to-[#F39B9B] text-white shadow-lg shadow-[#7C3AED]/20"
+                : "text-[#94A3B8] hover:text-white"
+            }`}
+          >
+            <Search size={13} /> Discover
+          </button>
+          <button
+            onClick={() => setDiscoverTab("my-churches")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-bold transition-all ${
+              discoverTab === "my-churches"
+                ? "bg-gradient-to-r from-[#7C3AED] to-[#F39B9B] text-white shadow-lg shadow-[#7C3AED]/20"
+                : "text-[#94A3B8] hover:text-white"
+            }`}
+          >
+            <Heart size={13} /> My Churches
+          </button>
+        </div>
+      </div>
+
+      {/* Filters + Church Cards — only in Discover tab */}
+      {discoverTab === "discover" && (
+        <>
       {/* Filters */}
       <AnimatePresence>
         {showFilters && (
@@ -416,14 +477,38 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
             </button>
           ) : (
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => {
+                if (onListChurch) {
+                  onListChurch();
+                } else {
+                  setShowCreateModal(true);
+                }
+              }}
               className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white"
               style={{ background: "linear-gradient(135deg, #A855F7, #EC4899)" }}
             >
-              Add Church
+              List Your Church
             </button>
           )}
         </div>
+      )}
+        </>
+      )}
+
+      {/* ─── MY CHURCHES TAB ─── */}
+      {discoverTab === "my-churches" && (
+        <MyChurchesView
+          churches={churches}
+          followedIds={followed}
+          onOpenChurch={(c) => {
+            setOpenChurch(c);
+            setActiveImageIdx(0);
+          }}
+          onToggleFollow={toggleFollow}
+          isAuthenticated={isAuthenticated}
+          onListChurch={onListChurch}
+          setShowCreateModal={setShowCreateModal}
+        />
       )}
 
       {/* Church Detail Modal */}
@@ -569,6 +654,26 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
                   </div>
                 )}
 
+                {/* GROUPS — placeholder section for the future Groups feature.
+                    The architecture (Prisma Group + GroupMember models, /api/groups,
+                    /api/groups/[id]/join) is intentionally NOT built yet — per spec,
+                    "Do not overengineer this now." This section surfaces the
+                    intent to users so they know Groups are coming. */}
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">Groups</p>
+                  <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Users size={14} className="text-[#A855F7]" />
+                      <p className="text-xs font-bold text-white">Church Groups coming soon</p>
+                    </div>
+                    <p className="text-[11px] text-[#94A3B8] leading-relaxed">
+                      Youth · Young Adults · Men · Women · Families · Bible Study ·
+                      Prayer · Worship · Kids · Care / Support. Group discovery and
+                      join / leave will be available here.
+                    </p>
+                  </div>
+                </div>
+
                 {openChurch.whatsapp_number && (
                   <a
                     href={`https://wa.me/${openChurch.whatsapp_number.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
@@ -636,7 +741,7 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
             >
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-bold gradient-text bg-gradient-to-r from-[#F39B9B] to-[#9786E3] bg-clip-text text-transparent">
-                  Add a Church
+                  List Your Church
                 </h2>
                 <button
                   onClick={() => setShowCreateModal(false)}
@@ -855,6 +960,126 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── MY CHURCHES VIEW ────────────────────────────────────────────────────────
+// Shows only the churches the current user is following. Auth-gated:
+// unauthenticated users see a prompt to sign in.
+
+function MyChurchesView({
+  churches,
+  followedIds,
+  onOpenChurch,
+  onToggleFollow,
+  isAuthenticated,
+  onListChurch,
+  setShowCreateModal,
+}: {
+  churches: Church[];
+  followedIds: Set<string>;
+  onOpenChurch: (c: Church) => void;
+  onToggleFollow: (id: string) => void;
+  isAuthenticated: boolean;
+  onListChurch?: () => void;
+  setShowCreateModal: (v: boolean) => void;
+}) {
+  const myChurches = churches.filter((c) => followedIds.has(c.id));
+
+  // Auth gate — unauthenticated users can't have follows yet
+  if (!isAuthenticated) {
+    return (
+      <div className="text-center py-16">
+        <Heart size={32} className="mx-auto text-[#475569] mb-3" />
+        <p className="text-sm text-[#94A3B8] mb-1">Sign in to see the churches you follow.</p>
+        <p className="text-[11px] text-[#64748B] mb-4">Your follows will appear here.</p>
+        <a
+          href="/api/auth/signin"
+          className="inline-block px-6 py-2.5 rounded-xl text-sm font-semibold text-white"
+          style={{ background: "linear-gradient(135deg, #A855F7, #EC4899)" }}
+        >
+          Sign in
+        </a>
+      </div>
+    );
+  }
+
+  if (myChurches.length === 0) {
+    return (
+      <div className="text-center py-16">
+        <Heart size={32} className="mx-auto text-[#475569] mb-3" />
+        <p className="text-sm text-[#94A3B8] mb-1">You're not following any churches yet.</p>
+        <p className="text-[11px] text-[#64748B] mb-4">Find a community and tap Follow.</p>
+        <button
+          onClick={() => onListChurch ? onListChurch() : setShowCreateModal(true)}
+          className="inline-block px-6 py-2.5 rounded-xl text-sm font-semibold text-white"
+          style={{ background: "linear-gradient(135deg, #A855F7, #EC4899)" }}
+        >
+          List Your Church
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[11px] text-[#94A3B8]">
+        {myChurches.length} church{myChurches.length === 1 ? "" : "es"} you follow
+      </p>
+      {myChurches.map((church) => (
+        <motion.div
+          key={church.id}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          onClick={() => onOpenChurch(church)}
+          className="rounded-2xl overflow-hidden cursor-pointer group border border-white/[0.06] hover:border-white/[0.12] transition-all bg-[#1C1929]"
+        >
+          <div className="flex gap-3 p-3">
+            {/* Thumbnail */}
+            <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 bg-[#0f0f1a]">
+              {church.cover_image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={church.cover_image}
+                  alt={church.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div
+                  className="w-full h-full"
+                  style={{ background: CHURCH_GRADIENTS[church.cover_gradient % CHURCH_GRADIENTS.length] }}
+                />
+              )}
+            </div>
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-white leading-tight truncate">{church.name}</h3>
+              <p className="text-[11px] text-[#94A3B8] mt-0.5 truncate">
+                {church.city ? `${church.city}, ` : ""}{church.state}
+              </p>
+              <div className="flex items-center gap-1 mt-1.5">
+                <Users size={11} className="text-[#94A3B8]" />
+                <span className="text-[10px] text-[#94A3B8]">{church.followers_count.toLocaleString()} followers</span>
+              </div>
+            </div>
+            {/* Following badge */}
+            <div className="flex items-center">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleFollow(church.id);
+                }}
+                className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-white/[0.06] text-[#94A3B8] border border-white/[0.06] hover:bg-white/[0.1] transition-all"
+              >
+                <span className="flex items-center gap-1">
+                  <UserMinus size={11} /> Following
+                </span>
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      ))}
     </div>
   );
 }
