@@ -286,7 +286,7 @@ export default function BiblePlansView({ translation, onOpenChapter }: Props) {
             const readingLabels = day.readings
               .map((r) => {
                 const book = getBook(r.bookId);
-                return book ? `${book.abbr} ${r.chapter}` : "";
+                return book ? `${book.name} ${r.chapter}` : "";
               })
               .join(" · ");
             return (

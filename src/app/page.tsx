@@ -16,7 +16,6 @@ import {
   LogOut,
   Home as HomeIcon,
   HeartHandshake,
-  BookMarked,
   ListChecks,
   Grid,
   X,
@@ -56,10 +55,10 @@ type View =
   | "admin";
 
 // Bible is the main feature — placed at the top of the sidebar.
-// Bible Comics is NOT a separate sidebar entry — it is a mode inside Bible.
+// Bible Comics and Reading Plans are NOT separate sidebar entries —
+// they are modes inside the Bible hub.
 const SIDEBAR_LINKS: { id: View; icon: typeof Search; label: string }[] = [
   { id: "bible", icon: BookOpen, label: "Bible" },
-  { id: "bible-plans", icon: BookMarked, label: "Reading Plans" },
   { id: "churches", icon: Search, label: "Churches" },
   { id: "events", icon: Calendar, label: "Events" },
   { id: "small-groups", icon: UsersRound, label: "Small Groups" },
@@ -82,9 +81,9 @@ const MOBILE_NAV: { id: View; icon: typeof Search; label: string }[] = [
 ];
 
 // Views that are NOT in the quick-access bottom nav (shown in the "More" sheet).
-// Note: Bible Comics is accessible from inside the Bible view (READ / COMICS mode switcher).
+// Note: Bible Comics and Reading Plans are both accessible from inside the
+// Bible view via the READ / BIBLE COMICS / READING PLANS mode switcher.
 const MOBILE_MORE_VIEWS: { id: View; icon: typeof Search; label: string }[] = [
-  { id: "bible-plans", icon: BookMarked, label: "Reading Plans" },
   { id: "events", icon: Calendar, label: "Events" },
   { id: "apologetics", icon: ListChecks, label: "Apologetics" },
   { id: "prayer-wall", icon: HeartHandshake, label: "Prayer Wall" },

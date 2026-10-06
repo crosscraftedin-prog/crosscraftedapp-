@@ -38,10 +38,11 @@ import {
 } from "@/lib/bible-data";
 import { useTranslation, useLanguage, LANGUAGES } from "@/lib/i18n/LanguageContext";
 import StreakBadge from "@/components/crosscrafted/StreakBadge";
+import BiblePlansView from "@/components/crosscrafted/BiblePlansView";
 import { BookOpen as BookOpenIcon, ArrowRight, Loader2 as ComicLoader, AlertCircle as ComicAlert } from "lucide-react";
 
 type View = "books" | "chapters" | "reader" | "search" | "bookmarks";
-type BibleMode = "read" | "comics";
+type BibleMode = "read" | "comics" | "plans";
 
 type ComicChapterSummary = {
   id: string;
@@ -281,28 +282,38 @@ export default function BibleView({ onOpenComic }: { onOpenComic?: (bookId: stri
         )}
       </div>
 
-      {/* ─── MODE SWITCHER (READ / COMICS) ─── */}
+      {/* ─── MODE SWITCHER (READ / BIBLE COMICS / READING PLANS) ─── */}
       <div className="mb-5">
-        <div className="flex p-1 bg-white/[0.04] border border-white/[0.06] rounded-2xl">
+        <div className="flex p-1 bg-white/[0.04] border border-white/[0.06] rounded-2xl gap-1">
           <button
             onClick={() => setMode("read")}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-bold transition-all ${
               mode === "read"
                 ? "bg-gradient-to-r from-[#7C3AED] to-[#F39B9B] text-white shadow-lg shadow-[#7C3AED]/20"
                 : "text-[#94A3B8] hover:text-white"
             }`}
           >
-            <BookOpenIcon size={14} /> READ
+            <BookOpenIcon size={13} /> READ
           </button>
           <button
             onClick={() => setMode("comics")}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-bold transition-all ${
               mode === "comics"
                 ? "bg-gradient-to-r from-[#7C3AED] to-[#F39B9B] text-white shadow-lg shadow-[#7C3AED]/20"
                 : "text-[#94A3B8] hover:text-white"
             }`}
           >
-            <Sparkles size={14} /> COMICS
+            <Sparkles size={13} /> COMICS
+          </button>
+          <button
+            onClick={() => setMode("plans")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-bold transition-all ${
+              mode === "plans"
+                ? "bg-gradient-to-r from-[#7C3AED] to-[#F39B9B] text-white shadow-lg shadow-[#7C3AED]/20"
+                : "text-[#94A3B8] hover:text-white"
+            }`}
+          >
+            <List size={13} /> PLANS
           </button>
         </div>
       </div>
@@ -451,6 +462,27 @@ export default function BibleView({ onOpenComic }: { onOpenComic?: (bookId: stri
           ────────────────────────────────────────────────────────────────── */}
       {mode === "comics" && (
         <ComicsBrowserView onOpenComic={(bookId, chapter) => onOpenComic?.(bookId, chapter)} />
+      )}
+
+      {/* ──────────────────────────────────────────────────────────────────
+          READING PLANS MODE — reuses the existing BiblePlansView component.
+          When a plan day's chapter is opened, we switch to READ mode and
+          load that chapter inline (no routing change required).
+          ────────────────────────────────────────────────────────────────── */}
+      {mode === "plans" && (
+        <BiblePlansView
+          translation={translation}
+          onOpenChapter={(bookId, chapter) => {
+            // Switch from PLANS → READ mode and load the chosen chapter
+            // inside the existing Bible reader.
+            const book = getBook(bookId);
+            if (book) {
+              setSelectedBook(book);
+              setSelectedChapter(chapter);
+              setMode("read");
+            }
+          }}
+        />
       )}
     </div>
   );
@@ -638,7 +670,9 @@ function BooksView({ onSelectBook }: { onSelectBook: (b: BibleBook) => void }) {
         {Object.entries(grouped).map(([category, bookList]) => (
           <div key={category}>
             <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">{category}</p>
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+            {/* 2 columns on mobile (full book names fit comfortably),
+                3 on small tablets, 4 on desktop */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
               {bookList.map((book, i) => (
                 <motion.button
                   key={book.id}
@@ -646,10 +680,14 @@ function BooksView({ onSelectBook }: { onSelectBook: (b: BibleBook) => void }) {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.03 }}
                   onClick={() => onSelectBook(book)}
-                  className="p-3 rounded-xl bg-[#1C1929] border border-white/[0.06] hover:border-white/[0.15] hover:bg-[#22202F] transition-all text-left group"
+                  className="p-3 rounded-xl bg-[#1C1929] border border-white/[0.06] hover:border-white/[0.15] hover:bg-[#22202F] transition-all text-left group min-h-[60px] flex flex-col justify-center"
                 >
-                  <p className="text-sm font-bold text-white group-hover:scale-[1.02] transition-transform">{book.abbr}</p>
-                  <p className="text-[10px] text-[#94A3B8] mt-0.5">{book.chapters} ch</p>
+                  <p className="text-sm font-bold text-white group-hover:scale-[1.02] transition-transform leading-tight">
+                    {book.name}
+                  </p>
+                  <p className="text-[10px] text-[#94A3B8] mt-0.5">
+                    {book.chapters} <span className="hidden sm:inline">chapters</span><span className="sm:hidden">ch</span>
+                  </p>
                 </motion.button>
               ))}
             </div>
