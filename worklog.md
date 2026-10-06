@@ -274,3 +274,23 @@ Stage Summary:
 - NO CHANGES TO: Genesis 1/2/3/4 content, panel artwork URLs, 6-panel structure, mobile 1×6 layout, desktop 3×2 layout, panel number/title/verse overlays, narration below artwork, bottom action bar, chapter navigation, mobile bottom nav, Bible reader, Trivia, Faith Points, auth, admin, CMS architecture, Prisma models, Supabase Storage, artwork upload API.
 - FILES CHANGED: src/app/page.tsx (default chapter + 2 labels + 1 comment), src/app/api/comic/share/[panelId]/route.ts (1 share fallback title).
 - BROWSER TESTS REQUIRED (admin-only, user must verify): open Bible Comics feature → should land on Genesis 1, not Genesis 2.
+
+---
+Task ID: landing-enter-app-opens-bible-comics
+Agent: main
+Task: Change the landing page "Enter App" button so it opens Bible Comics instead of the Bible reader.
+
+Work Log:
+- Located the Enter App button in src/components/crosscrafted/LandingHero.tsx (line 109).
+- It was calling onEnterApp('bible') which navigated to the Bible reader view.
+- Changed to onEnterApp('comic') so it now opens the Bible Comics feature.
+- Genesis 1 will load by default (per previous commit aacce20 — useState(1) default).
+- Left the hero CTA "Read the Bible" button unchanged — it intentionally opens the Bible reader as its label promises.
+- Committed as 530f805 and pushed to main → Vercel deploy triggered.
+- Verified production: homepage HTTP 200, Genesis 1 API HTTP 200.
+
+Stage Summary:
+- ROOT CAUSE: LandingHero.tsx Enter App button called onEnterApp('bible').
+- FIX: Changed to onEnterApp('comic'). Now Enter App → Bible Comics → Genesis 1.
+- FILES CHANGED: src/components/crosscrafted/LandingHero.tsx (1 line).
+- NO CHANGES TO: Bible reader, Trivia, Faith Points, sidebar nav, mobile bottom nav, ComicView, CMS, Genesis content, auth, admin.
