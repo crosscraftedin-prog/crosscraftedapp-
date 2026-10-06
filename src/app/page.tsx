@@ -99,6 +99,10 @@ export default function Home() {
   const [headerVisible, setHeaderVisible] = useState(true);
   const [showMoreSheet, setShowMoreSheet] = useState(false);
   const lastScrollY = useRef(0);
+  // Comic Bible state — data-driven, not hardcoded.
+  // Changed when user navigates between comic chapters or opens a shared URL.
+  const [comicBookId, setComicBookId] = useState("genesis");
+  const [comicChapter, setComicChapter] = useState(2);
 
   // Navigate to a new view, also resetting header + scroll position.
   const navigate = (next: View) => {
@@ -252,8 +256,12 @@ export default function Home() {
               )}
               {view === "comic" && (
                 <ComicView
-                  bookId="genesis"
-                  chapter={2}
+                  bookId={comicBookId}
+                  chapter={comicChapter}
+                  onNavigateChapter={(bid, ch) => {
+                    setComicBookId(bid);
+                    setComicChapter(ch);
+                  }}
                   onReadChapter={(bid, ch) => {
                     goView("bible");
                   }}

@@ -82,12 +82,12 @@ export async function GET(
         verseEnd: panel.verseEnd,
         bookId: panel.bookId,
         chapter: panel.chapter,
+        audioUrl: panel.audioUrl || null,
+        videoUrl: panel.videoUrl || null,
         title: activeTranslation?.title || null,
         narration: activeTranslation?.narration || null,
         captions: safeParseArray(activeTranslation?.captions),
-        // Whether this is a translation fallback (English shown instead of requested language)
         isFallback: !panelTranslation && !!englishPanelTranslation && lang !== "en",
-        // Whether this panel has a translation in the requested language at all
         hasTranslation: !!panelTranslation,
       };
     });

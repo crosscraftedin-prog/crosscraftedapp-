@@ -359,6 +359,10 @@ model ComicPanel {
   verseEnd        Int                // e.g. 3
   bookId          String             // denormalized from ComicChapter for quick verse lookups
   chapter         Int                // denormalized
+  // Optional audio — language-specific. Null = no audio, use TTS fallback.
+  // Future: audioUrl could be a JSON map { "en": "...", "hi": "..." } per language.
+  audioUrl        String?            // URL to professional audio narration (future)
+  videoUrl        String?            // URL to video content (future)
 
   comicChapter    ComicChapter @relation(fields: [comicChapterId], references: [id], onDelete: Cascade)
   translations    ComicPanelTranslation[]

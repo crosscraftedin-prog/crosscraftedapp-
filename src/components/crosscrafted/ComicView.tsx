@@ -34,6 +34,8 @@ type ComicPanel = {
   verseEnd: number;
   bookId: string;
   chapter: number;
+  audioUrl: string | null;
+  videoUrl: string | null;
   title: string | null;
   narration: string | null;
   captions: string[];
@@ -71,12 +73,13 @@ const PRAYER_PROMPTS: Record<string, string> = {
 type Props = {
   bookId: string;
   chapter: number;
+  onNavigateChapter: (bookId: string, chapter: number) => void;
   onReadChapter: (bookId: string, chapter: number) => void;
   onPray: (prayerPrompt: string) => void;
   onDiscuss: (topic: string) => void;
 };
 
-export default function ComicView({ bookId, chapter, onReadChapter, onPray, onDiscuss }: Props) {
+export default function ComicView({ bookId, chapter, onNavigateChapter, onReadChapter, onPray, onDiscuss }: Props) {
   const { lang } = useLanguage();
   const { isAuthenticated } = useSupabaseUser();
 
@@ -186,14 +189,20 @@ export default function ComicView({ bookId, chapter, onReadChapter, onPray, onDi
     const panel = chapterData.panels[currentPanel];
     if (!panel?.narration) return;
 
+    // If professional audio URL exists, open it in a new tab
+    if (panel.audioUrl) {
+      window.open(panel.audioUrl, "_blank");
+      return;
+    }
+
+    // Fallback: browser speech synthesis — clearly labeled as TTS,
+    // NOT a real Bible audio production.
     if (isSpeaking) {
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
       return;
     }
 
-    // Browser speech synthesis — clearly labeled as a TTS fallback,
-    // NOT a real Bible audio production.
     const utterance = new SpeechSynthesisUtterance(panel.narration);
     utterance.rate = 0.9;
     utterance.onend = () => setIsSpeaking(false);
@@ -205,40 +214,88 @@ export default function ComicView({ bookId, chapter, onReadChapter, onPray, onDi
     });
   };
 
-  // ─── Share ────────────────────────────────────────────────────────────────
+  // ─── Share — generates a server-side PNG share card ────────────────────────
+
+  const [shareLoading, setShareLoading] = useState(false);
 
   const handleShare = async () => {
     if (!chapterData) return;
     const panel = chapterData.panels[currentPanel];
     const ref = `${chapterData.bookId.charAt(0).toUpperCase() + chapterData.bookId.slice(1)} ${chapterData.chapter}:${panel.verseStart}-${panel.verseEnd}`;
-    const shareText = `${panel.title} — ${ref}\n\n${panel.narration?.substring(0, 200)}...\n\nRead more at Believ`;
     const shareUrl = `${window.location.origin}/?comic=${chapterData.bookId}/${chapterData.chapter}`;
 
-    if (navigator.share) {
-      try {
+    setShareLoading(true);
+
+    try {
+      // Generate the share card image server-side
+      const shareCardUrl = `/api/comic/share/${panel.panelId}?lang=${lang}&format=square`;
+
+      // Try native share with file (mobile only — supports navigator.share({ files }))
+      if (navigator.canShare) {
+        try {
+          // Fetch the PNG as a blob
+          const res = await fetch(shareCardUrl);
+          const blob = await res.blob();
+          const file = new File([blob], `believ-${panel.panelId}.png`, { type: "image/png" });
+
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              title: `Believ Comic Bible — ${ref}`,
+              text: `${panel.title} — ${ref}`,
+            });
+            setShareLoading(false);
+            return;
+          }
+        } catch {
+          // Fall through to text share
+        }
+      }
+
+      // Fallback: share text + URL + copy image to clipboard
+      const shareText = `${panel.title} — ${ref}\n\n${panel.narration?.substring(0, 200)}...\n\nRead more at Believ`;
+
+      if (navigator.share) {
         await navigator.share({
           title: `Believ Comic Bible — ${ref}`,
           text: shareText,
           url: shareUrl,
         });
-      } catch {
-        // User cancelled — ignore
+      } else {
+        navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
+        toast.success("Link copied!", { description: ref });
       }
-    } else {
-      navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
-      toast.success("Link copied!", { description: ref });
+    } catch {
+      // User cancelled or error
+    } finally {
+      setShareLoading(false);
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!chapterData) return;
     const panel = chapterData.panels[currentPanel];
-    // Download the artwork image
-    const link = document.createElement("a");
-    link.href = panel.artworkUrl;
-    link.download = `believ-${panel.panelId}.svg`;
-    link.click();
-    toast.success("Downloaded!", { description: `${panel.panelId} artwork saved` });
+
+    setShareLoading(true);
+    try {
+      // Download the server-generated share card PNG (not the raw SVG)
+      const shareCardUrl = `/api/comic/share/${panel.panelId}?lang=${lang}&format=square`;
+      const res = await fetch(shareCardUrl);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `believ-${panel.panelId}.png`;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      toast.success("Downloaded!", { description: `Share card saved as PNG` });
+    } catch (e: any) {
+      toast.error("Download failed", { description: e.message });
+    } finally {
+      setShareLoading(false);
+    }
   };
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -466,6 +523,13 @@ export default function ComicView({ bookId, chapter, onReadChapter, onPray, onDi
           Next <ChevronRight size={14} />
         </button>
       </div>
+
+      {/* Chapter Navigation — Previous / Next chapter (data-driven from BIBLE_BOOKS) */}
+      <ChapterNavigation
+        bookId={bookId}
+        chapter={chapter}
+        onNavigate={onNavigateChapter}
+      />
 
       {/* Quiz Modal */}
       <AnimatePresence>
@@ -716,5 +780,151 @@ function ComicQuizModal({
         </div>
       </motion.div>
     </motion.div>
+  );
+}
+
+// ─── Chapter Navigation ──────────────────────────────────────────────────────
+// Data-driven Previous/Next chapter navigation.
+// Uses BIBLE_BOOKS metadata to determine adjacent chapters.
+// Only shows "Coming Soon" for chapters that don't have a comic yet.
+
+function ChapterNavigation({
+  bookId,
+  chapter,
+  onNavigate,
+}: {
+  bookId: string;
+  chapter: number;
+  onNavigate: (bookId: string, chapter: number) => void;
+}) {
+  const [availableChapters, setAvailableChapters] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/comic/list")
+      .then((r) => r.json())
+      .then((data) => {
+        const set = new Set<string>();
+        (data.chapters || []).forEach((ch: any) => {
+          set.add(`${ch.bookId}-${ch.chapter}`);
+        });
+        setAvailableChapters(set);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Compute previous + next chapter using BIBLE_BOOKS metadata
+  const getAdjacentChapter = (direction: "prev" | "next") => {
+    // We need to know the book's chapter count and position in BIBLE_BOOKS
+    // Import dynamically to avoid SSR issues
+    const books = require("@/lib/bible-data").BIBLE_BOOKS as typeof import("@/lib/bible-data").BIBLE_BOOKS;
+    const book = books.find((b) => b.id === bookId);
+    if (!book) return null;
+
+    let nextChapter: number;
+    let nextBookId: string = bookId;
+
+    if (direction === "next") {
+      if (chapter < book.chapters) {
+        nextChapter = chapter + 1;
+      } else {
+        // Move to next book, chapter 1
+        const idx = books.findIndex((b) => b.id === bookId);
+        if (idx < books.length - 1) {
+          nextBookId = books[idx + 1].id;
+          nextChapter = 1;
+        } else {
+          return null; // End of Bible
+        }
+      }
+    } else {
+      if (chapter > 1) {
+        nextChapter = chapter - 1;
+      } else {
+        // Move to previous book, last chapter
+        const idx = books.findIndex((b) => b.id === bookId);
+        if (idx > 0) {
+          nextBookId = books[idx - 1].id;
+          nextChapter = books[idx - 1].chapters;
+        } else {
+          return null; // Start of Bible
+        }
+      }
+    }
+
+    return { bookId: nextBookId, chapter: nextChapter };
+  };
+
+  const prevChapter = getAdjacentChapter("prev");
+  const nextChapter = getAdjacentChapter("next");
+
+  const hasPrevComic = prevChapter ? availableChapters.has(`${prevChapter.bookId}-${prevChapter.chapter}`) : false;
+  const hasNextComic = nextChapter ? availableChapters.has(`${nextChapter.bookId}-${nextChapter.chapter}`) : false;
+
+  if (loading) return null;
+
+  const formatLabel = (bid: string, ch: number) => {
+    const books = require("@/lib/bible-data").BIBLE_BOOKS as typeof import("@/lib/bible-data").BIBLE_BOOKS;
+    const book = books.find((b) => b.id === bid);
+    return `${book?.name || bid} ${ch}`;
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-2 mt-6 pt-4 border-t border-white/[0.04]">
+      {/* Previous chapter */}
+      {prevChapter ? (
+        <button
+          onClick={() => {
+            if (hasPrevComic) {
+              onNavigate(prevChapter.bookId, prevChapter.chapter);
+            } else {
+              toast("Coming Soon", {
+                description: `${formatLabel(prevChapter.bookId, prevChapter.chapter)} comic is being prepared.`,
+              });
+            }
+          }}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+            hasPrevComic
+              ? "bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white"
+              : "bg-white/[0.02] border border-white/[0.04] text-[#475569] cursor-not-allowed"
+          }`}
+        >
+          <ChevronLeft size={14} />
+          <span className="hidden sm:inline">{formatLabel(prevChapter.bookId, prevChapter.chapter)}</span>
+          <span className="sm:hidden">Prev</span>
+          {!hasPrevComic && <span className="text-[8px] text-[#F59E0B] ml-1">Soon</span>}
+        </button>
+      ) : (
+        <div />
+      )}
+
+      {/* Next chapter */}
+      {nextChapter ? (
+        <button
+          onClick={() => {
+            if (hasNextComic) {
+              onNavigate(nextChapter.bookId, nextChapter.chapter);
+            } else {
+              toast("Coming Soon", {
+                description: `${formatLabel(nextChapter.bookId, nextChapter.chapter)} comic is being prepared.`,
+              });
+            }
+          }}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+            hasNextComic
+              ? "bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white"
+              : "bg-white/[0.02] border border-white/[0.04] text-[#475569] cursor-not-allowed"
+          }`}
+        >
+          {!hasNextComic && <span className="text-[8px] text-[#F59E0B] mr-1">Soon</span>}
+          <span className="hidden sm:inline">{formatLabel(nextChapter.bookId, nextChapter.chapter)}</span>
+          <span className="sm:hidden">Next</span>
+          <ChevronRight size={14} />
+        </button>
+      ) : (
+        <div />
+      )}
+    </div>
   );
 }
