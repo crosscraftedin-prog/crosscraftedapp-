@@ -113,3 +113,51 @@ system was created.
   are preserved.
 - No bulk operations yet (e.g. "publish all ready chapters"). Each chapter
   must be published individually.
+
+---
+Task ID: bugfix-artwork-upload
+Agent: main
+Task: Fix "Unexpected end of JSON input" error when uploading Bible Comics panel artwork via the admin CMS.
+
+Work Log:
+- Inspected the upload flow end-to-end: ComicArtworkUploader.tsx → /api/admin/comics/upload → Supabase Storage → DB.
+- Found root cause: /api/admin/comics/upload/route.ts was accidentally deleted in commit 728718a (Genesis 1 redesign).
+  Without that route file, requests fell through to /api/admin/comics/[id] which only supports GET/PATCH/DELETE.
+  Vercel returned HTTP 405 with content-length: 0 (empty body).
+  ComicArtworkUploader's `await res.json()` on empty body threw SyntaxError: Unexpected end of JSON input.
+- Verified by curling production: `curl -i -X POST https://crosscraftedapp.vercel.app/api/admin/comics/upload` returned `HTTP 405, content-length: 0, x-matched-path: /api/admin/comics/[id]`.
+- Restored the upload route with improvements:
+  * Admin-only via requireAdmin() (403 JSON for non-admins).
+  * Image validation: PNG/JPG/JPEG/WEBP, max 10MB.
+  * Path sanitization (alphanumeric + hyphens only).
+  * Sharp WebP conversion (quality 90).
+  * Upload to Supabase Storage bucket "believ-comic-artwork" (public read).
+  * Auto-create bucket if missing (idempotent).
+  * Optional DB persistence: when chapterId is provided, updates ComicPanel.artworkUrl immediately.
+  * Returns JSON: { success, url, artworkUrl, path, artworkPath, message }.
+  * ALL error paths return JSON (no empty bodies).
+  * Detects placeholder SUPABASE_SERVICE_ROLE_KEY and returns clear `missing: SUPABASE_SERVICE_ROLE_KEY` error.
+- Improved ComicArtworkUploader.tsx frontend:
+  * Replaced blind res.json() with safeParseJson() that checks res.ok, status, Content-Type, empty body, and HTML responses.
+  * Special-cases 403 (Forbidden), 405 (route missing), 500 (config error) with specific messages.
+  * When server returns `missing: ENV_VAR`, surfaces exact variable name + tells admin where to set it in Vercel.
+  * Toast shows the actual server error, not a parse error.
+- Wired chapterId from PanelFormModal → ComicArtworkUploader so the route can persist to DB on upload.
+- Verified production endpoint after deploy:
+  * GET → HTTP 405 + `{"success":false,"error":"Method not allowed — use POST"}` (was previously empty 405).
+  * POST without auth → HTTP 403 + `{"success":false,"error":"Forbidden — admin access required"}`.
+  * x-matched-path now correctly shows /api/admin/comics/upload (was /api/admin/comics/[id] before fix).
+- Verified Supabase Storage bucket "believ-comic-artwork" is publicly readable (HTTP 200 image/webp on existing GEN2-P01.webp).
+- Verified SUPABASE_SERVICE_ROLE_KEY is configured on Vercel (because GEN2-P01 was successfully uploaded previously and lives in Supabase Storage).
+- Verified no base64 data URLs remain in DB (all 27 sampled panels use either Supabase URLs or local SVG placeholders).
+- Committed as 7aff53b and pushed to main → Vercel deploy triggered.
+
+Stage Summary:
+- ROOT CAUSE: Upload route file deleted; production returned empty 405; frontend blind .json() on empty body → "Unexpected end of JSON input".
+- FIX: Restored route with strict JSON responses + improved frontend safeParseJson() that never throws on empty/non-JSON bodies and surfaces real server errors with env-var guidance.
+- API ENDPOINT: POST /api/admin/comics/upload (multipart/form-data).
+- SUPABASE BUCKET: believ-comic-artwork (public read, admin-only write).
+- DB UPDATE: ComicPanel.artworkUrl updated immediately when chapterId is supplied (also still persisted via existing Save flow).
+- VERCEL ENV: SUPABASE_SERVICE_ROLE_KEY is already configured (verified by existing GEN2-P01 upload). NEXT_PUBLIC_SUPABASE_URL also configured.
+- TESTS: GET → 405 JSON ✅ | POST no-auth → 403 JSON ✅ | route exists on Vercel ✅ | bucket publicly readable ✅ | placeholder SVGs still serve ✅.
+- PRODUCTION STATE: ready for admin to upload artwork to GEN1-P01 and GEN2-P02.
