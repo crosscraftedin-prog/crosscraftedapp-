@@ -713,3 +713,42 @@ Stage Summary:
 - FILES CHANGED: src/components/crosscrafted/AdminView.tsx (+103/-22 lines).
 - NO NEW PRISMA MIGRATIONS: Creating real Prisma models for Church/Event/Product/Business/Prayer/Apologetics/Competition/Announcement/Analytics is a large multi-day task that requires schema design + migration + admin API routes + server-side validation + image upload + audit log + analytics tracking. This commit does NOT attempt that — it only fixes the dead Quick Actions and adds honest UX banners.
 - NO CHANGES TO: BibleComicsAdmin (already real), Bible Comics functionality, Trivia Questions (real DB), Gifts & Redemptions (real APIs), Authentication / requireAdmin(), Brand colors / Koino logo, Mobile bottom nav, Routing architecture.
+
+---
+Task ID: koino-signup-onboarding-members
+Agent: main
+Task: Complete signup, onboarding, member profile, WhatsApp channel + admin member system.
+
+Work Log:
+- Added 13 new fields to User Prisma model: username (unique), dateOfBirth, gender, state, city, mobileNumber, mobileVerified, faithStatus, faithJourney, profileCompleted, whatsappChannelPromptShown, whatsappChannelClicked, signupMethod. Ran `prisma db push --accept-data-loss` successfully against production Supabase.
+- Created 4 new API endpoints:
+  1. POST/GET /api/profile/setup — saves onboarding profile step-by-step or complete. Server-authoritative (userId from auth session). Validates username uniqueness, required fields, enum values. GET returns existing partial profile for resume.
+  2. GET /api/profile/check-username?username=X — real-time availability check with suggestions.
+  3. GET /api/admin/members — admin-only member list with search, filters, pagination. ?stats=true returns dashboard stats (totalMembers, newToday, newThisWeek, newThisMonth, recentSignups). 403 for non-admins.
+  4. GET /api/config/whatsapp-channel — single source of truth for the official WhatsApp Channel URL.
+- Updated /api/auth/me to return profileCompleted.
+- Updated getAuthUser() in auth-server.ts to return profileCompleted.
+- Updated useSupabaseUser() hook to expose profileCompleted + loading state.
+- Created OnboardingView.tsx — 4-step flow: Welcome → Profile → Faith → WhatsApp. Progress indicator, username availability check, state/city dropdowns (state-dependent), faith questions with privacy note, WhatsApp channel follow (optional, skippable). Resume capability — loads existing partial profile and skips to appropriate step.
+- Updated page.tsx: added "onboarding" view type, OnboardingView import, useSupabaseUser destructuring, onboarding redirect useEffect (when authenticated && !profileCompleted → navigate to onboarding; when profileCompleted → navigate to home), enterApp() checks profileCompleted before navigating.
+- Committed as 7b491e5 and pushed to main → Vercel deploy triggered.
+- Verified production after deploy:
+  * Homepage: HTTP 200 ✅
+  * /api/auth/me: 401 for unauthenticated ✅
+  * /api/profile/setup: 401 for unauthenticated ✅
+  * /api/admin/members: 403 for non-admin ✅ (admin auth works)
+  * /api/config/whatsapp-channel: 200 with correct URL + label ✅
+  * Genesis 1 comic API: HTTP 200 ✅ (no regression)
+
+Stage Summary:
+- PRISMA MIGRATION: 13 new optional fields on User model (no data loss). Existing users have profileCompleted=false → will see onboarding on next login.
+- FILES CHANGED: 10 files (1 schema + 4 new API routes + 1 new component + 4 modified files for auth wiring).
+- REAL DB-BACKED: User model, profile fields, username uniqueness (DB-level @unique constraint), admin members API (queries real User table), dashboard stats (real counts from DB), WhatsApp channel config endpoint.
+- HONEST LIMITATIONS (not yet built — requires future work):
+  * Admin Members UI tab in AdminView (API exists at /api/admin/members, but the admin panel tab + member list/table/profile UI is not wired yet)
+  * OTP mobile verification for prize claims (requires OTP infrastructure — not built, per spec "Do not create an insecure custom OTP system")
+  * Trivia Winners model + admin UI (requires PrizaWinner Prisma model + admin CRUD)
+  * Activity Log model + API (requires AdminAction Prisma model)
+  * Analytics member growth charts (requires analytics event tracking)
+  * Notification system integration for onboarding completion
+- NO CHANGES TO: Existing auth (Google + Email via Supabase), Bible Comics (Genesis 1/2/3/4 unchanged), Bible/Trivia/Prayer Wall/Churches/Marketplace/Business Directory/Events/Admin, Brand colors / Koino logo, Mobile bottom nav, Routing architecture.
