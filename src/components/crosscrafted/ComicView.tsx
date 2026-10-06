@@ -6,23 +6,22 @@ import {
   BookOpen,
   ChevronLeft,
   ChevronRight,
-  Volume2,
-  Play,
   Brain,
   Heart,
   MessageCircle,
-  Share2,
-  Download,
   Loader2,
   X,
-  CheckCircle2,
   AlertCircle,
   Headphones,
   Video,
+  Zap,
+  Share2,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLanguage } from "@/lib/i18n/LanguageContext";
 import { useSupabaseUser } from "@/lib/supabase/use-user";
+import Image from "next/image";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -55,19 +54,6 @@ type ComicChapter = {
   titleIsFallback: boolean;
 };
 
-type ReadMode = "story" | "verse";
-
-// Prayer prompts for Genesis 2 panels
-const PRAYER_PROMPTS: Record<string, string> = {
-  "GEN2-P01": "Lord, thank You for the gift of rest. Help me honor the Sabbath and find peace in Your completed work.",
-  "GEN2-P02": "Father, thank You for creating me with purpose. You breathed life into dust — remind me that I am fearfully and wonderfully made.",
-  "GEN2-P03": "Lord, thank You for providing a place for me to dwell. Like Eden, may my life be a garden where Your presence flows.",
-  "GEN2-P04": "God, give me wisdom to obey Your commands. Help me choose life and resist the things that separate me from You.",
-  "GEN2-P05": "Father, thank You for the gift of companionship. Help me be a good steward of the relationships and responsibilities You've given me.",
-  "GEN2-P06": "Lord, thank You for the gift of family. May my relationships reflect Your love and the covenant You designed from the beginning.",
-  "GEN2-P07": "God, thank You for the beauty of marriage and intimacy. Help me honor the relationships You've blessed me with, walking in transparency and love.",
-};
-
 // ─── Component ─────────────────────────────────────────────────────────────
 
 type Props = {
@@ -86,15 +72,14 @@ export default function ComicView({ bookId, chapter, onNavigateChapter, onReadCh
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [chapterData, setChapterData] = useState<ComicChapter | null>(null);
-  const [currentPanel, setCurrentPanel] = useState(0);
-  const [readMode, setReadMode] = useState<ReadMode>("story");
-  const [verseData, setVerseData] = useState<{ verse: number; text: string }[] | null>(null);
-  const [verseLoading, setVerseLoading] = useState(false);
 
   // Quiz state
   const [showQuiz, setShowQuiz] = useState(false);
   const [quizQuestions, setQuizQuestions] = useState<any[]>([]);
   const [quizLoading, setQuizLoading] = useState(false);
+
+  // TTS state
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   // Load comic chapter
   const loadComic = useCallback(async () => {
@@ -116,43 +101,53 @@ export default function ComicView({ bookId, chapter, onNavigateChapter, onReadCh
     loadComic();
   }, [loadComic]);
 
-  // Load verse text for current panel (Verse Mode)
-  const loadVerses = useCallback(async (panel: ComicPanel) => {
-    setVerseLoading(true);
-    setVerseData(null);
-    try {
-      // Use the existing bible-data.ts fetchChapter function
-      const { fetchChapter } = await import("@/lib/bible-data");
-      const data = await fetchChapter(panel.bookId, panel.chapter, "kjv");
-      const verses = data.verses
-        .filter((v) => v.verse >= panel.verseStart && v.verse <= panel.verseEnd)
-        .map((v) => ({ verse: v.verse, text: v.text.trim() }));
-      setVerseData(verses);
-    } catch (e: any) {
-      toast.error("Failed to load verses", { description: e.message });
-    } finally {
-      setVerseLoading(false);
-    }
-  }, []);
+  // ─── Listen (TTS) ─────────────────────────────────────────────────────────
 
-  // Switch to Verse Mode
-  useEffect(() => {
-    if (readMode === "verse" && chapterData && chapterData.panels[currentPanel]) {
-      loadVerses(chapterData.panels[currentPanel]);
-    }
-  }, [readMode, currentPanel, chapterData, loadVerses]);
+  const handleListen = () => {
+    if (!chapterData) return;
 
-  // Navigate panels
-  const goPrev = () => {
-    if (currentPanel > 0) {
-      setCurrentPanel(currentPanel - 1);
-      if (readMode === "verse") setVerseData(null);
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
     }
+
+    // Combine all panel narrations into one speech
+    const fullNarration = chapterData.panels
+      .map((p, i) => `Panel ${i + 1}. ${p.title}. ${p.narration || ""}`)
+      .join(" ");
+
+    const utterance = new SpeechSynthesisUtterance(fullNarration);
+    utterance.rate = 0.9;
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+    setIsSpeaking(true);
+    toast("Audio narration", {
+      description: "Using browser voice synthesis. Professional audio coming soon.",
+    });
   };
-  const goNext = () => {
-    if (chapterData && currentPanel < chapterData.panels.length - 1) {
-      setCurrentPanel(currentPanel + 1);
-      if (readMode === "verse") setVerseData(null);
+
+  // ─── Share ────────────────────────────────────────────────────────────────
+
+  const handleShare = async () => {
+    if (!chapterData) return;
+    const shareUrl = `${window.location.origin}/?comic=${chapterData.bookId}/${chapterData.chapter}`;
+    const shareText = `${chapterData.title} — Believ Bible Comics\n\nRead the story. See the bigger picture. Grow in your faith.\n\n${shareUrl}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Believ Bible Comics — ${chapterData.title}`,
+          text: shareText,
+          url: shareUrl,
+        });
+      } catch {
+        // User cancelled
+      }
+    } else {
+      navigator.clipboard.writeText(shareText);
+      toast.success("Link copied!", { description: chapterData.title });
     }
   };
 
@@ -180,124 +175,6 @@ export default function ComicView({ bookId, chapter, onNavigateChapter, onReadCh
     }
   };
 
-  // ─── Listen (TTS fallback) ────────────────────────────────────────────────
-
-  const [isSpeaking, setIsSpeaking] = useState(false);
-
-  const handleListen = () => {
-    if (!chapterData) return;
-    const panel = chapterData.panels[currentPanel];
-    if (!panel?.narration) return;
-
-    // If professional audio URL exists, open it in a new tab
-    if (panel.audioUrl) {
-      window.open(panel.audioUrl, "_blank");
-      return;
-    }
-
-    // Fallback: browser speech synthesis — clearly labeled as TTS,
-    // NOT a real Bible audio production.
-    if (isSpeaking) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-      return;
-    }
-
-    const utterance = new SpeechSynthesisUtterance(panel.narration);
-    utterance.rate = 0.9;
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    window.speechSynthesis.speak(utterance);
-    setIsSpeaking(true);
-    toast("Text-to-speech", {
-      description: "Using browser voice synthesis. Professional audio coming soon.",
-    });
-  };
-
-  // ─── Share — generates a server-side PNG share card ────────────────────────
-
-  const [shareLoading, setShareLoading] = useState(false);
-
-  const handleShare = async () => {
-    if (!chapterData) return;
-    const panel = chapterData.panels[currentPanel];
-    const ref = `${chapterData.bookId.charAt(0).toUpperCase() + chapterData.bookId.slice(1)} ${chapterData.chapter}:${panel.verseStart}-${panel.verseEnd}`;
-    const shareUrl = `${window.location.origin}/?comic=${chapterData.bookId}/${chapterData.chapter}`;
-
-    setShareLoading(true);
-
-    try {
-      // Generate the share card image server-side
-      const shareCardUrl = `/api/comic/share/${panel.panelId}?lang=${lang}&format=square`;
-
-      // Try native share with file (mobile only — supports navigator.share({ files }))
-      if (navigator.canShare) {
-        try {
-          // Fetch the PNG as a blob
-          const res = await fetch(shareCardUrl);
-          const blob = await res.blob();
-          const file = new File([blob], `believ-${panel.panelId}.png`, { type: "image/png" });
-
-          if (navigator.canShare({ files: [file] })) {
-            await navigator.share({
-              files: [file],
-              title: `Believ Comic Bible — ${ref}`,
-              text: `${panel.title} — ${ref}`,
-            });
-            setShareLoading(false);
-            return;
-          }
-        } catch {
-          // Fall through to text share
-        }
-      }
-
-      // Fallback: share text + URL + copy image to clipboard
-      const shareText = `${panel.title} — ${ref}\n\n${panel.narration?.substring(0, 200)}...\n\nRead more at Believ`;
-
-      if (navigator.share) {
-        await navigator.share({
-          title: `Believ Comic Bible — ${ref}`,
-          text: shareText,
-          url: shareUrl,
-        });
-      } else {
-        navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
-        toast.success("Link copied!", { description: ref });
-      }
-    } catch {
-      // User cancelled or error
-    } finally {
-      setShareLoading(false);
-    }
-  };
-
-  const handleDownload = async () => {
-    if (!chapterData) return;
-    const panel = chapterData.panels[currentPanel];
-
-    setShareLoading(true);
-    try {
-      // Download the server-generated share card PNG (not the raw SVG)
-      const shareCardUrl = `/api/comic/share/${panel.panelId}?lang=${lang}&format=square`;
-      const res = await fetch(shareCardUrl);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `believ-${panel.panelId}.png`;
-      link.click();
-      URL.revokeObjectURL(url);
-
-      toast.success("Downloaded!", { description: `Share card saved as PNG` });
-    } catch (e: any) {
-      toast.error("Download failed", { description: e.message });
-    } finally {
-      setShareLoading(false);
-    }
-  };
-
   // ─── Render ────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -320,218 +197,74 @@ export default function ComicView({ bookId, chapter, onNavigateChapter, onReadCh
     );
   }
 
-  const panel = chapterData.panels[currentPanel];
-  const totalPanels = chapterData.panels.length;
-  const progress = ((currentPanel + 1) / totalPanels) * 100;
+  const bookName = bookId.charAt(0).toUpperCase() + bookId.slice(1);
+  const panels = chapterData.panels;
+
+  // Get prayer prompt from first panel's captions
+  const prayerPrompt = panels[0]?.captions?.[0] ||
+    `Lord, thank You for the story of ${chapterData.title}. Help me grow in faith through Your Word.`;
 
   return (
-    <div className="max-w-[800px] mx-auto px-4 py-5">
-      {/* Breadcrumb header */}
-      <div className="flex items-center gap-2 text-xs text-[#64748B] mb-4">
-        <span>Bible</span>
-        <ChevronRight size={10} />
-        <span>Old Testament</span>
-        <ChevronRight size={10} />
-        <span className="capitalize">{chapterData.bookId}</span>
-        <ChevronRight size={10} />
-        <span>Chapter {chapterData.chapter}</span>
-        <ChevronRight size={10} />
-        <span className="text-[#F39B9B] font-bold">Comic</span>
+    <div className="max-w-[1200px] mx-auto px-4 py-5">
+      {/* ─── HEADER ─── */}
+      <div className="text-center mb-6">
+        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#F39B9B] mb-2">
+          BIBLE COMICS
+        </p>
+        <h1 className="text-3xl font-black text-white mb-1">
+          {bookName} {chapter}
+        </h1>
+        <p className="text-lg text-[#A09DB1] font-semibold mb-2">
+          {chapterData.title}
+        </p>
+        <p className="text-xs text-[#64748B]">
+          Read the story • See the bigger picture • Grow in your faith
+        </p>
       </div>
 
-      {/* Chapter title */}
-      <div className="mb-4">
-        <h1 className="text-xl font-extrabold text-white">{chapterData.title}</h1>
-        {chapterData.titleIsFallback && (
-          <p className="text-[10px] text-[#F59E0B] mt-0.5">English (translation pending)</p>
-        )}
-      </div>
-
-      {/* Read / Comic toggle */}
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={() => onReadChapter(bookId, chapter)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-xs font-bold text-[#94A3B8] hover:text-white transition-all"
-        >
-          <BookOpen size={14} /> READ
-        </button>
-        <button
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#F39B9B]/15 border border-[#F39B9B]/30 text-xs font-bold text-[#F39B9B]"
-        >
-          <BookOpen size={14} /> COMIC
-        </button>
-      </div>
-
-      {/* Story / Verse mode toggle */}
-      <div className="flex gap-1 p-1 bg-white/[0.04] border border-white/[0.06] rounded-xl mb-4">
-        <button
-          onClick={() => setReadMode("story")}
-          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
-            readMode === "story" ? "bg-[#7C3AED] text-white" : "text-[#94A3B8] hover:text-white"
-          }`}
-        >
-          Story Mode
-        </button>
-        <button
-          onClick={() => setReadMode("verse")}
-          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
-            readMode === "verse" ? "bg-[#7C3AED] text-white" : "text-[#94A3B8] hover:text-white"
-          }`}
-        >
-          Verse Mode
-        </button>
-      </div>
-
-      {/* Progress bar */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] text-[#64748B] font-bold">
-            Panel {currentPanel + 1} of {totalPanels}
-          </span>
-          <span className="text-[10px] text-[#64748B]">{Math.round(progress)}%</span>
-        </div>
-        <div className="h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
-          <motion.div
-            className="h-full bg-gradient-to-r from-[#F39B9B] to-[#9786E3]"
-            initial={{ width: 0 }}
-            animate={{ width: `${progress}%` }}
-            transition={{ duration: 0.3 }}
+      {/* ─── COMIC PANEL GRID (3×2) ─── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+        {panels.map((panel, idx) => (
+          <ComicPanelCard
+            key={panel.panelId}
+            panel={panel}
+            index={idx + 1}
+            bookName={bookName}
+            chapterNum={chapter}
+            onReadVerse={onReadChapter}
+            bookId={bookId}
+            chapter={chapter}
           />
+        ))}
+      </div>
+
+      {/* ─── BOTTOM ACTION BAR ─── */}
+      <div className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+          <ActionButton icon={BookOpen} label="Read" sublabel="The full comic story" onClick={() => onReadChapter(bookId, chapter)} />
+          <ActionButton icon={isSpeaking ? X : Headphones} label={isSpeaking ? "Stop" : "Listen"} sublabel="Audio narration" onClick={handleListen} />
+          <ActionButton icon={Video} label="Watch" sublabel="Animated version" onClick={() => toast("Coming Soon", { description: "Animated version is being prepared." })} dimmed />
+          <ActionButton icon={Brain} label="Quiz" sublabel="Test your knowledge" onClick={startQuiz} />
+          <ActionButton icon={Zap} label="Earn FP" sublabel="Get Faith Points" onClick={() => toast("Take the quiz to earn FP!")} dimmed />
+          <ActionButton icon={Heart} label="Pray" sublabel="Daily prayer" onClick={() => onPray(prayerPrompt)} />
+          <ActionButton icon={MessageCircle} label="Discuss" sublabel="Join the community" onClick={() => onDiscuss(`What stands out to you in ${bookName} ${chapter}?`)} dimmed />
         </div>
       </div>
 
-      {/* Comic panel */}
-      <motion.div
-        key={panel.panelId}
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.3 }}
-        className="bg-[#1C1929] border border-white/[0.06] rounded-2xl overflow-hidden mb-4"
-      >
-        {/* Artwork */}
-        <div className="relative w-full aspect-[16/9] bg-[#0f0f1a]">
-          <img
-            src={panel.artworkUrl}
-            alt={panel.title || `Panel ${currentPanel + 1}`}
-            className="w-full h-full object-cover"
-          />
-          {/* Verse reference badge */}
-          <div className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold">
-            {bookId.charAt(0).toUpperCase() + bookId.slice(1)} {chapter}:{panel.verseStart}-{panel.verseEnd}
-          </div>
-          {/* Translation fallback badge */}
-          {panel.isFallback && (
-            <div className="absolute top-3 right-3 px-2 py-1 rounded-lg bg-[#F59E0B]/90 text-slate-950 text-[9px] font-bold uppercase">
-              EN text
-            </div>
-          )}
-        </div>
+      {/* ─── CHAPTER NAVIGATION ─── */}
+      <ChapterNavigation bookId={bookId} chapter={chapter} onNavigate={onNavigateChapter} />
 
-        {/* Panel content */}
-        <div className="p-4">
-          {/* Title */}
-          {panel.title && (
-            <h3 className="text-sm font-bold text-white mb-2">{panel.title}</h3>
-          )}
-
-          {/* Story mode: narration */}
-          {readMode === "story" && panel.narration && (
-            <p className="text-[13px] text-[#A09DB1] leading-relaxed">{panel.narration}</p>
-          )}
-
-          {/* Verse mode: individual verses */}
-          {readMode === "verse" && (
-            <div className="space-y-2">
-              {verseLoading ? (
-                <div className="flex items-center gap-2 text-[#64748B] text-xs">
-                  <Loader2 size={14} className="animate-spin" /> Loading verses...
-                </div>
-              ) : verseData ? (
-                verseData.map((v) => (
-                  <div key={v.verse} className="flex gap-2">
-                    <span className="text-[#F39B9B] font-bold text-[11px] shrink-0 w-6 text-right">{v.verse}</span>
-                    <p className="text-[13px] text-[#A09DB1] leading-relaxed flex-1">{v.text}</p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-xs text-[#64748B]">No verse data available.</p>
-              )}
-              {!verseLoading && verseData && (
-                <p className="text-[10px] text-[#475569] mt-2">
-                  Scripture from KJV (English). Indian-language Bible translations coming soon.
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Captions (if any) */}
-          {panel.captions.length > 0 && (
-            <div className="mt-3 space-y-1">
-              {panel.captions.map((cap, idx) => (
-                <p key={idx} className="text-[11px] text-[#94A3B8] italic">{cap}</p>
-              ))}
-            </div>
-          )}
-        </div>
-      </motion.div>
-
-      {/* Action buttons */}
-      <div className="grid grid-cols-4 md:grid-cols-7 gap-2 mb-4">
-        <ActionButton icon={BookOpen} label="Read" onClick={() => onReadChapter(bookId, chapter)} />
-        <ActionButton icon={isSpeaking ? X : Headphones} label={isSpeaking ? "Stop" : "Listen"} onClick={handleListen} />
-        <ActionButton icon={Video} label="Watch" onClick={() => toast("Coming Soon", { description: "Video content is being prepared." })} dimmed />
-        <ActionButton icon={Brain} label="Quiz" onClick={startQuiz} />
-        <ActionButton icon={Heart} label="Pray" onClick={() => onPray(PRAYER_PROMPTS[panel.panelId] || "Lord, thank You for Your Word.")} />
-        <ActionButton icon={MessageCircle} label="Discuss" onClick={() => onDiscuss(`What stands out to you most about ${panel.title}?`)} />
-        <ActionButton icon={Share2} label="Share" onClick={handleShare} />
-      </div>
-
-      {/* Download button */}
-      <button
-        onClick={handleDownload}
-        className="w-full py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-xs font-bold text-[#94A3B8] hover:text-white transition-all flex items-center justify-center gap-2 mb-4"
-      >
-        <Download size={14} /> Download Panel Image
-      </button>
-
-      {/* Navigation */}
-      <div className="flex items-center justify-between">
+      {/* ─── SHARE / DOWNLOAD ─── */}
+      <div className="flex gap-2 mt-4">
         <button
-          onClick={goPrev}
-          disabled={currentPanel === 0}
-          className="flex items-center gap-1 px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-xs font-bold text-[#94A3B8] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          onClick={handleShare}
+          className="flex-1 py-2.5 rounded-xl bg-[#7C3AED]/15 border border-[#7C3AED]/30 text-[#A78BFA] text-xs font-bold flex items-center justify-center gap-2 hover:bg-[#7C3AED]/25 transition-all"
         >
-          <ChevronLeft size={14} /> Previous
-        </button>
-        {/* Panel dots */}
-        <div className="flex gap-1.5">
-          {chapterData.panels.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setCurrentPanel(i)}
-              className={`w-2 h-2 rounded-full transition-all ${
-                i === currentPanel ? "bg-[#F39B9B] w-6" : "bg-white/20"
-              }`}
-            />
-          ))}
-        </div>
-        <button
-          onClick={goNext}
-          disabled={currentPanel === totalPanels - 1}
-          className="flex items-center gap-1 px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-xs font-bold text-[#94A3B8] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-        >
-          Next <ChevronRight size={14} />
+          <Share2 size={14} /> Share Chapter
         </button>
       </div>
 
-      {/* Chapter Navigation — Previous / Next chapter (data-driven from BIBLE_BOOKS) */}
-      <ChapterNavigation
-        bookId={bookId}
-        chapter={chapter}
-        onNavigate={onNavigateChapter}
-      />
-
-      {/* Quiz Modal */}
+      {/* ─── QUIZ MODAL ─── */}
       <AnimatePresence>
         {showQuiz && (
           <ComicQuizModal
@@ -550,16 +283,81 @@ export default function ComicView({ bookId, chapter, onNavigateChapter, onReadCh
   );
 }
 
+// ─── Comic Panel Card ───────────────────────────────────────────────────────
+
+function ComicPanelCard({
+  panel,
+  index,
+  bookName,
+  chapterNum,
+  onReadVerse,
+  bookId,
+  chapter,
+}: {
+  panel: ComicPanel;
+  index: number;
+  bookName: string;
+  chapterNum: number;
+  onReadVerse: (bookId: string, chapter: number) => void;
+  bookId: string;
+  chapter: number;
+}) {
+  const verseRef = `${bookName} ${chapterNum}:${panel.verseStart}-${panel.verseEnd}`;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.1 }}
+      className="bg-[#1C1929] border border-white/[0.06] rounded-2xl overflow-hidden"
+    >
+      {/* Panel number + title */}
+      <div className="p-3 pb-2">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="w-7 h-7 rounded-full bg-[#F39B9B] text-slate-950 text-xs font-black flex items-center justify-center shrink-0">
+            {index}
+          </span>
+          <h3 className="text-sm font-bold text-white leading-tight">
+            {panel.title}
+          </h3>
+        </div>
+      </div>
+
+      {/* Artwork */}
+      <div className="relative w-full aspect-[16/9] bg-[#0f0f1a] overflow-hidden">
+        <img
+          src={panel.artworkUrl}
+          alt={panel.title || `Panel ${index}`}
+          className="w-full h-full object-cover"
+        />
+        {/* Verse reference badge */}
+        <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-sm text-white text-[9px] font-bold">
+          {verseRef}
+        </div>
+      </div>
+
+      {/* Narration */}
+      <div className="p-3">
+        <p className="text-[12px] text-[#A09DB1] leading-relaxed line-clamp-3">
+          {panel.narration}
+        </p>
+      </div>
+    </motion.div>
+  );
+}
+
 // ─── Action Button ──────────────────────────────────────────────────────────
 
 function ActionButton({
   icon: Icon,
   label,
+  sublabel,
   onClick,
   dimmed = false,
 }: {
   icon: typeof BookOpen;
   label: string;
+  sublabel: string;
   onClick: () => void;
   dimmed?: boolean;
 }) {
@@ -568,13 +366,150 @@ function ActionButton({
       onClick={onClick}
       className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border transition-all ${
         dimmed
-          ? "bg-white/[0.02] border-white/[0.04] text-[#475569]"
+          ? "bg-white/[0.02] border-white/[0.04] text-[#475569] cursor-default"
           : "bg-white/[0.04] border-white/[0.06] text-[#94A3B8] hover:text-white hover:bg-white/[0.06]"
       }`}
     >
-      <Icon size={16} />
-      <span className="text-[9px] font-bold uppercase tracking-wider">{label}</span>
+      <Icon size={18} />
+      <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
+      <span className="text-[8px] text-[#64748B] hidden lg:block">{sublabel}</span>
     </button>
+  );
+}
+
+// ─── Chapter Navigation ──────────────────────────────────────────────────────
+
+function ChapterNavigation({
+  bookId,
+  chapter,
+  onNavigate,
+}: {
+  bookId: string;
+  chapter: number;
+  onNavigate: (bookId: string, chapter: number) => void;
+}) {
+  const [availableChapters, setAvailableChapters] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/comic/list")
+      .then((r) => r.json())
+      .then((data) => {
+        const set = new Set<string>();
+        (data.chapters || []).forEach((ch: any) => {
+          set.add(`${ch.bookId}-${ch.chapter}`);
+        });
+        setAvailableChapters(set);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const getAdjacentChapter = (direction: "prev" | "next") => {
+    const books = require("@/lib/bible-data").BIBLE_BOOKS as typeof import("@/lib/bible-data").BIBLE_BOOKS;
+    const book = books.find((b) => b.id === bookId);
+    if (!book) return null;
+
+    let nextChapter: number;
+    let nextBookId: string = bookId;
+
+    if (direction === "next") {
+      if (chapter < book.chapters) {
+        nextChapter = chapter + 1;
+      } else {
+        const idx = books.findIndex((b) => b.id === bookId);
+        if (idx < books.length - 1) {
+          nextBookId = books[idx + 1].id;
+          nextChapter = 1;
+        } else {
+          return null;
+        }
+      }
+    } else {
+      if (chapter > 1) {
+        nextChapter = chapter - 1;
+      } else {
+        const idx = books.findIndex((b) => b.id === bookId);
+        if (idx > 0) {
+          nextBookId = books[idx - 1].id;
+          nextChapter = books[idx - 1].chapters;
+        } else {
+          return null;
+        }
+      }
+    }
+
+    return { bookId: nextBookId, chapter: nextChapter };
+  };
+
+  const prevChapter = getAdjacentChapter("prev");
+  const nextChapter = getAdjacentChapter("next");
+
+  const hasPrevComic = prevChapter ? availableChapters.has(`${prevChapter.bookId}-${prevChapter.chapter}`) : false;
+  const hasNextComic = nextChapter ? availableChapters.has(`${nextChapter.bookId}-${nextChapter.chapter}`) : false;
+
+  if (loading) return null;
+
+  const formatLabel = (bid: string, ch: number) => {
+    const books = require("@/lib/bible-data").BIBLE_BOOKS as typeof import("@/lib/bible-data").BIBLE_BOOKS;
+    const book = books.find((b) => b.id === bid);
+    return `${book?.name || bid} ${ch}`;
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-2 mt-6 pt-4 border-t border-white/[0.04]">
+      {prevChapter ? (
+        <button
+          onClick={() => {
+            if (hasPrevComic) {
+              onNavigate(prevChapter.bookId, prevChapter.chapter);
+            } else {
+              toast("Coming Soon", {
+                description: `${formatLabel(prevChapter.bookId, prevChapter.chapter)} comic is being prepared.`,
+              });
+            }
+          }}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+            hasPrevComic
+              ? "bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white"
+              : "bg-white/[0.02] border border-white/[0.04] text-[#475569] cursor-not-allowed"
+          }`}
+        >
+          <ChevronLeft size={14} />
+          <span className="hidden sm:inline">{formatLabel(prevChapter.bookId, prevChapter.chapter)}</span>
+          <span className="sm:hidden">Prev</span>
+          {!hasPrevComic && <span className="text-[8px] text-[#F59E0B] ml-1">Soon</span>}
+        </button>
+      ) : (
+        <div />
+      )}
+
+      {nextChapter ? (
+        <button
+          onClick={() => {
+            if (hasNextComic) {
+              onNavigate(nextChapter.bookId, nextChapter.chapter);
+            } else {
+              toast("Coming Soon", {
+                description: `${formatLabel(nextChapter.bookId, nextChapter.chapter)} comic is being prepared.`,
+              });
+            }
+          }}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+            hasNextComic
+              ? "bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white"
+              : "bg-white/[0.02] border border-white/[0.04] text-[#475569] cursor-not-allowed"
+          }`}
+        >
+          {!hasNextComic && <span className="text-[8px] text-[#F59E0B] mr-1">Soon</span>}
+          <span className="hidden sm:inline">{formatLabel(nextChapter.bookId, nextChapter.chapter)}</span>
+          <span className="sm:hidden">Next</span>
+          <ChevronRight size={14} />
+        </button>
+      ) : (
+        <div />
+      )}
+    </div>
   );
 }
 
@@ -688,14 +623,11 @@ function ComicQuizModal({
               <div
                 key={i}
                 className={`p-2 rounded-lg border text-xs ${
-                  qr.correct
-                    ? "bg-[#22C55E]/10 border-[#22C55E]/20"
-                    : "bg-[#EF4444]/10 border-[#EF4444]/20"
+                  qr.correct ? "bg-[#22C55E]/10 border-[#22C55E]/20" : "bg-[#EF4444]/10 border-[#EF4444]/20"
                 }`}
               >
                 <p className="font-bold text-white">{qr.questionId}</p>
                 <p className="text-[#94A3B8]">{qr.correct ? "✓ Correct" : "✗ Incorrect"}</p>
-                {qr.alreadyScored && <p className="text-[#64748B] text-[10px]">Already scored — 0 FP</p>}
               </div>
             ))}
           </div>
@@ -780,151 +712,5 @@ function ComicQuizModal({
         </div>
       </motion.div>
     </motion.div>
-  );
-}
-
-// ─── Chapter Navigation ──────────────────────────────────────────────────────
-// Data-driven Previous/Next chapter navigation.
-// Uses BIBLE_BOOKS metadata to determine adjacent chapters.
-// Only shows "Coming Soon" for chapters that don't have a comic yet.
-
-function ChapterNavigation({
-  bookId,
-  chapter,
-  onNavigate,
-}: {
-  bookId: string;
-  chapter: number;
-  onNavigate: (bookId: string, chapter: number) => void;
-}) {
-  const [availableChapters, setAvailableChapters] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/comic/list")
-      .then((r) => r.json())
-      .then((data) => {
-        const set = new Set<string>();
-        (data.chapters || []).forEach((ch: any) => {
-          set.add(`${ch.bookId}-${ch.chapter}`);
-        });
-        setAvailableChapters(set);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  // Compute previous + next chapter using BIBLE_BOOKS metadata
-  const getAdjacentChapter = (direction: "prev" | "next") => {
-    // We need to know the book's chapter count and position in BIBLE_BOOKS
-    // Import dynamically to avoid SSR issues
-    const books = require("@/lib/bible-data").BIBLE_BOOKS as typeof import("@/lib/bible-data").BIBLE_BOOKS;
-    const book = books.find((b) => b.id === bookId);
-    if (!book) return null;
-
-    let nextChapter: number;
-    let nextBookId: string = bookId;
-
-    if (direction === "next") {
-      if (chapter < book.chapters) {
-        nextChapter = chapter + 1;
-      } else {
-        // Move to next book, chapter 1
-        const idx = books.findIndex((b) => b.id === bookId);
-        if (idx < books.length - 1) {
-          nextBookId = books[idx + 1].id;
-          nextChapter = 1;
-        } else {
-          return null; // End of Bible
-        }
-      }
-    } else {
-      if (chapter > 1) {
-        nextChapter = chapter - 1;
-      } else {
-        // Move to previous book, last chapter
-        const idx = books.findIndex((b) => b.id === bookId);
-        if (idx > 0) {
-          nextBookId = books[idx - 1].id;
-          nextChapter = books[idx - 1].chapters;
-        } else {
-          return null; // Start of Bible
-        }
-      }
-    }
-
-    return { bookId: nextBookId, chapter: nextChapter };
-  };
-
-  const prevChapter = getAdjacentChapter("prev");
-  const nextChapter = getAdjacentChapter("next");
-
-  const hasPrevComic = prevChapter ? availableChapters.has(`${prevChapter.bookId}-${prevChapter.chapter}`) : false;
-  const hasNextComic = nextChapter ? availableChapters.has(`${nextChapter.bookId}-${nextChapter.chapter}`) : false;
-
-  if (loading) return null;
-
-  const formatLabel = (bid: string, ch: number) => {
-    const books = require("@/lib/bible-data").BIBLE_BOOKS as typeof import("@/lib/bible-data").BIBLE_BOOKS;
-    const book = books.find((b) => b.id === bid);
-    return `${book?.name || bid} ${ch}`;
-  };
-
-  return (
-    <div className="flex items-center justify-between gap-2 mt-6 pt-4 border-t border-white/[0.04]">
-      {/* Previous chapter */}
-      {prevChapter ? (
-        <button
-          onClick={() => {
-            if (hasPrevComic) {
-              onNavigate(prevChapter.bookId, prevChapter.chapter);
-            } else {
-              toast("Coming Soon", {
-                description: `${formatLabel(prevChapter.bookId, prevChapter.chapter)} comic is being prepared.`,
-              });
-            }
-          }}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-            hasPrevComic
-              ? "bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white"
-              : "bg-white/[0.02] border border-white/[0.04] text-[#475569] cursor-not-allowed"
-          }`}
-        >
-          <ChevronLeft size={14} />
-          <span className="hidden sm:inline">{formatLabel(prevChapter.bookId, prevChapter.chapter)}</span>
-          <span className="sm:hidden">Prev</span>
-          {!hasPrevComic && <span className="text-[8px] text-[#F59E0B] ml-1">Soon</span>}
-        </button>
-      ) : (
-        <div />
-      )}
-
-      {/* Next chapter */}
-      {nextChapter ? (
-        <button
-          onClick={() => {
-            if (hasNextComic) {
-              onNavigate(nextChapter.bookId, nextChapter.chapter);
-            } else {
-              toast("Coming Soon", {
-                description: `${formatLabel(nextChapter.bookId, nextChapter.chapter)} comic is being prepared.`,
-              });
-            }
-          }}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-            hasNextComic
-              ? "bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white"
-              : "bg-white/[0.02] border border-white/[0.04] text-[#475569] cursor-not-allowed"
-          }`}
-        >
-          {!hasNextComic && <span className="text-[8px] text-[#F59E0B] mr-1">Soon</span>}
-          <span className="hidden sm:inline">{formatLabel(nextChapter.bookId, nextChapter.chapter)}</span>
-          <span className="sm:hidden">Next</span>
-          <ChevronRight size={14} />
-        </button>
-      ) : (
-        <div />
-      )}
-    </div>
   );
 }
