@@ -614,3 +614,69 @@ Stage Summary:
 - STATS VERIFIED: 800 trivia questions (queried production DB), 7 PRIZE_TIERS (in code), 11 LANGUAGES (in code). No fake users/churches/businesses/community sizes.
 - NO CHANGES TO: Believ logo (reused as-is), brand colors (deep navy + coral/pink/purple/blue gradients preserved), Bible Comics functionality (Genesis 1/2/3/4 unchanged), Bible reader / Trivia / Prayer Wall / Churches / Marketplace / Business Directory / Events / Admin / Auth, mobile bottom nav, routing architecture, database schema.
 - BROWSER TESTS REQUIRED (admin-only, user must verify): open landing page → tap ENTER APP → confirm App Home opens (not Bible Comics) → confirm "Welcome to Believ" + 8 feature cards grouped by BELIEVE/CONNECT/GROW/PLAY/DISCOVER → tap Bible Comics card → confirm Genesis 1 opens → back to Home → tap each card → confirm each feature opens correctly → check landing page stats show "800+ Bible Questions", "7 Prize Tiers", "11 Languages" → check public nav shows Bible/Churches/Events/Trivia/Prayer.
+
+---
+Task ID: koino-rebrand
+Agent: main
+Task: Global rebrand Believ → Koino (Faith. Fellowship. Belong.)
+
+Work Log:
+- Copied uploaded master logo (Glossy Koino Faith Logo.png) to /public/koino-logo.png (canonical asset).
+- Also replaced /public/believ-logo.png with the Koino logo so existing Image src="/believ-logo.png" references don't break during transition (file name kept as alias, content is now Koino).
+- Updated src/app/layout.tsx metadata: title, description, keywords, authors, icons, openGraph (title/description/siteName), twitter (title/description) — all Believ → Koino. Added manifest: "/manifest.webmanifest" reference.
+- Created src/app/manifest.ts (NEW PWA manifest): name "Koino — Faith. Fellowship. Belong.", short_name "Koino", description, start_url "/", display "standalone", background_color + theme_color #12101A, 4 icon entries (192+512, any+maskable), 5 app shortcuts (Bible, Bible Comics, Churches, Prayer Wall, Bible Trivia).
+- Updated i18n strings in ALL 13 languages (en + 12 Indic: hi, te, ta, ml, bn, pa, kn, as, mr, gu, ur, or):
+  * brand.name: Believ → Koino
+  * brand.tagline: Believe. Connect. Grow. → Faith. Fellowship. Belong.
+  * landing.title: Believ → Koino
+  * landing.titleGradient: Believe. Connect. Grow. Play. → Faith. Fellowship. Belong.
+  * landing.subtitle: updated to spec wording
+  * landing.cta.enterBeliev: Enter Believ → Enter Koino
+  * cta.button: Enter Believ → Enter Koino
+  * cta.subtitle: Join the Believ community → Join the Koino community
+  * nav.enterApp: Enter Believ → Enter Koino
+  * nav.prayer: Prayer Wall → Prayer (compact)
+  * signin.title: Believ → Koino
+  * signin.subtitle: Believe. Connect. Grow. → Faith. Fellowship. Belong.
+  * triviaView.results.shareText: Play on Believ! → Play on Koino!
+  * comingSoon.body: everything else on Believ → everything else on Koino
+  * 77 standalone "Believ" → "Koino" replacements across the 11 Indic files
+- Updated 16 component files: ComicView, AdminView, BusinessDirectoryView, TriviaView, LevelUpAnimation, ListYourEntity, ChurchesView, ShopView, LandingHero, AppHomeView, EventsView, page.tsx, comic/share route, auth/signin page, crosscrafted-data.ts, streaks.ts
+  * All user-facing "Believ" brand references → "Koino"
+  * All "Believe. Connect. Grow. Play." taglines → "Faith. Fellowship. Belong."
+  * All logo src="/believ-logo.png" → src="/koino-logo.png"
+  * All alt="Believ" → alt="Koino"
+  * All share text "on Believ" → "on Koino"
+  * All WhatsApp prefilled messages "on Believ" → "on Koino"
+  * All helper text "Believ does not process payments" → "Koino does not process payments"
+  * All "Believ Store" → "Koino Store"
+  * All "Welcome to Believ" → "Welcome to Koino"
+  * AppHomeView group label "BELIEVE" → "FAITH" (aligns with new tagline; the BELIEVE/CONNECT/GROW/PLAY/DISCOVER groups describe the user's faith journey actions, not the brand)
+  * AppHomeView "BELIEV" badge → "KOINO"
+  * crosscrafted-data.ts mock products: "Believ Signature T-Shirt" → "Koino Signature T-Shirt", "Believ Hoodie" → "Koino Hoodie", brand attribute "Believ" → "Koino", 22 total replacements
+- Committed as 5e1ba56 and pushed to main → Vercel deploy triggered.
+- Verified production after deploy:
+  * Homepage: HTTP 200 ✅
+  * Page title: <title>Koino — Faith. Fellowship. Belong.</title> ✅
+  * koino-logo.png: HTTP 200, image/png, 837KB ✅
+  * /manifest.webmanifest: HTTP 200, name "Koino — Faith. Fellowship. Belong.", short_name "Koino", 4 icons, 5 shortcuts ✅
+  * Genesis 1/2/3/4 comic APIs: all HTTP 200 ✅ (no regression to Bible Comics)
+
+Stage Summary:
+- ROOT CAUSE OF OLD BRANDING: "Believ" was the original platform name across i18n strings, component text, layout metadata, and logo file. Tagline was "Believe. Connect. Grow. Play."
+- FIX: Global rebrand to "Koino" with tagline "Faith. Fellowship. Belong." Logo replaced with uploaded master asset.
+- FILES CHANGED: 33 files (1 new manifest.ts + 1 new koino-logo.png + 1 replaced believ-logo.png content + 30 modified source files).
+- ENTER APP routing: unchanged from previous commit (already opens App Home, not Bible Comics).
+- NO CHANGES TO: Believ logo file structure (replaced in-place), brand colors (deep navy + coral/pink/purple/blue gradients preserved), Bible Comics functionality (Genesis 1/2/3/4 unchanged — only "Believ" → "Koino" in share text), Bible reader / Trivia / Prayer Wall / Churches / Marketplace / Business Directory / Events / Admin / Auth, mobile bottom nav, routing architecture, database schema, internal code identifiers (file names, variable names, Prisma models, API paths — all retained per spec).
+- NO OVER-BRANDING: Features keep their own clear names (Bible, Churches, Events, Bible Trivia, Prayer Wall, Marketplace, Business Directory, Bible Comics). No "Koino Bible" / "Koino Churches" / "Koino Events" naming.
+- REMAINING BELIEV REFERENCES (all intentional):
+  * /public/believ-logo.png file name (kept as alias — content is now the Koino logo, so existing Image refs still work)
+  * src/lib/i18n/*.ts key name "landing.cta.enterBeliev" (internal identifier — value is "Enter Koino")
+  * "Believers" (English word for people who believe — NOT the brand — preserved in mock event description)
+  * Internal code identifiers (file names like ChurchesView.tsx, variable names, Prisma models, API paths) — all retained per spec
+  * Production deployment URL "crosscraftedapp.vercel.app" in .env (actual Vercel URL — not changed per spec "do not change production deployment settings blindly")
+- BROWSER TESTS REQUIRED (admin-only, user must verify): open landing page → confirm Koino logo + "Koino" wordmark + "Faith. Fellowship. Belong." tagline → tap ENTER KOINO → confirm App Home opens (not Bible Comics) → confirm "Welcome to Koino" + KOINO badge + "Faith. Fellowship. Belong." tagline → tap each feature → confirm no "Believ" branding anywhere → check browser tab title shows "Koino — Faith. Fellowship. Belong." → check favicon shows Koino logo.
+- MANUAL DNS/DOMAIN WORK STILL NEEDED (per spec section 21):
+  * Official domain www.koino.in — DNS not configured yet (currently still crosscraftedapp.vercel.app)
+  * When ready: configure koino.in DNS → Vercel, add custom domain in Vercel project settings, update NEXT_PUBLIC_SITE_URL env var if needed
+  * Do NOT blindly change production deployment URL until DNS is ready
