@@ -15,12 +15,13 @@ export const en: Record<string, string> = {
   // ─── Landing hero ───
   "landing.badge": "Faith Community Platform",
   "landing.title": "Believ",
-  "landing.titleGradient": "Grow in Faith, Together",
+  "landing.titleGradient": "Believe. Connect. Grow. Play.",
   "landing.subtitle":
-    "Your all-in-one Christian community platform — Bible trivia, apologetics, church directory, marketplace, and more. Built to strengthen faith and connect believers across India.",
+    "Your all-in-one Christian community platform — Bible, churches, events, prayer, trivia, marketplace, business directory and more. Built to help believers grow in faith and connect with the Christian community.",
+  "landing.cta.enterBeliev": "Enter Believ",
   "landing.cta.readBible": "Read the Bible",
   "landing.cta.tryTrivia": "Try Trivia",
-  "landing.stats.questions": "Quiz Questions",
+  "landing.stats.questions": "Bible Questions",
   "landing.stats.tiers": "Prize Tiers",
   "landing.stats.languages": "Languages",
   "landing.stats.free": "Free",
@@ -46,25 +47,34 @@ export const en: Record<string, string> = {
   // ─── Features section ───
   "features.title": "Everything for Your Faith Journey",
   "features.subtitle":
-    "From Bible quizzes to church listings, everything a Christian community needs — in one place.",
+    "From Bible reading to Bible Comics, churches, events, prayer, trivia, marketplace and business directory — everything a Christian community needs, in one place.",
   "feature.bible.title": "Holy Bible",
   "feature.bible.desc":
-    "Read the entire Bible — all 66 books — in KJV or WEB translation. Search by keyword, bookmark verses, and follow daily reading plans. Available in 11 Indian language UIs.",
-  "feature.trivia.title": "Bible Trivia Challenge",
+    "Read the entire Bible — all 66 books — in KJV or WEB translation. Search by keyword, bookmark verses, and follow daily reading plans.",
+  "feature.comics.title": "Bible Comics",
+  "feature.comics.desc":
+    "Experience Bible stories through original visual storytelling. Genesis and more — panel-by-panel illustrated Scripture.",
+  "feature.trivia.title": "Bible Trivia",
   "feature.trivia.desc":
-    "Test your Bible knowledge across 4 difficulty levels — Beginners, Intermediate, Skilled, Expert. Choose Full Bible, New Testament, Old Testament, or Apologetics. Earn Faith Points for new questions, unlock rewards, and compete with other churches!",
-  "feature.churches.title": "Church Directory",
+    "Test your Bible knowledge across 4 difficulty levels. Choose Full Bible, New Testament, Old Testament, or Apologetics. Earn Faith Points and unlock rewards.",
+  "feature.churches.title": "Churches",
   "feature.churches.desc":
-    "Find churches across India filtered by state, city, and language. Follow churches, see service times, and connect with local congregations near you.",
-  "feature.listChurch.title": "List Your Church",
-  "feature.listChurch.desc":
-    "Add your church to our directory and help believers find a community. Include service times, denomination, location, and contact details.",
-  "feature.marketplace.title": "Marketplace",
-  "feature.marketplace.desc":
-    "List your Christian business or shop & sell items — Bibles, books, music, apparel, and more. Connect with buyers via WhatsApp. No payment gateway needed.",
+    "Find churches across India filtered by state, city, and language. Follow churches you attend or want to stay connected with.",
+  "feature.events.title": "Events",
+  "feature.events.desc":
+    "Discover Christian events, conferences, worship gatherings and community activities. Filter by state, city, date and category.",
   "feature.prayer.title": "Prayer Wall",
   "feature.prayer.desc":
-    "Share prayer requests and encourage one another in faith. A community space for lifting up needs and praising God for answered prayers.",
+    "Share prayer requests, pray for others and encourage one another in faith.",
+  "feature.marketplace.title": "Marketplace",
+  "feature.marketplace.desc":
+    "Discover Christian products and connect with sellers — Bibles, books, music, apparel, and more.",
+  "feature.businessDirectory.title": "Business Directory",
+  "feature.businessDirectory.desc":
+    "Discover Christian businesses, services and professionals across India.",
+  "feature.community.title": "Community",
+  "feature.community.desc":
+    "Connect with believers and grow together in faith.",
 
   // ─── Trivia section ───
   "trivia.badge": "Bible Trivia Challenge",
@@ -77,19 +87,19 @@ export const en: Record<string, string> = {
   "languages.title": "Available in Indian Languages",
 
   // ─── CTA section ───
-  "cta.title": "\"Iron sharpens iron\"",
+  "cta.title": "Grow in Faith, Together",
   "cta.subtitle":
-    "Join the Believ community — explore churches, test your Bible knowledge, list your business, and grow in faith together.",
+    "Join the Believ community — explore the Bible, read Bible Comics, find churches and events, share prayer, test your Bible knowledge, and discover Christian businesses and products.",
   "cta.button": "Enter Believ",
 
   // ─── Header nav ───
   "nav.bible": "Bible",
   "nav.churches": "Churches",
-  "nav.trivia": "Trivia",
-  "nav.prayer": "Prayer Wall",
-  "nav.shop": "Marketplace",
   "nav.events": "Events",
-  "nav.enterApp": "Enter App",
+  "nav.trivia": "Trivia",
+  "nav.prayer": "Prayer",
+  "nav.shop": "Marketplace",
+  "nav.enterApp": "Enter Believ",
   "nav.admin": "Admin",
 
   // ─── Sign-in page ───

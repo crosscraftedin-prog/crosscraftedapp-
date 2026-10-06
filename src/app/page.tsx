@@ -35,11 +35,13 @@ import HeaderUserSection from "@/components/crosscrafted/HeaderUserSection";
 import LanguageSwitcher from "@/components/crosscrafted/LanguageSwitcher";
 import ComicView from "@/components/crosscrafted/ComicView";
 import BusinessDirectoryView from "@/components/crosscrafted/BusinessDirectoryView";
+import AppHomeView from "@/components/crosscrafted/AppHomeView";
 import { toast } from "sonner";
 import { type Translation } from "@/lib/bible-data";
 
 type View =
   | "landing"
+  | "home" // App Home dashboard (default after Enter App)
   | "bible"
   | "bible-plans"
   | "comic"
@@ -62,6 +64,7 @@ type View =
 // Small Groups is part of the Churches hub (Groups section inside church profile),
 // and List Your Church is a primary action inside the Churches hub.
 const SIDEBAR_LINKS: { id: View; icon: typeof Search; label: string }[] = [
+  { id: "home", icon: HomeIcon, label: "Home" },
   { id: "bible", icon: BookOpen, label: "Bible" },
   { id: "churches", icon: Search, label: "Churches" },
   { id: "events", icon: Calendar, label: "Events" },
@@ -248,6 +251,11 @@ export default function Home() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18 }}
             >
+              {view === "home" && (
+                <AppHomeView
+                  onNavigate={(v) => goView(v)}
+                />
+              )}
               {view === "bible" && (
                 <BibleView
                   onOpenComic={(bookId, chapter) => {

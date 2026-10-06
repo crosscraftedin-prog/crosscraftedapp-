@@ -12,6 +12,8 @@ import {
   Store,
   HeartHandshake,
   Globe,
+  Calendar,
+  Users,
 } from "lucide-react";
 import LanguageSwitcher from "@/components/crosscrafted/LanguageSwitcher";
 import { useTranslation } from "@/lib/i18n/LanguageContext";
@@ -25,43 +27,64 @@ const FEATURES = [
     icon: BookOpen,
     color: "#7C3AED",
     title: "Holy Bible",
-    desc: "Read the entire Bible — all 66 books — in KJV or WEB translation. Search by keyword, bookmark verses, and follow daily reading plans. Available in 11 Indian language UIs.",
+    desc: "Read the entire Bible — all 66 books — in KJV or WEB translation. Search by keyword, bookmark verses, and follow daily reading plans.",
     view: "bible",
   },
   {
-    icon: Award,
-    color: "#38BDF8",
-    title: "Bible Trivia Challenge",
-    desc: "Test your Bible knowledge across 4 difficulty levels — Beginners, Intermediate, Skilled, Expert. Choose Full Bible, New Testament, Old Testament, or Apologetics. Earn Faith Points for new questions, unlock rewards, and compete with other churches!",
-    view: "trivia",
+    icon: Sparkles,
+    color: "#EC4899",
+    title: "Bible Comics",
+    desc: "Experience Bible stories through original visual storytelling. Genesis and more — panel-by-panel illustrated Scripture.",
+    view: "comic",
   },
   {
     icon: Search,
     color: "#F39B9B",
-    title: "Church Directory",
-    desc: "Find churches across India filtered by state, city, and language. Follow churches, see service times, and connect with local congregations near you.",
+    title: "Churches",
+    desc: "Find churches across India filtered by state, city, and language. Follow churches you attend or want to stay connected with.",
     view: "churches",
   },
   {
-    icon: Building2,
-    color: "#22C55E",
-    title: "List Your Church",
-    desc: "Add your church to our directory and help believers find a community. Include service times, denomination, location, and contact details.",
-    view: "list-church",
-  },
-  {
-    icon: Store,
-    color: "#9786E3",
-    title: "Marketplace",
-    desc: "List your Christian business or shop & sell items — Bibles, books, music, apparel, and more. Connect with buyers via WhatsApp. No payment gateway needed.",
-    view: "shop",
+    icon: Calendar,
+    color: "#38BDF8",
+    title: "Events",
+    desc: "Discover Christian events, conferences, worship gatherings and community activities. Filter by state, city, date and category.",
+    view: "events",
   },
   {
     icon: HeartHandshake,
     color: "#F59E0B",
     title: "Prayer Wall",
-    desc: "Share prayer requests and encourage one another in faith. A community space for lifting up needs and praising God for answered prayers.",
+    desc: "Share prayer requests, pray for others and encourage one another in faith.",
     view: "prayer-wall",
+  },
+  {
+    icon: Award,
+    color: "#22C55E",
+    title: "Bible Trivia",
+    desc: "Test your Bible knowledge across 4 difficulty levels. Choose Full Bible, New Testament, Old Testament, or Apologetics. Earn Faith Points and unlock rewards.",
+    view: "trivia",
+  },
+  {
+    icon: Store,
+    color: "#9786E3",
+    title: "Marketplace",
+    desc: "Discover Christian products and connect with sellers — Bibles, books, music, apparel, and more.",
+    view: "shop",
+  },
+  {
+    icon: Building2,
+    color: "#0EA5E9",
+    title: "Business Directory",
+    desc: "Discover Christian businesses, services and professionals across India.",
+    view: "business-directory",
+  },
+  {
+    icon: Users,
+    color: "#A855F7",
+    title: "Community",
+    desc: "Connect with believers and grow together in faith.",
+    view: "churches",
   },
 ];
 
@@ -97,16 +120,17 @@ export default function LandingHero({ onEnterApp }: Props) {
             />
             <h1 className="text-base font-black tracking-tight">{t("brand.name")}</h1>
           </div>
-          <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-[#94A3B8]">
+          <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-[#94A3B8]">
             <button onClick={() => onEnterApp("bible")} className="hover:text-white transition-colors">{t("nav.bible")}</button>
             <button onClick={() => onEnterApp("churches")} className="hover:text-white transition-colors">{t("nav.churches")}</button>
+            <button onClick={() => onEnterApp("events")} className="hover:text-white transition-colors">{t("nav.events")}</button>
             <button onClick={() => onEnterApp("trivia")} className="hover:text-white transition-colors">{t("nav.trivia")}</button>
             <button onClick={() => onEnterApp("prayer-wall")} className="hover:text-white transition-colors">{t("nav.prayer")}</button>
           </nav>
           <div className="flex items-center gap-2">
             <LanguageSwitcher />
             <button
-              onClick={() => onEnterApp("comic")}
+              onClick={() => onEnterApp("home")}
               className="px-5 py-2.5 bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all hover:-translate-y-px"
             >
               {t("nav.enterApp")}
@@ -146,7 +170,7 @@ export default function LandingHero({ onEnterApp }: Props) {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="text-base sm:text-lg text-[#A09DB1] max-w-xl mx-auto leading-relaxed"
           >
-            Your all-in-one Christian community platform — Bible trivia, apologetics, church directory, marketplace, and more. Built to strengthen faith and connect believers across India.
+            {t('landing.subtitle')}
           </motion.p>
 
           <motion.div
@@ -156,16 +180,16 @@ export default function LandingHero({ onEnterApp }: Props) {
             className="flex flex-wrap justify-center gap-4 pt-2"
           >
             <button
-              onClick={() => onEnterApp("bible")}
+              onClick={() => onEnterApp("home")}
               className="px-8 py-3.5 bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 font-extrabold rounded-2xl text-sm uppercase tracking-wider shadow-lg shadow-[#F39B9B]/20 flex items-center gap-2 transition-all hover:-translate-y-px"
             >
-              <ArrowRight size={18} /> Read the Bible
+              <ArrowRight size={18} /> {t("landing.cta.enterBeliev")}
             </button>
             <button
-              onClick={() => onEnterApp("trivia")}
+              onClick={() => onEnterApp("bible")}
               className="px-8 py-3.5 border border-white/[0.08] hover:border-white/[0.15] text-[#A09DB1] hover:text-white font-extrabold rounded-2xl text-sm uppercase tracking-wider transition-all bg-white/[0.02] flex items-center gap-2"
             >
-              Try Trivia
+              <BookOpen size={18} /> {t("landing.cta.readBible")}
             </button>
           </motion.div>
 
@@ -176,16 +200,16 @@ export default function LandingHero({ onEnterApp }: Props) {
             className="grid grid-cols-4 gap-6 pt-8 border-t border-white/[0.04] max-w-lg mx-auto"
           >
             <div>
-              <p className="text-xl font-extrabold text-[#F39B9B]">25+</p>
+              <p className="text-xl font-extrabold text-[#F39B9B]">800+</p>
               <p className="text-[10px] text-[#726E88] font-bold uppercase tracking-wider mt-0.5">{t('landing.stats.questions')}</p>
             </div>
             <div>
-              <p className="text-xl font-extrabold text-[#7C3AED]">6+</p>
+              <p className="text-xl font-extrabold text-[#7C3AED]">7</p>
               <p className="text-[10px] text-[#726E88] font-bold uppercase tracking-wider mt-0.5">{t('landing.stats.tiers')}</p>
             </div>
             <div>
               <p className="text-xl font-extrabold text-[#38BDF8]">11</p>
-              <p className="text-[10px] text-[#726E88] font-bold uppercase tracking-wider mt-0.5">Languages</p>
+              <p className="text-[10px] text-[#726E88] font-bold uppercase tracking-wider mt-0.5">{t('landing.stats.languages')}</p>
             </div>
             <div>
               <p className="text-xl font-extrabold text-[#22C55E]">Free</p>
@@ -340,13 +364,13 @@ export default function LandingHero({ onEnterApp }: Props) {
         <div className="bg-gradient-to-tr from-[#1C1929] to-slate-900 border border-white/[0.06] rounded-3xl p-8 sm:p-12 space-y-5 shadow-2xl relative overflow-hidden">
           <div className="absolute -top-12 -right-12 w-28 h-28 bg-[#F39B9B]/5 blur-2xl rounded-full" />
           <div className="absolute -bottom-12 -left-12 w-28 h-28 bg-[#9786E3]/5 blur-2xl rounded-full" />
-          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight relative">"Iron sharpens iron"</h2>
+          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight relative">{t('cta.title')}</h2>
           <p className="text-xs sm:text-sm text-[#A09DB1] max-w-lg mx-auto leading-relaxed relative">
-            Join the Believ community — explore churches, test your Bible knowledge, list your business, and grow in faith together.
+            {t('cta.subtitle')}
           </p>
           <div className="pt-2 relative">
             <button
-              onClick={() => onEnterApp("churches")}
+              onClick={() => onEnterApp("home")}
               className="px-8 py-3.5 bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 font-extrabold rounded-2xl text-xs uppercase tracking-widest shadow-lg transition-all inline-flex items-center gap-2 hover:-translate-y-px"
             >
               Enter Believ <ArrowRight size={16} strokeWidth={2.5} />
