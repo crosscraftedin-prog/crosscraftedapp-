@@ -34,6 +34,7 @@ import BibleView from "@/components/crosscrafted/BibleView";
 import BiblePlansView from "@/components/crosscrafted/BiblePlansView";
 import AdminView from "@/components/crosscrafted/AdminView";
 import HeaderUserSection from "@/components/crosscrafted/HeaderUserSection";
+import LanguageSwitcher from "@/components/crosscrafted/LanguageSwitcher";
 import { type Translation } from "@/lib/bible-data";
 
 type View =
@@ -151,6 +152,7 @@ export default function Home() {
             <h1 className="text-base md:text-lg font-black tracking-tight text-white">Believ</h1>
           </button>
           <div className="hidden md:flex items-center gap-3">
+            <LanguageSwitcher />
             <HeaderUserSection />
             <button
               onClick={goHome}
@@ -169,6 +171,7 @@ export default function Home() {
           </div>
           {/* Mobile: minimal right side */}
           <div className="md:hidden flex items-center gap-2">
+            <LanguageSwitcher compact />
             <HeaderUserSection mobile />
             <button
               onClick={goHome}

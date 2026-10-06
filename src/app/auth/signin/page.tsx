@@ -12,9 +12,12 @@ import {
   AlertCircle,
   Lock,
 } from "lucide-react";
+import { useTranslation } from "@/lib/i18n/LanguageContext";
+import LanguageSwitcher from "@/components/crosscrafted/LanguageSwitcher";
 
 function SignInForm() {
   const router = useRouter();
+  const t = useTranslation();
   const searchParams = useSearchParams();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
@@ -124,8 +127,9 @@ function SignInForm() {
             className="rounded-2xl mb-4 mx-auto"
             priority
           />
-          <h1 className="text-2xl font-extrabold text-white">Believ</h1>
-          <p className="text-sm text-[#A09DB1] mt-1">Believe. Connect. Grow. — Sign in to track your Faith Points</p>
+          <h1 className="text-2xl font-extrabold text-white">{t("brand.name")}</h1>
+          <p className="text-sm text-[#A09DB1] mt-1">{t("signin.subtitle")}</p>
+          <div className="mt-3"><LanguageSwitcher /></div>
         </div>
 
         <div className="bg-[#1C1929] border border-white/[0.08] rounded-3xl p-6 space-y-4">
@@ -155,13 +159,13 @@ function SignInForm() {
               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
             </svg>
-            {googleLoading ? "Redirecting..." : "Continue with Google"}
+            {googleLoading ? t("signin.google.loading") : t("signin.google")}
           </button>
 
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-white/[0.08]" />
             <span className="text-[10px] text-[#64748B] uppercase tracking-wider">
-              or {mode === "signin" ? "sign in" : "sign up"} with email
+              {mode === "signin" ? t("signin.divider.signin") : t("signin.divider.signup")}
             </span>
             <div className="flex-1 h-px bg-white/[0.08]" />
           </div>
@@ -171,7 +175,7 @@ function SignInForm() {
             {mode === "signup" && (
               <div>
                 <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
-                  <User size={10} className="inline mr-0.5" /> Name (optional)
+                  <User size={10} className="inline mr-0.5" /> {t("signin.name")}
                 </label>
                 <input
                   type="text"
@@ -184,20 +188,20 @@ function SignInForm() {
             )}
             <div>
               <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
-                <Mail size={10} className="inline mr-0.5" /> Email
+                <Mail size={10} className="inline mr-0.5" /> {t("signin.email")}
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="neo-input text-sm"
-                placeholder="you@example.com"
+                placeholder={t("signin.emailPlaceholder")}
                 required
               />
             </div>
             <div>
               <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
-                <Lock size={10} className="inline mr-0.5" /> Password
+                <Lock size={10} className="inline mr-0.5" /> {t("signin.password")}
               </label>
               <input
                 type="password"
@@ -216,8 +220,8 @@ function SignInForm() {
               style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)" }}
             >
               {loading
-                ? (mode === "signup" ? "Creating account..." : "Signing in...")
-                : (mode === "signup" ? "Create account" : "Sign in")}
+                ? (mode === "signup" ? t("signin.submit.signupLoading") : t("signin.submit.signinLoading"))
+                : (mode === "signup" ? t("signin.submit.signup") : t("signin.submit.signin"))}
               <ArrowRight size={14} />
             </button>
           </form>
@@ -234,9 +238,9 @@ function SignInForm() {
               className="text-[11px] text-[#94A3B8] hover:text-white transition-colors"
             >
               {mode === "signin" ? (
-                <>Don&apos;t have an account? <span className="text-[#A78BFA] font-bold">Sign up</span></>
+                <>{t("signin.toggle.toSignup")} <span className="text-[#A78BFA] font-bold">{t("signin.toggle.toSignupLink")}</span></>
               ) : (
-                <>Already have an account? <span className="text-[#A78BFA] font-bold">Sign in</span></>
+                <>{t("signin.toggle.toSignin")} <span className="text-[#A78BFA] font-bold">{t("signin.toggle.toSigninLink")}</span></>
               )}
             </button>
           </div>
@@ -244,7 +248,7 @@ function SignInForm() {
           <div className="bg-[#38BDF8]/8 border border-[#38BDF8]/20 rounded-xl p-3">
             <div className="flex items-center gap-1.5 mb-1">
               <Sparkles size={11} className="text-[#38BDF8]" />
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[#38BDF8]">Faith Points</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#38BDF8]">{t("signin.fpBanner.title")}</p>
             </div>
             <p className="text-[11px] text-[#A09DB1] leading-relaxed">
               Sign in to earn and track Faith Points securely. Your points are stored server-side — no more localStorage farming!
@@ -256,7 +260,7 @@ function SignInForm() {
           onClick={() => router.push("/")}
           className="w-full mt-4 py-2 text-xs text-[#64748B] hover:text-white transition-colors"
         >
-          ← Back to home
+          ← {t("signin.back")}
         </button>
       </div>
     </div>

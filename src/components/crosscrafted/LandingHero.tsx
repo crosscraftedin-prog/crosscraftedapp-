@@ -13,6 +13,8 @@ import {
   HeartHandshake,
   Globe,
 } from "lucide-react";
+import LanguageSwitcher from "@/components/crosscrafted/LanguageSwitcher";
+import { useTranslation } from "@/lib/i18n/LanguageContext";
 
 type Props = {
   onEnterApp: (view: string) => void;
@@ -78,6 +80,7 @@ const LANGUAGES = [
 ];
 
 export default function LandingHero({ onEnterApp }: Props) {
+  const t = useTranslation();
   return (
     <div className="min-h-screen bg-[#12101A] text-white flex flex-col">
       {/* Top nav */}
@@ -92,20 +95,23 @@ export default function LandingHero({ onEnterApp }: Props) {
               className="rounded-lg"
               priority
             />
-            <h1 className="text-base font-black tracking-tight">Believ</h1>
+            <h1 className="text-base font-black tracking-tight">{t("brand.name")}</h1>
           </div>
           <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-[#94A3B8]">
-            <button onClick={() => onEnterApp("bible")} className="hover:text-white transition-colors">Bible</button>
-            <button onClick={() => onEnterApp("churches")} className="hover:text-white transition-colors">Churches</button>
-            <button onClick={() => onEnterApp("trivia")} className="hover:text-white transition-colors">Trivia</button>
-            <button onClick={() => onEnterApp("prayer-wall")} className="hover:text-white transition-colors">Prayer Wall</button>
+            <button onClick={() => onEnterApp("bible")} className="hover:text-white transition-colors">{t("nav.bible")}</button>
+            <button onClick={() => onEnterApp("churches")} className="hover:text-white transition-colors">{t("nav.churches")}</button>
+            <button onClick={() => onEnterApp("trivia")} className="hover:text-white transition-colors">{t("nav.trivia")}</button>
+            <button onClick={() => onEnterApp("prayer-wall")} className="hover:text-white transition-colors">{t("nav.prayer")}</button>
           </nav>
-          <button
-            onClick={() => onEnterApp("bible")}
-            className="px-5 py-2.5 bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all hover:-translate-y-px"
-          >
-            Enter App
-          </button>
+          <div className="flex items-center gap-2">
+            <LanguageSwitcher />
+            <button
+              onClick={() => onEnterApp("bible")}
+              className="px-5 py-2.5 bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 font-extrabold rounded-xl text-xs uppercase tracking-wider transition-all hover:-translate-y-px"
+            >
+              {t("nav.enterApp")}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -130,7 +136,7 @@ export default function LandingHero({ onEnterApp }: Props) {
           >
             Believ <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#F39B9B] to-[#9786E3]">
-              Grow in Faith, Together
+              {t('landing.titleGradient')}
             </span>
           </motion.h1>
 
@@ -171,11 +177,11 @@ export default function LandingHero({ onEnterApp }: Props) {
           >
             <div>
               <p className="text-xl font-extrabold text-[#F39B9B]">25+</p>
-              <p className="text-[10px] text-[#726E88] font-bold uppercase tracking-wider mt-0.5">Quiz Questions</p>
+              <p className="text-[10px] text-[#726E88] font-bold uppercase tracking-wider mt-0.5">{t('landing.stats.questions')}</p>
             </div>
             <div>
               <p className="text-xl font-extrabold text-[#7C3AED]">6+</p>
-              <p className="text-[10px] text-[#726E88] font-bold uppercase tracking-wider mt-0.5">Prize Tiers</p>
+              <p className="text-[10px] text-[#726E88] font-bold uppercase tracking-wider mt-0.5">{t('landing.stats.tiers')}</p>
             </div>
             <div>
               <p className="text-xl font-extrabold text-[#38BDF8]">11</p>
@@ -183,7 +189,7 @@ export default function LandingHero({ onEnterApp }: Props) {
             </div>
             <div>
               <p className="text-xl font-extrabold text-[#22C55E]">Free</p>
-              <p className="text-[10px] text-[#726E88] font-bold uppercase tracking-wider mt-0.5">To Use</p>
+              <p className="text-[10px] text-[#726E88] font-bold uppercase tracking-wider mt-0.5">{t('landing.stats.toUse')}</p>
             </div>
           </motion.div>
         </div>
@@ -197,7 +203,7 @@ export default function LandingHero({ onEnterApp }: Props) {
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#7C3AED]/15 border border-[#7C3AED]/25 text-[#A78BFA] text-xs font-bold">
                 <BookOpen size={12} /> The Holy Bible
               </div>
-              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Read God's Word Daily</h2>
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">{t('bible.title')}</h2>
               <p className="text-sm text-[#A09DB1] leading-relaxed">
                 All 66 books, in KJV and WEB translations. Search any verse by keyword,
                 bookmark favorites, and follow daily reading plans — Bible in 90 Days,
@@ -205,19 +211,19 @@ export default function LandingHero({ onEnterApp }: Props) {
               </p>
               <div className="grid grid-cols-2 gap-3 pt-2">
                 <div className="bg-white/[0.04] rounded-xl px-3 py-2 border border-white/[0.06]">
-                  <p className="text-xs font-bold text-[#A78BFA]">66 Books</p>
+                  <p className="text-xs font-bold text-[#A78BFA]">{t('bible.stat.books')}</p>
                   <p className="text-[10px] text-[#94A3B8]">39 OT · 27 NT</p>
                 </div>
                 <div className="bg-white/[0.04] rounded-xl px-3 py-2 border border-white/[0.06]">
-                  <p className="text-xs font-bold text-[#38BDF8]">2 Translations</p>
+                  <p className="text-xs font-bold text-[#38BDF8]">{t('bible.stat.translations')}</p>
                   <p className="text-[10px] text-[#94A3B8]">KJV · WEB</p>
                 </div>
                 <div className="bg-white/[0.04] rounded-xl px-3 py-2 border border-white/[0.06]">
-                  <p className="text-xs font-bold text-[#F59E0B]">4 Plans</p>
+                  <p className="text-xs font-bold text-[#F59E0B]">{t('bible.stat.plans')}</p>
                   <p className="text-[10px] text-[#94A3B8]">14 – 90 days</p>
                 </div>
                 <div className="bg-white/[0.04] rounded-xl px-3 py-2 border border-white/[0.06]">
-                  <p className="text-xs font-bold text-[#22C55E]">11 Langs</p>
+                  <p className="text-xs font-bold text-[#22C55E]">{t('bible.stat.langs')}</p>
                   <p className="text-[10px] text-[#94A3B8]">Indian UIs</p>
                 </div>
               </div>
@@ -245,7 +251,7 @@ export default function LandingHero({ onEnterApp }: Props) {
       <section className="py-16 border-t border-white/[0.03] bg-[#1C1929]/30">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center max-w-xl mx-auto space-y-3 mb-12">
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Everything for Your Faith Journey</h2>
+            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">{t('features.title')}</h2>
             <p className="text-sm text-[#A09DB1]">
               From Bible quizzes to church listings, everything a Christian community needs — in one place.
             </p>
@@ -285,7 +291,7 @@ export default function LandingHero({ onEnterApp }: Props) {
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#7C3AED]/15 border border-[#7C3AED]/25 text-[#A78BFA] text-xs font-bold">
                 <Award size={12} /> Bible Trivia Challenge
               </div>
-              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">How Well Do You Know the Bible?</h2>
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">{t('trivia.title')}</h2>
               <p className="text-sm text-[#A09DB1] leading-relaxed">
                 4 difficulty levels, 4 categories, growing question pool, Faith Points and real rewards
               </p>
@@ -317,7 +323,7 @@ export default function LandingHero({ onEnterApp }: Props) {
       <section className="py-12 px-6 max-w-3xl mx-auto w-full text-center">
         <div className="inline-flex items-center gap-2 mb-4">
           <Globe size={20} className="text-[#38BDF8]" />
-          <h2 className="text-xl font-extrabold">Available in Indian Languages</h2>
+          <h2 className="text-xl font-extrabold">{t('languages.title')}</h2>
         </div>
         <div className="flex justify-center gap-4">
           {LANGUAGES.map((lang) => (
