@@ -557,3 +557,60 @@ Stage Summary:
 - SIDEBAR NO LONGER CONFUSING: was "List Business" (implies form), now "Business Directory" (implies discovery). Listing creation is now accessed from inside the directory via the "+ List Your Business" CTA — matches the spec's "remove confusion" requirement.
 - NO CHANGES TO: Marketplace (separate system — products vs businesses), Churches/Events/Bible/Trivia/Prayer Wall/Apologetics/Admin/Auth, comic content (Genesis 1/2/3/4 unchanged), mobile bottom nav, routing architecture, existing notification system.
 - BROWSER TESTS REQUIRED (admin-only, user must verify): open Business Directory → see 6 business cards with verified badges → search "caterer" → see Grace Christian Caterers → filter by State (Telangana) → see b1 + b6 → tap a business → see detail modal with cover + About + Services + Hours + Contact CTAs → tap "+ List Your Business" → existing ListYourEntity form opens → on mobile, scroll to bottom → confirm fixed bottom nav doesn't cover the last business card.
+
+---
+Task ID: landing-page-app-home-brand-system
+Agent: main
+Task: Finalize landing page + app entry + brand system. ENTER APP must open App Home (not Bible Comics).
+
+Work Log:
+- Located root cause in LandingHero.tsx line 109: ENTER APP button had onClick={() => onEnterApp("comic")} which routed directly to ComicView (Bible Comics). Fixed to onEnterApp("home").
+- Added new "home" view type to page.tsx View union. Added AppHomeView import. Added "Home" as the first SIDEBAR_LINKS entry with HomeIcon.
+- Created AppHomeView.tsx (new component):
+  * "Welcome to Believ" greeting (or "Welcome, {firstName}" when authenticated, using Supabase user_metadata.full_name → name → email local-part fallback)
+  * "Believe. Connect. Grow. Play." tagline
+  * Feature cards grouped by BELIEVE / CONNECT / GROW / PLAY / DISCOVER with colored gradient accents
+  * Each card links to an existing feature (Bible, Bible Comics, Churches, Events, Prayer Wall, Bible Trivia, Marketplace, Business Directory)
+  * pb-28 md:pb-5 so fixed mobile bottom nav doesn't cover content
+- Updated LandingHero.tsx:
+  * ENTER APP button: onEnterApp("comic") → onEnterApp("home") ✅
+  * Final CTA "Enter Believ" button: onEnterApp("churches") → onEnterApp("home") ✅
+  * Primary hero CTA: was "Read the Bible" → bible, now "Enter Believ" → home (pink primary)
+  * Secondary hero CTA: was "Try Trivia" → trivia, now "Read the Bible" → bible (outlined secondary)
+  * Public nav: added Events (was Bible/Churches/Trivia/Prayer, now Bible/Churches/Events/Trivia/Prayer)
+  * FEATURES array expanded from 6 to 9 cards: Holy Bible, Bible Comics, Churches, Events, Prayer Wall, Bible Trivia, Marketplace, Business Directory, Community
+  * Removed outdated "List Your Church" feature card
+  * Updated all feature descriptions to match spec wording
+  * Stats fixed: 25+ → 800+ (verified 800 trivia questions in production DB via Prisma count), 6+ → 7 (verified 7 PRIZE_TIERS in code), 11 kept (verified 11 LANGUAGES in code — accurate)
+  * Hero subtitle: hardcoded → t('landing.subtitle')
+  * Final CTA title: hardcoded "Iron sharpens iron" → t('cta.title') = "Grow in Faith, Together"
+  * Final CTA subtitle: hardcoded → t('cta.subtitle')
+  * Added Calendar + Users imports for new feature cards
+- Updated i18n/en.ts:
+  * landing.titleGradient: "Grow in Faith, Together" → "Believe. Connect. Grow. Play."
+  * landing.subtitle: updated to mention all real features
+  * landing.cta.enterBeliev: NEW = "Enter Believ"
+  * landing.stats.questions: "Quiz Questions" → "Bible Questions"
+  * features.subtitle: updated
+  * feature.comics/events/businessDirectory/community: NEW keys
+  * feature.churches.title: "Church Directory" → "Churches"
+  * feature.listChurch: REMOVED (no longer a landing card)
+  * cta.title: "Iron sharpens iron" → "Grow in Faith, Together"
+  * cta.subtitle: updated
+  * nav.prayer: "Prayer Wall" → "Prayer" (more compact)
+  * nav.enterApp: "Enter App" → "Enter Believ"
+- Verified actual production stats via Prisma: TriviaQuestion.count() = 800 (so "800+" is truthful).
+- Committed as bc909ae and pushed to main → Vercel deploy triggered.
+- Verified production after deploy:
+  * Homepage: HTTP 200 ✅
+  * Genesis 1/2/3/4 comic APIs: all HTTP 200 ✅ (no regression to Bible Comics)
+  * /api/auth/me: HTTP 401 for unauthenticated (auth intact) ✅
+  * Comic list API: HTTP 200 ✅
+
+Stage Summary:
+- ROOT CAUSE: LandingHero ENTER APP button hardcoded to onEnterApp("comic").
+- FIX: ENTER APP now opens AppHomeView (new "home" view) — a lightweight dashboard where users choose where to go.
+- FILES CHANGED: src/app/page.tsx (new "home" view type + sidebar Home entry + AppHomeView render), src/components/crosscrafted/LandingHero.tsx (ENTER APP routing fix + stats fix + FEATURES expansion + copy updates + Events added to nav), src/components/crosscrafted/AppHomeView.tsx (NEW — App Home dashboard), src/lib/i18n/en.ts (landing + features + cta + nav copy updates).
+- STATS VERIFIED: 800 trivia questions (queried production DB), 7 PRIZE_TIERS (in code), 11 LANGUAGES (in code). No fake users/churches/businesses/community sizes.
+- NO CHANGES TO: Believ logo (reused as-is), brand colors (deep navy + coral/pink/purple/blue gradients preserved), Bible Comics functionality (Genesis 1/2/3/4 unchanged), Bible reader / Trivia / Prayer Wall / Churches / Marketplace / Business Directory / Events / Admin / Auth, mobile bottom nav, routing architecture, database schema.
+- BROWSER TESTS REQUIRED (admin-only, user must verify): open landing page → tap ENTER APP → confirm App Home opens (not Bible Comics) → confirm "Welcome to Believ" + 8 feature cards grouped by BELIEVE/CONNECT/GROW/PLAY/DISCOVER → tap Bible Comics card → confirm Genesis 1 opens → back to Home → tap each card → confirm each feature opens correctly → check landing page stats show "800+ Bible Questions", "7 Prize Tiers", "11 Languages" → check public nav shows Bible/Churches/Events/Trivia/Prayer.
