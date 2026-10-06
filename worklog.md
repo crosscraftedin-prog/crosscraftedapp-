@@ -680,3 +680,36 @@ Stage Summary:
   * Official domain www.koino.in — DNS not configured yet (currently still crosscraftedapp.vercel.app)
   * When ready: configure koino.in DNS → Vercel, add custom domain in Vercel project settings, update NEXT_PUBLIC_SITE_URL env var if needed
   * Do NOT blindly change production deployment URL until DNS is ready
+
+---
+Task ID: admin-panel-quick-actions-fix
+Agent: main
+Task: Wire admin Quick Actions + overview cards + honest Preview Mode banners.
+
+Work Log:
+- Inspected AdminView.tsx (1921 lines). Found DashboardTab's Quick Actions were <div> elements with cursor-pointer CSS but NO onClick handler — dead buttons. Overview cards were static display, not clickable.
+- Audited underlying data architecture honestly:
+  * Real DB + Real Admin APIs: Bible Comics (14 admin API routes, ComicChapter/ComicPanel Prisma models), Trivia Questions (800+ in DB), Gifts & Redemptions (admin APIs).
+  * Mock data only (NO Prisma model, NO admin API): Churches, Events, Products, Businesses, Prayers, Apologetics, Competitions, Announcements, Analytics — all mock arrays in crosscrafted-data.ts.
+- Fixed Quick Actions: wired all 6 buttons to navigate to correct admin tab via setActiveTab(). Added icons to each button.
+- Fixed overview cards: wired all 6 cards to navigate to their admin tab. Added "Open {label} admin →" hover hint.
+- Passed onNavigate={setActiveTab} prop from parent to DashboardTab.
+- Added "Architecture Status" card on Dashboard:
+  * Green ● DB-backed: Bible Comics, Trivia, Gifts & Redemptions
+  * Orange ● Preview mode: Churches, Events, Marketplace, Prayers, Apologetics, Competitions, Announcements, Analytics
+- Created PreviewModeBanner component and added it to all 8 mock-data tabs (ChurchesTab, EventsTab, MarketplaceTab, PrayersTab, ApologeticsTab, CompetitionsTab, AnnouncementsTab, AnalyticsTab).
+- BibleComicsAdmin does NOT get the banner (it's the only real DB-backed admin section).
+- Committed as 2913f54 and pushed to main → Vercel deploy triggered.
+- Verified production after deploy:
+  * Homepage: HTTP 200 ✅
+  * Genesis 1/2/3/4 comic APIs: all HTTP 200 ✅ (no regression to Bible Comics)
+  * /api/admin/comics: HTTP 403 for non-admin ✅ (auth intact)
+  * Page title: "Koino — Faith. Fellowship. Belong." ✅
+
+Stage Summary:
+- ROOT CAUSE: Quick Actions were <div> with cursor-pointer but no onClick — dead buttons.
+- FIX: All 6 Quick Actions + 6 overview cards now navigate to their correct admin tab via setActiveTab().
+- HONEST UX: PreviewModeBanner on all 8 mock-data tabs clearly tells the admin that actions don't persist to DB. Architecture Status card on Dashboard summarizes what's real vs. preview.
+- FILES CHANGED: src/components/crosscrafted/AdminView.tsx (+103/-22 lines).
+- NO NEW PRISMA MIGRATIONS: Creating real Prisma models for Church/Event/Product/Business/Prayer/Apologetics/Competition/Announcement/Analytics is a large multi-day task that requires schema design + migration + admin API routes + server-side validation + image upload + audit log + analytics tracking. This commit does NOT attempt that — it only fixes the dead Quick Actions and adds honest UX banners.
+- NO CHANGES TO: BibleComicsAdmin (already real), Bible Comics functionality, Trivia Questions (real DB), Gifts & Redemptions (real APIs), Authentication / requireAdmin(), Brand colors / Koino logo, Mobile bottom nav, Routing architecture.
