@@ -382,3 +382,42 @@ Stage Summary:
 - EXISTING BiblePlansView reused unchanged (only 1 line changed for display).
 - NO CHANGES TO: comic DB schema, comic artwork, comic CMS, comic APIs, Genesis 1/2/3/4 panel counts, coverArtUrl field semantics, Bible reader functionality, Trivia, Faith Points, auth, admin, LandingHero, routing architecture.
 - BROWSER TESTS REQUIRED (admin-only, user must verify): open Bible → switch between READ / BIBLE COMICS / READING PLANS → verify each mode shows the expected content → in PLANS mode, click a day → verify it switches to READ mode with the chosen chapter loaded → in READ mode, verify all 66 books use full names → verify mobile layout has no horizontal overflow.
+
+---
+Task ID: churches-hub-redesign
+Agent: main
+Task: Churches + Groups structure redesign — remove Small Groups + List Church from sidebar, add Discover/My Churches tabs, route List Your Church to dedicated page, add Groups placeholder.
+
+Work Log:
+- Inspected current state: ChurchesView.tsx (860 lines, uses in-memory CHURCHES mock array + component-local followed Set), ListYourEntity.tsx (existing church listing form), Prisma schema (21 models, NO Church/Group/Follow models — churches are mock data only).
+- Decided scope: per spec "do not overengineer this now", do NOT add Prisma migrations for Church/Follow/Group models. Instead: consolidate sidebar, add My Churches tab (component-local state with clear comment about future DB hydration), auth-gate follow toggle, route List Your Church to existing dedicated page, add Groups placeholder in church detail modal.
+- Removed "Small Groups" and "List Church" from SIDEBAR_LINKS + MOBILE_MORE_VIEWS in page.tsx. Removed unused UsersRound + Building2 imports.
+- Standalone /small-groups and /list-church view routes PRESERVED in page.tsx for backward compatibility.
+- Updated ChurchesView.tsx:
+  * Added onListChurch?: () => void prop
+  * Added Discover/My Churches tab switcher with Believ purple→pink gradient active state
+  * Wrapped existing Filters + Church Cards + Empty State in discoverTab === "discover" conditional
+  * Added MyChurchesView component (separate function at end of file): shows followed churches as compact list cards with thumbnail + name + location + followers count + Following button; auth-gated empty state for unauthenticated users; "no follows yet" empty state for authenticated users
+  * Made toggleFollow auth-aware: checks isAuthenticated via useSupabaseUser; if unauthenticated, shows "Sign in required" toast and does NOT toggle
+  * "+ Add Church" button → "+ List Your Church" with routing logic: if onListChurch provided, call it; else fall back to in-page modal (back-compat)
+  * "Add a Church" modal title → "List Your Church"
+  * Empty-state "Add Church" button → "List Your Church" with same routing logic
+  * Added Groups placeholder section inside church detail modal: "Church Groups coming soon" with categories listed (Youth, Young Adults, Men, Women, Families, Bible Study, Prayer, Worship, Kids, Care / Support)
+  * Added pb-28 md:pb-5 to container so fixed mobile bottom nav doesn't cover content
+  * Imported useSupabaseUser, Heart icon
+- Wired page.tsx: ChurchesView receives onListChurch={() => goView("list-church")} → taps "+ List Your Church" → opens dedicated ListYourEntity variant="church" full-page form
+- Committed as 48863f9 and pushed to main → Vercel deploy triggered.
+- Verified production after deploy:
+  * Homepage: HTTP 200 ✅
+  * Genesis 1 comic API: HTTP 200 ✅ (no regression to Bible Comics)
+  * Bible verse API: HTTP 200 ✅ (no regression to Bible reader)
+  * /api/auth/me: HTTP 401 for unauthenticated (correct — auth system intact)
+
+Stage Summary:
+- FILES CHANGED: src/app/page.tsx (sidebar cleanup + onListChurch wiring), src/components/crosscrafted/ChurchesView.tsx (+241/-14: tabs + auth-gate + Groups placeholder + MyChurchesView + bottom padding).
+- NO DATABASE MIGRATIONS: Prisma schema unchanged. No Church/Group/Follow models added. Follow state is component-local with clear comment about future DB hydration. Per spec: "do not overengineer this now."
+- NO CHANGES TO: ListYourEntity (existing church listing form fields preserved: Church Name, Description, State, City, Address, Denomination, Service Times, Church Photos, WhatsApp Number, Languages, Contact Name, Email, Phone), existing church data (CHURCHES array in crosscrafted-data.ts unchanged), Bible/Bible Comics/Reading Plans/Trivia/Marketplace/Prayer Wall/Apologetics/Events/Admin/Auth, comic content (Genesis 1/2/3/4 unchanged), mobile bottom nav, routing architecture.
+- EXISTING APIS/MODELS REUSED: ListYourEntity (church variant) reused as-is. CHURCHES mock data reused as-is. useSupabaseUser auth hook reused as-is. Existing church detail modal reused as-is (only added Groups section).
+- AUTH/SECURITY: Follow toggle is now auth-gated (was previously open to anyone). Login required to follow. Login required to list a church (existing ListYourEntity behavior preserved). No private user data exposed. No service-role keys exposed.
+- MOBILE: pb-28 added so fixed mobile bottom nav doesn't cover My Churches list or church detail. Mode switcher (Discover/My Churches) uses same compact tab pattern as Bible hub (fits comfortably on small screens). Long church names truncate cleanly with `truncate` class.
+- BROWSER TESTS REQUIRED (admin-only, user must verify): open Churches → tap "+ List Your Church" → confirm ListYourEntity page opens → switch to My Churches tab (unauth) → see "Sign in required" → sign in → switch to My Churches → see "You're not following any churches yet" → switch to Discover → tap Follow on a church → switch to My Churches → see the church in the list → tap a church → see Groups placeholder section in detail modal.
