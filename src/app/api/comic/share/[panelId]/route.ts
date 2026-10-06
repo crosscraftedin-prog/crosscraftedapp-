@@ -39,7 +39,7 @@ export async function GET(
     const translation = panel.translations.find((t) => t.lang === lang) ||
                         panel.translations.find((t) => t.lang === "en");
 
-    const title = translation?.title || "Believ Comic Bible";
+    const title = translation?.title || "Believ Bible Comics";
     const narration = translation?.narration || "";
     const excerpt = narration.length > 200 ? narration.substring(0, 197) + "..." : narration;
     const bookName = panel.bookId.charAt(0).toUpperCase() + panel.bookId.slice(1);

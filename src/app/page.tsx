@@ -59,7 +59,7 @@ type View =
 const SIDEBAR_LINKS: { id: View; icon: typeof Search; label: string }[] = [
   { id: "bible", icon: BookOpen, label: "Bible" },
   { id: "bible-plans", icon: BookMarked, label: "Reading Plans" },
-  { id: "comic", icon: BookOpen, label: "Comic Bible" },
+  { id: "comic", icon: BookOpen, label: "Bible Comics" },
   { id: "churches", icon: Search, label: "Churches" },
   { id: "events", icon: Calendar, label: "Events" },
   { id: "small-groups", icon: UsersRound, label: "Small Groups" },
@@ -83,7 +83,7 @@ const MOBILE_NAV: { id: View; icon: typeof Search; label: string }[] = [
 
 // Views that are NOT in the quick-access bottom nav (shown in the "More" sheet).
 const MOBILE_MORE_VIEWS: { id: View; icon: typeof Search; label: string }[] = [
-  { id: "comic", icon: BookOpen, label: "Comic Bible" },
+  { id: "comic", icon: BookOpen, label: "Bible Comics" },
   { id: "bible-plans", icon: BookMarked, label: "Reading Plans" },
   { id: "events", icon: Calendar, label: "Events" },
   { id: "apologetics", icon: ListChecks, label: "Apologetics" },
@@ -99,10 +99,11 @@ export default function Home() {
   const [headerVisible, setHeaderVisible] = useState(true);
   const [showMoreSheet, setShowMoreSheet] = useState(false);
   const lastScrollY = useRef(0);
-  // Comic Bible state — data-driven, not hardcoded.
+  // Bible Comics state — data-driven, not hardcoded.
+  // Default to Genesis 1 (the first chapter of the Bible).
   // Changed when user navigates between comic chapters or opens a shared URL.
   const [comicBookId, setComicBookId] = useState("genesis");
-  const [comicChapter, setComicChapter] = useState(2);
+  const [comicChapter, setComicChapter] = useState(1);
 
   // Navigate to a new view, also resetting header + scroll position.
   const navigate = (next: View) => {
