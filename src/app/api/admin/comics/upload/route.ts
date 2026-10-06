@@ -233,11 +233,42 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 12) Optionally persist the URL to ComicPanel.artworkUrl immediately.
-    //     This is a convenience: the PanelFormModal Save button is still the
-    //     canonical write path, but if chapterId is supplied we mirror the
-    //     upload result into the DB so the panel reflects the new artwork
-    //     even before the admin clicks Save.
+    // 11b) Append a cache-busting version query param.
+    //
+    // WHY: The storage path is deterministic — `bible-comics/{bookId}/{chapter}/{panelId}.webp`.
+    // Re-uploading artwork to the same panel *upserts* the file at the SAME
+    // public URL. Two failure modes follow:
+    //   1) React: `setArtwork(sameUrlString)` is a no-op (state value is
+    //      unchanged) → the <img> never re-renders → preview shows OLD image.
+    //   2) Browser cache: even if the <img> did re-render, the browser
+    //      serves the cached image at that URL.
+    //
+    // Appending `?v=${Date.now()}` solves both: the URL string differs from
+    // the previous state value, so React re-renders; the browser sees a
+    // new URL string and fetches the freshly-uploaded file. The query param
+    // is harmless — Supabase Storage ignores it.
+    //
+    // The versioned URL is persisted to ComicPanel.artworkUrl so that
+    // reopening the editor (or a public ComicView user) sees the version
+    // that was last uploaded. Subsequent re-uploads bump `?v=` again.
+    const version = Date.now();
+    const versionedUrl = (() => {
+      try {
+        const u = new URL(publicUrl);
+        u.searchParams.set("v", String(version));
+        return u.toString();
+      } catch {
+        // Defensive: if publicUrl isn't a parseable URL (shouldn't happen
+        // for Supabase Storage URLs), fall back to appending ?v= manually.
+        return publicUrl + (publicUrl.includes("?") ? "&" : "?") + "v=" + version;
+      }
+    })();
+
+    // 12) Optionally persist the versioned URL to ComicPanel.artworkUrl
+    //     immediately. This is a convenience: the PanelFormModal Save button
+    //     is still the canonical write path, but if chapterId is supplied we
+    //     mirror the upload result into the DB so the panel reflects the new
+    //     artwork (and its new version) even before the admin clicks Save.
     let dbUpdated = false;
     if (chapterId) {
       try {
@@ -248,7 +279,7 @@ export async function POST(req: NextRequest) {
             comicChapterId: chapterId,
             panelId: safePanelId,
           },
-          data: { artworkUrl: publicUrl },
+          data: { artworkUrl: versionedUrl },
         });
         dbUpdated = updated.count > 0;
         if (!dbUpdated) {
@@ -263,10 +294,11 @@ export async function POST(req: NextRequest) {
         // the PanelFormModal Save will persist it. Surface a warning instead.
         return jsonOk({
           success: true,
-          url: publicUrl,
-          artworkUrl: publicUrl,
+          url: versionedUrl,
+          artworkUrl: versionedUrl,
           path: storagePath,
           artworkPath: storagePath,
+          version,
           message:
             "Artwork uploaded to Supabase Storage, but DB update failed (will be saved when you click Save).",
           dbUpdated: false,
@@ -278,14 +310,15 @@ export async function POST(req: NextRequest) {
     // 13) Return success JSON (always valid JSON — never empty)
     return jsonOk({
       success: true,
-      url: publicUrl,
-      artworkUrl: publicUrl,
+      url: versionedUrl,
+      artworkUrl: versionedUrl,
       path: storagePath,
       artworkPath: storagePath,
       filename: `${safePanelId}.webp`,
       originalSize: file.size,
       optimizedSize: webpBuffer.length,
       format: "webp",
+      version,
       dbUpdated,
       message: "Artwork uploaded successfully",
     });
