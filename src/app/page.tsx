@@ -35,12 +35,15 @@ import BiblePlansView from "@/components/crosscrafted/BiblePlansView";
 import AdminView from "@/components/crosscrafted/AdminView";
 import HeaderUserSection from "@/components/crosscrafted/HeaderUserSection";
 import LanguageSwitcher from "@/components/crosscrafted/LanguageSwitcher";
+import ComicView from "@/components/crosscrafted/ComicView";
+import { toast } from "sonner";
 import { type Translation } from "@/lib/bible-data";
 
 type View =
   | "landing"
   | "bible"
   | "bible-plans"
+  | "comic"
   | "churches"
   | "events"
   | "trivia"
@@ -56,6 +59,7 @@ type View =
 const SIDEBAR_LINKS: { id: View; icon: typeof Search; label: string }[] = [
   { id: "bible", icon: BookOpen, label: "Bible" },
   { id: "bible-plans", icon: BookMarked, label: "Reading Plans" },
+  { id: "comic", icon: BookOpen, label: "Comic Bible" },
   { id: "churches", icon: Search, label: "Churches" },
   { id: "events", icon: Calendar, label: "Events" },
   { id: "small-groups", icon: UsersRound, label: "Small Groups" },
@@ -79,6 +83,7 @@ const MOBILE_NAV: { id: View; icon: typeof Search; label: string }[] = [
 
 // Views that are NOT in the quick-access bottom nav (shown in the "More" sheet).
 const MOBILE_MORE_VIEWS: { id: View; icon: typeof Search; label: string }[] = [
+  { id: "comic", icon: BookOpen, label: "Comic Bible" },
   { id: "bible-plans", icon: BookMarked, label: "Reading Plans" },
   { id: "events", icon: Calendar, label: "Events" },
   { id: "apologetics", icon: ListChecks, label: "Apologetics" },
@@ -243,6 +248,21 @@ export default function Home() {
                 <BiblePlansView
                   translation="kjv"
                   onOpenChapter={() => goView("bible")}
+                />
+              )}
+              {view === "comic" && (
+                <ComicView
+                  bookId="genesis"
+                  chapter={2}
+                  onReadChapter={(bid, ch) => {
+                    goView("bible");
+                  }}
+                  onPray={(prompt) => {
+                    goView("prayer-wall");
+                  }}
+                  onDiscuss={(topic) => {
+                    toast("Discussion coming soon", { description: topic });
+                  }}
                 />
               )}
               {view === "churches" && <ChurchesView />}

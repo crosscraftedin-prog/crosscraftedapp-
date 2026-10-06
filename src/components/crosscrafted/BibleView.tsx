@@ -26,7 +26,6 @@ import {
   OT_BOOKS,
   NT_BOOKS,
   TRANSLATIONS,
-  BIBLE_LANGUAGES,
   getBook,
   fetchChapter,
   isReferenceQuery,
@@ -37,19 +36,18 @@ import {
   type Translation,
   type Bookmark as BookmarkType,
 } from "@/lib/bible-data";
+import { useTranslation, useLanguage, LANGUAGES } from "@/lib/i18n/LanguageContext";
 import StreakBadge from "@/components/crosscrafted/StreakBadge";
-import { useTranslation } from "@/lib/i18n/LanguageContext";
 
 type View = "books" | "chapters" | "reader" | "search" | "bookmarks";
 
 export default function BibleView() {
   const t = useTranslation();
+  const { lang, setLang } = useLanguage();
   const [view, setView] = useState<View>("books");
   const [selectedBook, setSelectedBook] = useState<BibleBook | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
   const [translation, setTranslation] = useState<Translation>("kjv");
-  const [language, setLanguage] = useState(BIBLE_LANGUAGES[0]);
-  const [showLangPicker, setShowLangPicker] = useState(false);
   const [chapterText, setChapterText] = useState<string>("");
   const [chapterVerses, setChapterVerses] = useState<{ verse: number; text: string }[]>([]);
   const [chapterLoading, setChapterLoading] = useState(false);
@@ -60,6 +58,12 @@ export default function BibleView() {
   const [bookmarks, setBookmarks] = useState<BookmarkType[]>([]);
   const [bookmarkedVerses, setBookmarkedVerses] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Whether Bible text is available in the selected language.
+  // bible-api.com only supports English (KJV/WEB). Indian-language
+  // Bible translations will be connected in the future — until then,
+  // non-English languages show a clear "unavailable" notice + English fallback.
+  const bibleTextSupported = lang === "en";
 
   // Load bookmarks on mount
   useEffect(() => {
@@ -262,78 +266,48 @@ export default function BibleView() {
         </div>
       </div>
 
-      {/* Translation + Language pickers */}
+      {/* Translation picker (KJV/WEB) + language notice */}
       <div className="flex gap-2 mb-4">
         <div className="flex p-1 bg-white/[0.04] border border-white/[0.06] rounded-xl">
-          {TRANSLATIONS.map((t) => (
+          {TRANSLATIONS.map((tr) => (
             <button
-              key={t.id}
-              onClick={() => setTranslation(t.id)}
+              key={tr.id}
+              onClick={() => setTranslation(tr.id)}
               className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
-                translation === t.id ? "bg-[#7C3AED] text-white" : "text-[#94A3B8] hover:text-white"
+                translation === tr.id ? "bg-[#7C3AED] text-white" : "text-[#94A3B8] hover:text-white"
               }`}
             >
-              {t.abbr}
+              {tr.abbr}
             </button>
           ))}
         </div>
-        <button
-          onClick={() => setShowLangPicker(!showLangPicker)}
-          className="flex-1 flex items-center justify-between px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-xs text-white hover:bg-white/[0.06] transition-all"
-        >
-          <span className="flex items-center gap-1.5">
-            <span>{language.flag}</span>
-            <span className="font-bold">{language.nativeLabel}</span>
-            {!language.supported && (
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#F59E0B]/15 text-[#F59E0B]">EN fallback</span>
-            )}
+        {/* Language indicator — reflects the app-wide LanguageContext selection.
+            Uses the globe LanguageSwitcher in the header, not a separate dropdown here. */}
+        <div className="flex-1 flex items-center justify-between px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-xs">
+          <span className="flex items-center gap-1.5 text-white">
+            <span>{LANGUAGES.find((l) => l.code === lang)?.flag || "🌐"}</span>
+            <span className="font-bold">{LANGUAGES.find((l) => l.code === lang)?.nativeName || "English"}</span>
           </span>
-          <ChevronDown size={14} className="text-[#94A3B8]" />
-        </button>
+          {!bibleTextSupported && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#F59E0B]/15 text-[#F59E0B] font-bold">
+              EN text
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Language dropdown */}
-      <AnimatePresence>
-        {showLangPicker && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="mb-4 bg-white/[0.04] border border-white/[0.06] rounded-2xl p-3 overflow-hidden"
-          >
-            <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">Select Language</p>
-            <div className="grid grid-cols-3 gap-2">
-              {BIBLE_LANGUAGES.map((lang) => (
-                <button
-                  key={lang.id}
-                  onClick={() => {
-                    setLanguage(lang);
-                    setShowLangPicker(false);
-                    if (!lang.supported) {
-                      toast("Translation in preparation", {
-                        description: `${lang.label} Bible text is being prepared. Showing English (KJV) for now.`,
-                      });
-                    }
-                  }}
-                  className={`flex flex-col items-center gap-0.5 p-2 rounded-xl border transition-all ${
-                    language.id === lang.id
-                      ? "bg-[#7C3AED]/15 border-[#7C3AED]/40"
-                      : "bg-white/[0.03] border-white/[0.06] hover:bg-white/[0.05]"
-                  }`}
-                >
-                  <span className="text-xl">{lang.flag}</span>
-                  <span className="text-[11px] font-bold text-white">{lang.nativeLabel}</span>
-                  <span className="text-[9px] text-[#94A3B8]">{lang.label}</span>
-                </button>
-              ))}
-            </div>
-            <p className="text-[10px] text-[#64748B] mt-3 leading-relaxed">
-              Currently KJV &amp; WEB (English) text is fully available offline. Indian language translations
-              are being prepared — until then, English (KJV) text is shown.
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Scripture language notice — clearly tells the user that Bible TEXT
+          is only available in English (KJV/WEB), while UI is in their language. */}
+      {!bibleTextSupported && view === "reader" && (
+        <div className="mb-4 bg-[#38BDF8]/8 border border-[#38BDF8]/20 rounded-xl p-3">
+          <p className="text-[10px] text-[#A09DB1] leading-relaxed">
+            <span className="font-bold text-[#38BDF8]">Notice:</span> The Bible text below is in
+            English ({translation.toUpperCase()}). The app interface is in your selected language,
+            but Indian-language Bible translations are not yet available. We are working on connecting
+            Hindi, Tamil, Telugu, and other translations.
+          </p>
+        </div>
+      )}
 
       {/* BOOKS VIEW */}
       {view === "books" && (

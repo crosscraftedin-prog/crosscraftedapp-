@@ -23,6 +23,9 @@ model User {
   emailVerified DateTime?
   role         String   @default("user") // "user" | "admin"
   totalPoints  Int      @default(0) // SERVER-AUTHORITATIVE — never trust client
+  // User's preferred UI language. Synced from the LanguageContext cookie
+  // when the user signs in. Null = use cookie/browser detection (existing behavior).
+  preferredLanguage String? // "en" | "hi" | "bn" | "te" | "mr" | "ta" | "gu" | "ur" | "kn" | "or" | "ml" | "pa" | "as"
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -318,4 +321,93 @@ model StreakFreeze {
 
   @@unique([userId, activity, freezeDate])
   @@index([userId])
+}
+
+// ─── COMIC BIBLE ───────────────────────────────────────────────────────────
+// Bible Comic system. References existing Bible book IDs from bible-data.ts
+// (e.g. bookId = "genesis" matches BIBLE_BOOKS[].id).
+// Artwork is language-independent — ONE image per panel.
+// Text (title, narration, captions) is localized via ComicPanelTranslation.
+
+model ComicChapter {
+  id              String   @id @default(cuid())
+  comicId         String   @unique // e.g. "genesis-2" — human-readable stable ID
+  bookId          String             // e.g. "genesis" — matches BIBLE_BOOKS[].id
+  chapter         Int                // e.g. 2
+  title           String             // English default title
+  coverArtUrl     String?            // optional chapter cover image
+  sortOrder       Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  panels          ComicPanel[]
+  translations    ComicChapterTranslation[]
+  quizLinks       ComicChapterQuiz[]
+
+  @@unique([bookId, chapter]) // one comic per book+chapter
+  @@index([bookId])
+}
+
+model ComicPanel {
+  id              String   @id @default(cuid())
+  panelId         String   @unique // e.g. "GEN2-P01" — stable, human-readable
+  comicChapterId  String
+  sortOrder       Int      @default(0)
+  artworkUrl      String             // ONE image — language-independent
+  verseStart      Int                // e.g. 1
+  verseEnd        Int                // e.g. 3
+  bookId          String             // denormalized from ComicChapter for quick verse lookups
+  chapter         Int                // denormalized
+
+  comicChapter    ComicChapter @relation(fields: [comicChapterId], references: [id], onDelete: Cascade)
+  translations    ComicPanelTranslation[]
+
+  @@index([comicChapterId])
+}
+
+model ComicPanelTranslation {
+  id              String   @id @default(cuid())
+  panelId         String             // FK to ComicPanel.panelId
+  lang            String             // "en", "hi", "te", etc.
+  title           String?            // Panel title in this language
+  narration       String?            // Narration / story text
+  captions        String   @default("[]") // JSON array of caption strings (speech bubbles, etc.)
+
+  panel           ComicPanel @relation(fields: [panelId], references: [panelId], onDelete: Cascade)
+
+  @@unique([panelId, lang]) // one translation per panel per language
+  @@index([lang])
+}
+
+model ComicChapterTranslation {
+  id              String   @id @default(cuid())
+  comicChapterId  String
+  lang            String
+  title           String?            // Chapter title in this language
+
+  comicChapter    ComicChapter @relation(fields: [comicChapterId], references: [id], onDelete: Cascade)
+
+  @@unique([comicChapterId, lang])
+  @@index([lang])
+}
+
+// ─── COMIC → TRIVIA CONNECTION ─────────────────────────────────────────────
+// Links a Comic chapter to existing TriviaQuestion records.
+// When a user takes a Comic quiz, the API fetches questions via this join table,
+// then scores them using the EXISTING submitQuiz() function.
+// The same questionId works in both regular Trivia and Comic quiz.
+// Anti-farming: @@unique([userId, questionId]) on TriviaQuestionAttempt
+// prevents earning FP twice for the same question, regardless of where it was asked.
+
+model ComicChapterQuiz {
+  id              String   @id @default(cuid())
+  comicChapterId  String
+  questionId      String             // references TriviaQuestion.questionId
+  sortOrder       Int      @default(0)
+
+  comicChapter    ComicChapter @relation(fields: [comicChapterId], references: [id], onDelete: Cascade)
+
+  @@unique([comicChapterId, questionId]) // one link per chapter+question
+  @@index([comicChapterId])
 }
