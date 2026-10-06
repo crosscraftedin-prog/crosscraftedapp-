@@ -1637,13 +1637,14 @@ function PanelFormModal({
         </div>
 
         <div className="space-y-3">
-          {/* Artwork — uses dedicated ComicArtworkUploader (uploads to server, NOT base64) */}
+          {/* Artwork — uses dedicated ComicArtworkUploader (uploads to Supabase Storage, NOT base64) */}
           <ComicArtworkUploader
             artworkUrl={artwork || null}
             onChange={(url) => setArtwork(url || "")}
             bookId={bookId}
             chapter={chapterNum}
             panelId={panelIdValue}
+            chapterId={chapterId}
             label="Panel Artwork (required)"
           />
 

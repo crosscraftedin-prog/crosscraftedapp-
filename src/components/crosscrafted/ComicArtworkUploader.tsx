@@ -5,7 +5,7 @@ import { Image as ImageIcon, X, Upload, Loader2, AlertCircle } from "lucide-reac
 import { toast } from "sonner";
 
 type Props = {
-  /** Current artwork URL (storage path like /comic-artwork/genesis/2/GEN2-P01.webp) */
+  /** Current artwork URL (storage path like https://...supabase.co/.../GEN2-P01.webp) */
   artworkUrl: string | null;
   /** Called when artwork is uploaded/replaced — receives the new URL */
   onChange: (url: string | null) => void;
@@ -15,6 +15,8 @@ type Props = {
   chapter: number;
   /** Panel ID for filename (e.g. "GEN2-P01") */
   panelId: string;
+  /** Optional ComicChapter.id — when provided, the API will also persist the URL to DB */
+  chapterId?: string;
   label?: string;
 };
 
@@ -23,11 +25,19 @@ type Props = {
  *
  * Flow:
  *   Admin selects image → uploads to /api/admin/comics/upload →
- *   server converts to WebP via sharp → saves to public/comic-artwork/ →
- *   returns URL → saved in ComicPanel.artworkUrl
+ *   server validates + converts to WebP via sharp → saves to Supabase
+ *   Storage → returns public URL → saved in ComicPanel.artworkUrl
  *
- * Does NOT use base64 data URLs — artwork is stored as files on the server.
+ * Does NOT use base64 data URLs — artwork is stored as files in Supabase Storage.
  * Does NOT break the existing ImagePicker (separate component).
+ *
+ * Error handling:
+ *   - Never blindly calls res.json() — checks res.ok, status, Content-Type,
+ *     and empty bodies first.
+ *   - Surfaces the actual server error message instead of generic
+ *     "Unexpected end of JSON input".
+ *   - Handles 403 (Forbidden), 405 (wrong route), 500 (config/storage error)
+ *     with specific user-facing messages.
  */
 export default function ComicArtworkUploader({
   artworkUrl,
@@ -35,11 +45,49 @@ export default function ComicArtworkUploader({
   bookId,
   chapter,
   panelId,
+  chapterId,
   label = "Artwork",
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * Safe JSON parser — never throws "Unexpected end of JSON input".
+   * Returns `{ ok: false, error }` if the body is empty / non-JSON.
+   */
+  async function safeParseJson(res: Response): Promise<{ ok: boolean; data?: any; error?: string }> {
+    const text = await res.text().catch(() => "");
+    if (!text || text.trim() === "") {
+      return {
+        ok: false,
+        error: `Server returned an empty response (HTTP ${res.status}). This usually means the upload route is missing or the server crashed.`,
+      };
+    }
+    // Check Content-Type — warn if it's HTML (e.g. Vercel 404 page)
+    const ct = res.headers.get("content-type") || "";
+    if (!ct.includes("application/json") && !ct.includes("text/plain")) {
+      // Try to parse anyway — sometimes Next.js returns JSON without proper CT
+      try {
+        const data = JSON.parse(text);
+        return { ok: true, data };
+      } catch {
+        return {
+          ok: false,
+          error: `Server returned ${ct || "non-JSON"} (HTTP ${res.status}). Response: ${text.slice(0, 200)}`,
+        };
+      }
+    }
+    try {
+      const data = JSON.parse(text);
+      return { ok: true, data };
+    } catch (e: any) {
+      return {
+        ok: false,
+        error: `Server returned malformed JSON (HTTP ${res.status}): ${e?.message || "parse error"}. First 200 chars: ${text.slice(0, 200)}`,
+      };
+    }
+  }
 
   const handleFile = async (file: File) => {
     // Validate file type
@@ -69,22 +117,61 @@ export default function ComicArtworkUploader({
       formData.append("bookId", bookId);
       formData.append("chapter", String(chapter));
       formData.append("panelId", panelId);
+      if (chapterId) formData.append("chapterId", chapterId);
 
       const res = await fetch("/api/admin/comics/upload", {
         method: "POST",
         body: formData,
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Upload failed");
+      const parsed = await safeParseJson(res);
+      if (!parsed.ok) {
+        throw new Error(parsed.error || "Upload failed (invalid server response)");
+      }
 
-      onChange(data.url);
+      const data = parsed.data || {};
+
+      // Handle non-OK responses with a structured error
+      if (!res.ok) {
+        // Special-case the missing-config error so the admin sees exactly
+        // which Vercel env var to set.
+        if (data.missing) {
+          const envVar = data.missing;
+          throw new Error(
+            `${data.error || "Upload failed"} (Set ${envVar} in Vercel → Project → Settings → Environment Variables.)`
+          );
+        }
+        if (res.status === 403) {
+          throw new Error("Forbidden — you must be signed in as an admin to upload artwork.");
+        }
+        if (res.status === 405) {
+          throw new Error("Upload endpoint returned 405 Method Not Allowed. The route /api/admin/comics/upload may not be deployed. Try redeploying.");
+        }
+        throw new Error(data.error || `Upload failed (HTTP ${res.status})`);
+      }
+
+      // Success — prefer the `artworkUrl` alias, fall back to `url`
+      const finalUrl = data.artworkUrl || data.url;
+      if (!finalUrl) {
+        throw new Error("Server returned success but no artwork URL was provided.");
+      }
+
+      onChange(finalUrl);
+
+      const sizeNote =
+        data.optimizedSize && data.originalSize
+          ? ` · WebP ${(data.optimizedSize / 1024).toFixed(0)}KB (from ${(data.originalSize / 1024).toFixed(0)}KB)`
+          : ` · ${(file.size / 1024).toFixed(0)}KB original`;
+
+      const dbNote = data.dbUpdated === true ? " · saved to DB" : "";
+
       toast.success("Artwork uploaded!", {
-        description: `Saved as WebP (${(file.size / 1024).toFixed(0)}KB original)`,
+        description: `Saved to Supabase Storage${sizeNote}${dbNote}`,
       });
     } catch (e: any) {
-      setError(e.message || "Upload failed");
-      toast.error("Upload failed", { description: e.message });
+      const msg = e?.message || "Upload failed";
+      setError(msg);
+      toast.error("Upload failed", { description: msg });
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -157,7 +244,7 @@ export default function ComicArtworkUploader({
       {error && (
         <div className="flex items-start gap-1.5 text-[10px] text-[#EF4444]">
           <AlertCircle size={11} className="mt-0.5 shrink-0" />
-          <span>{error}</span>
+          <span className="break-words">{error}</span>
         </div>
       )}
 
