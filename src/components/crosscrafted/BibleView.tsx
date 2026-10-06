@@ -38,13 +38,26 @@ import {
 } from "@/lib/bible-data";
 import { useTranslation, useLanguage, LANGUAGES } from "@/lib/i18n/LanguageContext";
 import StreakBadge from "@/components/crosscrafted/StreakBadge";
+import { BookOpen as BookOpenIcon, ArrowRight, Loader2 as ComicLoader, AlertCircle as ComicAlert } from "lucide-react";
 
 type View = "books" | "chapters" | "reader" | "search" | "bookmarks";
+type BibleMode = "read" | "comics";
 
-export default function BibleView() {
+type ComicChapterSummary = {
+  id: string;
+  comicId: string;
+  bookId: string;
+  chapter: number;
+  title: string;
+  coverArtUrl: string | null;
+  sortOrder: number;
+};
+
+export default function BibleView({ onOpenComic }: { onOpenComic?: (bookId: string, chapter: number) => void }) {
   const t = useTranslation();
   const { lang, setLang } = useLanguage();
   const [view, setView] = useState<View>("books");
+  const [mode, setMode] = useState<BibleMode>("read");
   const [selectedBook, setSelectedBook] = useState<BibleBook | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
   const [translation, setTranslation] = useState<Translation>("kjv");
@@ -228,175 +241,362 @@ export default function BibleView() {
   };
 
   return (
-    <div className="max-w-[680px] mx-auto px-4 py-5">
+    <div className="max-w-[680px] mx-auto px-4 py-5 pb-28 md:pb-5">
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <div>
           <h1 className="text-xl font-bold text-white">{t("nav.bible")}</h1>
           <p className="text-xs text-[#94A3B8] mt-0.5">{t("bible.subtitle")}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setView("search")}
-            className={`p-2 rounded-xl text-xs font-semibold transition-all border ${
-              view === "search"
-                ? "bg-[#7C3AED]/15 border-[#7C3AED]/30 text-[#A78BFA]"
-                : "bg-white/[0.04] border-white/[0.06] text-[#94A3B8] hover:text-white"
-            }`}
-            title="Search"
-          >
-            <Search size={14} />
-          </button>
-          <button
-            onClick={() => setView("bookmarks")}
-            className={`relative p-2 rounded-xl text-xs font-semibold transition-all border ${
-              view === "bookmarks"
-                ? "bg-[#F59E0B]/15 border-[#F59E0B]/30 text-[#F59E0B]"
-                : "bg-white/[0.04] border-white/[0.06] text-[#94A3B8] hover:text-white"
-            }`}
-            title="Bookmarks"
-          >
-            <Bookmark size={14} />
-            {bookmarks.length > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#F59E0B] text-slate-950 text-[9px] font-bold flex items-center justify-center">
-                {bookmarks.length > 9 ? "9+" : bookmarks.length}
-              </span>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Translation picker (KJV/WEB) + language notice */}
-      <div className="flex gap-2 mb-4">
-        <div className="flex p-1 bg-white/[0.04] border border-white/[0.06] rounded-xl">
-          {TRANSLATIONS.map((tr) => (
+        {mode === "read" && (
+          <div className="flex items-center gap-2">
             <button
-              key={tr.id}
-              onClick={() => setTranslation(tr.id)}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
-                translation === tr.id ? "bg-[#7C3AED] text-white" : "text-[#94A3B8] hover:text-white"
+              onClick={() => setView("search")}
+              className={`p-2 rounded-xl text-xs font-semibold transition-all border ${
+                view === "search"
+                  ? "bg-[#7C3AED]/15 border-[#7C3AED]/30 text-[#A78BFA]"
+                  : "bg-white/[0.04] border-white/[0.06] text-[#94A3B8] hover:text-white"
               }`}
+              title="Search"
             >
-              {tr.abbr}
+              <Search size={14} />
             </button>
-          ))}
-        </div>
-        {/* Language indicator — reflects the app-wide LanguageContext selection.
-            Uses the globe LanguageSwitcher in the header, not a separate dropdown here. */}
-        <div className="flex-1 flex items-center justify-between px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-xs">
-          <span className="flex items-center gap-1.5 text-white">
-            <span>{LANGUAGES.find((l) => l.code === lang)?.flag || "🌐"}</span>
-            <span className="font-bold">{LANGUAGES.find((l) => l.code === lang)?.nativeName || "English"}</span>
-          </span>
-          {!bibleTextSupported && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#F59E0B]/15 text-[#F59E0B] font-bold">
-              EN text
-            </span>
-          )}
+            <button
+              onClick={() => setView("bookmarks")}
+              className={`relative p-2 rounded-xl text-xs font-semibold transition-all border ${
+                view === "bookmarks"
+                  ? "bg-[#F59E0B]/15 border-[#F59E0B]/30 text-[#F59E0B]"
+                  : "bg-white/[0.04] border-white/[0.06] text-[#94A3B8] hover:text-white"
+              }`}
+              title="Bookmarks"
+            >
+              <Bookmark size={14} />
+              {bookmarks.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#F59E0B] text-slate-950 text-[9px] font-bold flex items-center justify-center">
+                  {bookmarks.length > 9 ? "9+" : bookmarks.length}
+                </span>
+              )}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ─── MODE SWITCHER (READ / COMICS) ─── */}
+      <div className="mb-5">
+        <div className="flex p-1 bg-white/[0.04] border border-white/[0.06] rounded-2xl">
+          <button
+            onClick={() => setMode("read")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
+              mode === "read"
+                ? "bg-gradient-to-r from-[#7C3AED] to-[#F39B9B] text-white shadow-lg shadow-[#7C3AED]/20"
+                : "text-[#94A3B8] hover:text-white"
+            }`}
+          >
+            <BookOpenIcon size={14} /> READ
+          </button>
+          <button
+            onClick={() => setMode("comics")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
+              mode === "comics"
+                ? "bg-gradient-to-r from-[#7C3AED] to-[#F39B9B] text-white shadow-lg shadow-[#7C3AED]/20"
+                : "text-[#94A3B8] hover:text-white"
+            }`}
+          >
+            <Sparkles size={14} /> COMICS
+          </button>
         </div>
       </div>
 
-      {/* Scripture language notice — clearly tells the user that Bible TEXT
-          is only available in English (KJV/WEB), while UI is in their language. */}
-      {!bibleTextSupported && view === "reader" && (
-        <div className="mb-4 bg-[#38BDF8]/8 border border-[#38BDF8]/20 rounded-xl p-3">
-          <p className="text-[10px] text-[#A09DB1] leading-relaxed">
-            <span className="font-bold text-[#38BDF8]">Notice:</span> The Bible text below is in
-            English ({translation.toUpperCase()}). The app interface is in your selected language,
-            but Indian-language Bible translations are not yet available. We are working on connecting
-            Hindi, Tamil, Telugu, and other translations.
-          </p>
-        </div>
-      )}
-
-      {/* BOOKS VIEW */}
-      {view === "books" && (
+      {/* ──────────────────────────────────────────────────────────────────
+          READ MODE — existing Bible experience unchanged
+          ────────────────────────────────────────────────────────────────── */}
+      {mode === "read" && (
         <>
-          <StreakBadge activity="bible_reading" />
-          <div className="h-4" />
-          <BooksView onSelectBook={handleSelectBook} />
+          {/* Translation picker (KJV/WEB) + language notice */}
+          <div className="flex gap-2 mb-4">
+            <div className="flex p-1 bg-white/[0.04] border border-white/[0.06] rounded-xl">
+              {TRANSLATIONS.map((tr) => (
+                <button
+                  key={tr.id}
+                  onClick={() => setTranslation(tr.id)}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                    translation === tr.id ? "bg-[#7C3AED] text-white" : "text-[#94A3B8] hover:text-white"
+                  }`}
+                >
+                  {tr.abbr}
+                </button>
+              ))}
+            </div>
+            {/* Language indicator — reflects the app-wide LanguageContext selection.
+                Uses the globe LanguageSwitcher in the header, not a separate dropdown here. */}
+            <div className="flex-1 flex items-center justify-between px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-xs">
+              <span className="flex items-center gap-1.5 text-white">
+                <span>{LANGUAGES.find((l) => l.code === lang)?.flag || "🌐"}</span>
+                <span className="font-bold">{LANGUAGES.find((l) => l.code === lang)?.nativeName || "English"}</span>
+              </span>
+              {!bibleTextSupported && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#F59E0B]/15 text-[#F59E0B] font-bold">
+                  EN text
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Scripture language notice — clearly tells the user that Bible TEXT
+              is only available in English (KJV/WEB), while UI is in their language. */}
+          {!bibleTextSupported && view === "reader" && (
+            <div className="mb-4 bg-[#38BDF8]/8 border border-[#38BDF8]/20 rounded-xl p-3">
+              <p className="text-[10px] text-[#A09DB1] leading-relaxed">
+                <span className="font-bold text-[#38BDF8]">Notice:</span> The Bible text below is in
+                English ({translation.toUpperCase()}). The app interface is in your selected language,
+                but Indian-language Bible translations are not yet available. We are working on connecting
+                Hindi, Tamil, Telugu, and other translations.
+              </p>
+            </div>
+          )}
+
+          {/* BOOKS VIEW */}
+          {view === "books" && (
+            <>
+              <StreakBadge activity="bible_reading" />
+              <div className="h-4" />
+              <BooksView onSelectBook={handleSelectBook} />
+            </>
+          )}
+
+          {/* CHAPTERS VIEW */}
+          {view === "chapters" && selectedBook && (
+            <ChaptersView
+              book={selectedBook}
+              onSelectChapter={handleSelectChapter}
+              onBack={() => setView("books")}
+            />
+          )}
+
+          {/* READER VIEW */}
+          {view === "reader" && selectedBook && selectedChapter !== null && (
+            <ReaderView
+              book={selectedBook}
+              chapter={selectedChapter}
+              verses={chapterVerses}
+              loading={chapterLoading}
+              error={chapterError}
+              translation={translation}
+              bookmarkedVerses={bookmarkedVerses}
+              scrollRef={scrollRef}
+              onPrev={handlePrevChapter}
+              onNext={handleNextChapter}
+              onBackToChapters={() => setView("chapters")}
+              onBookmark={(verse, text) => handleBookmarkToggle(selectedBook, selectedChapter, verse, text)}
+              onShare={(verse, text) => handleShareVerse(selectedBook, selectedChapter, verse, text)}
+            />
+          )}
+
+          {/* SEARCH VIEW */}
+          {view === "search" && (
+            <SearchView
+              query={searchQuery}
+              onQueryChange={setSearchQuery}
+              onSearch={handleSearch}
+              loading={searchLoading}
+              results={searchResults}
+              onSelectResult={(bookId, chapter) => {
+                const book = getBook(bookId);
+                if (book) {
+                  setSelectedBook(book);
+                  setSelectedChapter(chapter);
+                }
+              }}
+              translation={translation}
+              onQuickLookup={async (ref) => {
+                setSearchQuery(ref);
+                setSearchLoading(true);
+                try {
+                  const { fetchVerseByReference } = await import("@/lib/bible-data");
+                  const result = await fetchVerseByReference(ref, translation);
+                  setSearchResults(result ? [result] : []);
+                  if (!result) {
+                    toast("Verse not found", {
+                      description: `Couldn't find "${ref}" in ${translation.toUpperCase()}.`,
+                    });
+                  }
+                } catch {
+                  toast.error("Lookup failed");
+                } finally {
+                  setSearchLoading(false);
+                }
+              }}
+            />
+          )}
+
+          {/* BOOKMARKS VIEW */}
+          {view === "bookmarks" && (
+            <BookmarksView
+              bookmarks={bookmarks}
+              onSelect={(bookId, chapter) => {
+                const book = getBook(bookId);
+                if (book) {
+                  setSelectedBook(book);
+                  setSelectedChapter(chapter);
+                }
+              }}
+              onRemove={refreshBookmarks}
+            />
+          )}
         </>
       )}
 
-      {/* CHAPTERS VIEW */}
-      {view === "chapters" && selectedBook && (
-        <ChaptersView
-          book={selectedBook}
-          onSelectChapter={handleSelectChapter}
-          onBack={() => setView("books")}
-        />
+      {/* ──────────────────────────────────────────────────────────────────
+          COMICS MODE — chapter browser using existing /api/comic/list
+          ────────────────────────────────────────────────────────────────── */}
+      {mode === "comics" && (
+        <ComicsBrowserView onOpenComic={(bookId, chapter) => onOpenComic?.(bookId, chapter)} />
       )}
+    </div>
+  );
+}
 
-      {/* READER VIEW */}
-      {view === "reader" && selectedBook && selectedChapter !== null && (
-        <ReaderView
-          book={selectedBook}
-          chapter={selectedChapter}
-          verses={chapterVerses}
-          loading={chapterLoading}
-          error={chapterError}
-          translation={translation}
-          bookmarkedVerses={bookmarkedVerses}
-          scrollRef={scrollRef}
-          onPrev={handlePrevChapter}
-          onNext={handleNextChapter}
-          onBackToChapters={() => setView("chapters")}
-          onBookmark={(verse, text) => handleBookmarkToggle(selectedBook, selectedChapter, verse, text)}
-          onShare={(verse, text) => handleShareVerse(selectedBook, selectedChapter, verse, text)}
-        />
-      )}
+// ─── COMICS BROWSER VIEW ────────────────────────────────────────────────────
+// Lists all published comic chapters from /api/comic/list (sorted by
+// sortOrder + bookId + chapter) and lets the user open any chapter —
+// which hands control to the existing ComicView (via onOpenComic).
 
-      {/* SEARCH VIEW */}
-      {view === "search" && (
-        <SearchView
-          query={searchQuery}
-          onQueryChange={setSearchQuery}
-          onSearch={handleSearch}
-          loading={searchLoading}
-          results={searchResults}
-          onSelectResult={(bookId, chapter) => {
-            const book = getBook(bookId);
-            if (book) {
-              setSelectedBook(book);
-              setSelectedChapter(chapter);
-            }
-          }}
-          translation={translation}
-          onQuickLookup={async (ref) => {
-            setSearchQuery(ref);
-            setSearchLoading(true);
-            try {
-              const { fetchVerseByReference } = await import("@/lib/bible-data");
-              const result = await fetchVerseByReference(ref, translation);
-              setSearchResults(result ? [result] : []);
-              if (!result) {
-                toast("Verse not found", {
-                  description: `Couldn't find "${ref}" in ${translation.toUpperCase()}.`,
-                });
-              }
-            } catch {
-              toast.error("Lookup failed");
-            } finally {
-              setSearchLoading(false);
-            }
-          }}
-        />
-      )}
+function ComicsBrowserView({ onOpenComic }: { onOpenComic: (bookId: string, chapter: number) => void }) {
+  const [chapters, setChapters] = useState<ComicChapterSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-      {/* BOOKMARKS VIEW */}
-      {view === "bookmarks" && (
-        <BookmarksView
-          bookmarks={bookmarks}
-          onSelect={(bookId, chapter) => {
-            const book = getBook(bookId);
-            if (book) {
-              setSelectedBook(book);
-              setSelectedChapter(chapter);
-            }
-          }}
-          onRemove={refreshBookmarks}
-        />
-      )}
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch("/api/comic/list");
+        const text = await res.text();
+        if (!text) throw new Error("Empty response from server");
+        const data = JSON.parse(text);
+        if (!res.ok) throw new Error(data.error || "Failed to load comics");
+        // Defensive sort — preserve sortOrder ordering, then bookId, then chapter.
+        const list: ComicChapterSummary[] = (data.chapters || []).slice().sort((a: ComicChapterSummary, b: ComicChapterSummary) => {
+          if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+          if (a.bookId !== b.bookId) return a.bookId.localeCompare(b.bookId);
+          return a.chapter - b.chapter;
+        });
+        if (!cancelled) setChapters(list);
+      } catch (e: any) {
+        if (!cancelled) setError(e.message || "Failed to load comics");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <ComicLoader size={28} className="text-[#F39B9B] animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-16">
+        <ComicAlert size={28} className="mx-auto text-[#EF4444] mb-3" />
+        <p className="text-sm text-[#94A3B8]">{error}</p>
+      </div>
+    );
+  }
+
+  if (chapters.length === 0) {
+    return (
+      <div className="text-center py-16">
+        <Sparkles size={28} className="mx-auto text-[#475569] mb-3" />
+        <p className="text-sm text-[#94A3B8]">No comics published yet.</p>
+      </div>
+    );
+  }
+
+  const bookName = (bid: string) => bid.charAt(0).toUpperCase() + bid.slice(1);
+
+  return (
+    <div>
+      {/* Section label */}
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#F39B9B]">
+            BIBLE COMICS
+          </p>
+          <p className="text-[11px] text-[#64748B] mt-0.5">
+            Visual Bible storytelling — pick a chapter to begin
+          </p>
+        </div>
+      </div>
+
+      {/* Chapter grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {chapters.map((ch, idx) => {
+          const cover = ch.coverArtUrl;
+          return (
+            <button
+              key={ch.id}
+              onClick={() => onOpenComic(ch.bookId, ch.chapter)}
+              className="group bg-[#1C1929] border border-white/[0.06] hover:border-white/[0.15] hover:-translate-y-px rounded-2xl overflow-hidden transition-all text-left flex flex-col"
+            >
+              {/* Cover (uses ComicChapter.coverArtUrl when available) */}
+              <div className="relative w-full aspect-[16/9] bg-[#0f0f1a] overflow-hidden">
+                {cover ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={cover}
+                    alt={ch.title}
+                    className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <BookOpenIcon size={28} className="text-[#475569]" />
+                  </div>
+                )}
+
+                {/* Top gradient for legibility */}
+                <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/70 to-transparent pointer-events-none" />
+                {/* Bottom gradient for legibility */}
+                <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/80 to-transparent pointer-events-none" />
+
+                {/* Chapter number overlay (top-left) */}
+                <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-[#F39B9B] text-slate-950 text-[9px] font-black">
+                  {idx + 1}
+                </div>
+
+                {/* Chapter title + reference overlay (bottom-left) */}
+                <div className="absolute bottom-2 left-2 right-2">
+                  <p className="text-xs font-extrabold text-white drop-shadow leading-tight line-clamp-2">
+                    {ch.title}
+                  </p>
+                  <p className="text-[9px] text-white/80 mt-0.5 font-bold">
+                    {bookName(ch.bookId)} {ch.chapter}
+                  </p>
+                </div>
+              </div>
+
+              {/* CTA bar */}
+              <div className="flex items-center justify-between px-3 py-2 border-t border-white/[0.04]">
+                <span className="text-[10px] text-[#94A3B8] font-bold uppercase tracking-wider">
+                  Continue Reading
+                </span>
+                <ArrowRight
+                  size={14}
+                  className="text-[#94A3B8] group-hover:text-white group-hover:translate-x-0.5 transition-all"
+                />
+              </div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

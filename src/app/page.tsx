@@ -56,10 +56,10 @@ type View =
   | "admin";
 
 // Bible is the main feature — placed at the top of the sidebar.
+// Bible Comics is NOT a separate sidebar entry — it is a mode inside Bible.
 const SIDEBAR_LINKS: { id: View; icon: typeof Search; label: string }[] = [
   { id: "bible", icon: BookOpen, label: "Bible" },
   { id: "bible-plans", icon: BookMarked, label: "Reading Plans" },
-  { id: "comic", icon: BookOpen, label: "Bible Comics" },
   { id: "churches", icon: Search, label: "Churches" },
   { id: "events", icon: Calendar, label: "Events" },
   { id: "small-groups", icon: UsersRound, label: "Small Groups" },
@@ -82,8 +82,8 @@ const MOBILE_NAV: { id: View; icon: typeof Search; label: string }[] = [
 ];
 
 // Views that are NOT in the quick-access bottom nav (shown in the "More" sheet).
+// Note: Bible Comics is accessible from inside the Bible view (READ / COMICS mode switcher).
 const MOBILE_MORE_VIEWS: { id: View; icon: typeof Search; label: string }[] = [
-  { id: "comic", icon: BookOpen, label: "Bible Comics" },
   { id: "bible-plans", icon: BookMarked, label: "Reading Plans" },
   { id: "events", icon: Calendar, label: "Events" },
   { id: "apologetics", icon: ListChecks, label: "Apologetics" },
@@ -248,7 +248,18 @@ export default function Home() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.18 }}
             >
-              {view === "bible" && <BibleView />}
+              {view === "bible" && (
+                <BibleView
+                  onOpenComic={(bookId, chapter) => {
+                    // Switch from Bible hub → full ComicView for the chosen chapter.
+                    // Preserves the existing comicBookId/comicChapter state so
+                    // chapter navigation inside ComicView continues to work.
+                    setComicBookId(bookId);
+                    setComicChapter(chapter);
+                    goView("comic");
+                  }}
+                />
+              )}
               {view === "bible-plans" && (
                 <BiblePlansView
                   translation="kjv"
