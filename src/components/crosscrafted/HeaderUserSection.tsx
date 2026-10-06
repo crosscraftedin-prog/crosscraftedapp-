@@ -31,8 +31,13 @@ export default function HeaderUserSection({ mobile = false }: { mobile?: boolean
       if (user) {
         // Fetch Faith Points from the API
         fetch("/api/trivia/stats")
-          .then((r) => r.json())
-          .then((data) => setPoints(data.totalPoints || 0))
+          .then((r) => r.text())
+          .then((text) => {
+            if (text) {
+              const data = JSON.parse(text);
+              setPoints(data.totalPoints || 0);
+            }
+          })
           .catch(() => setPoints(0));
       }
     });
@@ -42,8 +47,13 @@ export default function HeaderUserSection({ mobile = false }: { mobile?: boolean
       setUser(session?.user ?? null);
       if (session?.user) {
         fetch("/api/trivia/stats")
-          .then((r) => r.json())
-          .then((data) => setPoints(data.totalPoints || 0))
+          .then((r) => r.text())
+          .then((text) => {
+            if (text) {
+              const data = JSON.parse(text);
+              setPoints(data.totalPoints || 0);
+            }
+          })
           .catch(() => setPoints(0));
       } else {
         setPoints(0);

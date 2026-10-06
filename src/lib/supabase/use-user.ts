@@ -31,9 +31,12 @@ export function useSupabaseUser() {
         try {
           const res = await fetch("/api/auth/me", { cache: "no-store" });
           if (res.ok) {
-            const data = await res.json();
-            setRole(data.role || "user");
-            setPoints(data.totalPoints || 0);
+            const text = await res.text();
+            if (text) {
+              const data = JSON.parse(text);
+              setRole(data.role || "user");
+              setPoints(data.totalPoints || 0);
+            }
           }
         } catch {
           // ignore — role defaults to "user"

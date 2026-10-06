@@ -87,8 +87,12 @@ export default function ComicView({ bookId, chapter, onNavigateChapter, onReadCh
     setError(null);
     try {
       const res = await fetch(`/api/comic/${bookId}/${chapter}?lang=${lang}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const text = await res.text();
+      if (!text) {
+        throw new Error("Empty response from server");
+      }
+      const data = JSON.parse(text);
+      if (!res.ok) throw new Error(data.error || "Failed to load comic");
       setChapterData(data.chapter);
     } catch (e: any) {
       setError(e.message || "Failed to load comic");
