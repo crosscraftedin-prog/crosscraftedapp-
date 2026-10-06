@@ -294,3 +294,47 @@ Stage Summary:
 - FIX: Changed to onEnterApp('comic'). Now Enter App → Bible Comics → Genesis 1.
 - FILES CHANGED: src/components/crosscrafted/LandingHero.tsx (1 line).
 - NO CHANGES TO: Bible reader, Trivia, Faith Points, sidebar nav, mobile bottom nav, ComicView, CMS, Genesis content, auth, admin.
+
+---
+Task ID: bible-hub-read-comics-mode
+Agent: main
+Task: Redesign Bible section into a hub with two modes (READ / COMICS) — remove separate "Bible Comics" sidebar entry, add mode switcher inside Bible view.
+
+Work Log:
+- Read existing BibleView.tsx (842 lines) to understand structure: header + translation picker + conditional views (books/chapters/reader/search/bookmarks).
+- Read page.tsx to find the sidebar entries: SIDEBAR_LINKS had "Bible Comics" at line 62, MOBILE_MORE_VIEWS had it at line 86.
+- Removed "Bible Comics" entry from BOTH SIDEBAR_LINKS and MOBILE_MORE_VIEWS. Sidebar now has ONE "Bible" entry.
+- Added new optional prop to BibleView: onOpenComic?(bookId, chapter).
+- Added new state: mode: "read" | "comics" (default: "read").
+- Added MODE SWITCHER directly under the Bible heading:
+    [ 📖 READ ]   [ ✨ COMICS ]
+  Active state uses Believ's purple/pink gradient (from-[#7C3AED] to-[#F39B9B]).
+- READ mode shows the existing Bible experience unchanged (KJV/WEB picker, language indicator, scripture notice, books/chapters/reader/search/bookmarks).
+- Search/Bookmark header buttons only render in READ mode (don't apply to COMICS mode).
+- COMICS mode renders a new ComicsBrowserView component:
+  * Fetches /api/comic/list (existing public API).
+  * Defensive sort: sortOrder → bookId → chapter (Genesis 1 before Genesis 2, 3, 4 — no hardcoding).
+  * Renders chapter cards in responsive grid: 1 column mobile, 2 columns sm+.
+  * Each card shows: coverArtUrl image (when available), chapter number overlay (top-left), chapter title + "Genesis N" reference overlay (bottom-left), "Continue Reading" CTA bar.
+  * Clicking a card calls onOpenComic(bookId, chapter) → existing ComicView opens.
+- Updated page.tsx to pass onOpenComic to BibleView:
+    onOpenComic={(bookId, chapter) => {
+      setComicBookId(bookId);
+      setComicChapter(chapter);
+      goView("comic");
+    }}
+  This preserves the existing comicBookId/comicChapter state so chapter navigation inside ComicView continues to work.
+- Added pb-28 on mobile (md:pb-5 desktop) to BibleView container so fixed mobile bottom nav doesn't cover chapter cards.
+- Committed as 3a2b2f3 and pushed to main → Vercel deploy triggered.
+- Verified production APIs after deploy:
+  * Comic list API: HTTP 200, 4 chapters in correct order (genesis-1 sort=0 → genesis-2 sort=1 → genesis-3 sort=2 → genesis-4 sort=3). genesis-1 and genesis-2 both have cover=yes.
+  * Genesis 1 API: HTTP 200 ✅
+  * Genesis 2 API: HTTP 200 ✅
+  * Genesis 3 API: HTTP 200 ✅
+  * Genesis 4 API: HTTP 200 ✅
+  * Homepage: HTTP 200 ✅
+
+Stage Summary:
+- FILES CHANGED: src/app/page.tsx (removed 2 sidebar entries + added onOpenComic prop), src/components/crosscrafted/BibleView.tsx (added mode state + switcher + ComicsBrowserView component, +357/-146 lines).
+- NO CHANGES TO: ComicView.tsx (reused as-is), comic APIs, comic DB schema, comic CMS, comic artwork (Genesis 1/2/3/4 panels unchanged), coverArtUrl field semantics (still stored on ComicChapter + returned by /api/comic/list + now also displayed in ComicsBrowserView + still displayed in admin chapter list), Bible reader functionality, Trivia, Faith Points, auth, admin, LandingHero Enter App button.
+- BROWSER TESTS REQUIRED (admin-only, user must verify): open Bible → switch to COMICS → see chapter cards → click Genesis 1 → ComicView opens with all 6 panels → back to Bible → still in COMICS mode → switch to READ → existing Bible reader works.
