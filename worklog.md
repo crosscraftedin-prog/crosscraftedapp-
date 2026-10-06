@@ -467,3 +467,51 @@ Stage Summary:
 - NO PAYMENT GATEWAY: Believ does NOT process payments. ticketUrl opens external site in new tab. Helper text explicitly tells users "Believ does not process payments."
 - NO CHANGES TO: Bible/Bible Comics/Reading Plans/Trivia/Marketplace/Churches/Prayer Wall/Apologetics/Admin/Auth, comic content (Genesis 1/2/3/4 unchanged), mobile bottom nav, routing architecture, existing notification system (admin notification audience picker is a future task).
 - BROWSER TESTS REQUIRED (admin-only, user must verify): open Events → tap Near You → see "Select your location" banner → open filters → pick State (e.g. Telangana) → City dropdown becomes enabled with Telangana cities → pick Hyderabad → tap Online quick filter → see only online+hybrid events → tap an event → see event-type-aware "Where" section → if ticketUrl exists, see "Get Tickets" button + helper text → tap WhatsApp button → confirm prefilled message → confirm external links open in new tab.
+
+---
+Task ID: store-marketplace-business-directory-redesign
+Agent: main
+Task: Store + Marketplace + Christian Business Directory redesign — 1:1 product images, seller type distinction, state/city filters, external Buy Link, business categories.
+
+Work Log:
+- Inspected current state: ShopView.tsx (914 lines, uses PRODUCTS mock array of 6 products), Product type had vendor/city/whatsapp_number but no sellerType/state/buyUrl. Cards used h-32 landscape + object-cover (T-shirts got cropped). No image fallback. Modal CTA was always "Add to Cart" (no buyUrl logic). WhatsApp message said "CrossCrafted" not "Believ". ListYourEntity (business variant) had no category dropdown.
+- Extended Product type with: sellerType ("believ" | "marketplace"), state, buyUrl (external checkout), subcategory, status, featured.
+- Updated all 6 existing PRODUCTS (pr1-pr6) to use new schema — preserved all existing data, only added new fields. Added 2 NEW official Believ Store products (pr7 Believ Signature T-Shirt, pr8 Believ Hoodie) with sellerType: "believ", variations, attributes, buyUrl.
+- Added MARKETPLACE_CATEGORIES single source of truth (16 categories): Bibles, Books, Christian Clothing, T-Shirts, Hoodies, Accessories, Phone Covers, Christian Art, Wall Art, Gifts, Home & Living, Music, Kids, Stationery, Apparel, Other.
+- Added BUSINESS_CATEGORIES single source of truth (19 categories): Christian Clothing, Christian Books & Bibles, Christian Wedding Services, Christian Caterers, Christian Event Planners, Christian Photographers, Christian Home Bakers, Christian Gifts, Christian Music, Christian Media, Christian Designers, Christian Education, Christian Schools, Christian Travel, Christian Counseling, Christian Printing, Christian Technology, Christian Services, Other.
+- Added Business type for future Business Directory (currently ListYourEntity handles it — Business type maps 1:1 to a future Prisma model).
+- Updated ShopView.tsx:
+  * Added seller-type filter row: [All] [Believ Store] [Marketplace] with purple→blue gradient
+  * Added State + City filter row (state-dependent, same as Events)
+  * Search now searches name + description + vendor + category + subcategory + state + city
+  * Product card image: 1:1 (aspect-square) + object-contain (was h-32 landscape + object-cover — fixed T-shirt cropping)
+  * Image fallback: labeled Believ placeholder with ImageOff icon when image fails to load OR no image (was showing broken-image icon or empty gradient)
+  * Seller type badge on each card: purple "✓ Believ" for Believ Store, blue "Marketplace" for third-party
+  * Modal main image: 1:1 (aspect-square) + object-contain
+  * Modal thumbnails: object-contain + dark bg
+  * Modal "Vendor" section → "Seller" with sellerType badge + state
+  * Modal CTA: if buyUrl → "Buy Now" (external link, new tab); else fallback to "Add to Cart"
+  * Helper text under Buy Now for marketplace products: "Payment, shipping, and refunds are handled by the seller. Believ does not process payments."
+  * WhatsApp prefilled message: "Hi, I found your product 'X' on Believ..." (was "CrossCrafted")
+  * List Item form: added External Buy Link field with helper text
+  * List Item form: City field is now state-dependent dropdown (was free text)
+  * CATEGORIES constant derives from MARKETPLACE_CATEGORIES (single source of truth)
+  * Added pb-28 md:pb-5 so mobile bottom nav doesn't cover content
+- Updated ListYourEntity.tsx:
+  * Added BUSINESS_CATEGORIES import
+  * Added businessCategory field to formData state
+  * Added Business Category dropdown (required) to business variant form
+  * Updated WhatsApp helper text for businesses
+- Committed as 2f1855e and pushed to main → Vercel deploy triggered.
+- Verified production after deploy:
+  * Homepage: HTTP 200 ✅
+  * Genesis 1/2/3/4 comic APIs: all HTTP 200 ✅ (no regression to Bible Comics)
+  * /api/auth/me: HTTP 401 for unauthenticated (auth intact) ✅
+
+Stage Summary:
+- FILES CHANGED: src/lib/crosscrafted-data.ts (Product type extended + 8 PRODUCTS + Business type + MARKETPLACE_CATEGORIES + BUSINESS_CATEGORIES), src/components/crosscrafted/ShopView.tsx (1:1 images + seller-type filter + state/city filter + image fallback + Buy Now + helper text + List Item form Buy Link field + mobile padding, +468/-76 lines), src/components/crosscrafted/ListYourEntity.tsx (business category dropdown + formData + import).
+- NO DATABASE MIGRATIONS: Prisma schema unchanged. No Product/Business model added. Products are mock data (same as before). When real Prisma models are added later, the new Product/Business fields map 1:1 to them.
+- NO PAYMENT GATEWAY: Believ does NOT process payments for third-party Marketplace sellers. buyUrl opens external site in new tab. Helper text explicitly tells users "Believ does not process payments." No Stripe/Razorpay/PayPal/internal checkout.
+- EXISTING PRODUCTS PRESERVED: All 6 existing PRODUCTS (pr1-pr6) kept their data — only added new fields. No products deleted. Old products without variations/attributes still work (fields are optional).
+- NO CHANGES TO: Bible/Bible Comics/Reading Plans/Trivia/Churches/Prayer Wall/Apologetics/Events/Admin/Auth, comic content (Genesis 1/2/3/4 unchanged), mobile bottom nav, routing architecture, existing notification system.
+- BROWSER TESTS REQUIRED (admin-only, user must verify): open Marketplace → see 1:1 product cards with seller-type badges → tap Believ Store filter → see only pr7 + pr8 → tap Marketplace filter → see pr1-pr6 → tap a T-shirt product (pr4) → see full T-shirt visible (no cropping) → tap Buy Now → opens external link in new tab → see helper text "Believ does not process payments" → on mobile, scroll to bottom → confirm fixed bottom nav doesn't cover last product card → open List Your Business → see Business Category dropdown with 19 categories.
