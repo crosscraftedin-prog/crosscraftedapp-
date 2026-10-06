@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSupabaseUser } from "@/lib/supabase/use-user";
+import { useTranslation } from "@/lib/i18n/LanguageContext";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Award,
@@ -88,6 +89,7 @@ type SubmitResult = {
 
 export default function TriviaView() {
   const { user, isAuthenticated, points: userPoints } = useSupabaseUser();
+  const t = useTranslation();
   const api = useTriviaApi();
 
   const [selectedLevel, setSelectedLevel] = useState<(typeof QUIZ_LEVELS)[number] | null>(null);
@@ -320,17 +322,17 @@ export default function TriviaView() {
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <div>
-          <h1 className="text-xl font-bold text-white">Bible Trivia</h1>
+          <h1 className="text-xl font-bold text-white">{t("triviaView.title")}</h1>
           <p className="text-xs text-[#94A3B8] mt-0.5">
             {isAuthenticated
-              ? `Verified: ${userPoints || 0} FP`
-              : "Sign in to earn Faith Points"}
+              ? t("triviaView.verified", { points: userPoints || 0 })
+              : t("triviaView.signInPrompt")}
           </p>
         </div>
         {isAuthenticated && (
           <div className="flex items-center gap-1 px-3 py-2 rounded-xl bg-[#F59E0B]/10 border border-[#F59E0B]/25">
             <Trophy size={14} className="text-[#F59E0B]" />
-            <span className="text-xs font-bold text-[#F59E0B]">{userPoints || 0} FP</span>
+            <span className="text-xs font-bold text-[#F59E0B]">{t("common.faithPoints", { count: (userPoints || 0).toLocaleString() })}</span>
           </div>
         )}
       </div>
@@ -340,7 +342,7 @@ export default function TriviaView() {
         <div className="bg-[#38BDF8]/8 border border-[#38BDF8]/20 rounded-xl p-3 mb-4 flex items-center gap-3">
           <LogIn size={18} className="text-[#38BDF8] shrink-0" />
           <div className="flex-1">
-            <p className="text-xs font-bold text-white">Sign in to earn Faith Points</p>
+            <p className="text-xs font-bold text-white">{t("triviaView.signInPrompt")}</p>
             <p className="text-[10px] text-[#A09DB1]">Practice Mode is available without signing in.</p>
           </div>
           <a
@@ -355,22 +357,22 @@ export default function TriviaView() {
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-white/[0.04] border border-white/[0.06] rounded-2xl mb-5 overflow-x-auto">
         {([
-          { id: "play", label: "Play" },
-          { id: "compete", label: "Compete" },
-          { id: "rewards", label: "Rewards" },
-          { id: "leaderboard", label: "Leaders" },
-          { id: "stats", label: "My Stats" },
-        ] as const).map((t) => (
+          { id: "play", label: t("triviaView.tab.play") },
+          { id: "compete", label: t("triviaView.tab.compete") },
+          { id: "rewards", label: t("triviaView.tab.rewards") },
+          { id: "leaderboard", label: t("triviaView.tab.leaderboard") },
+          { id: "stats", label: t("triviaView.tab.stats") },
+        ] as const).map((tab) => (
           <button
-            key={t.id}
-            onClick={() => setActiveTab(t.id)}
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
             className={`flex-1 min-w-fit px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-              activeTab === t.id
+              activeTab === tab.id
                 ? "bg-[#7C3AED] text-white shadow-lg shadow-[#7C3AED]/25"
                 : "text-[#94A3B8] hover:text-white"
             }`}
           >
-            {t.label}
+            {tab.label}
           </button>
         ))}
       </div>
@@ -797,7 +799,7 @@ export default function TriviaView() {
                     onClick={resetGame}
                     className="flex-1 py-3 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2"
                   >
-                    <RotateCcw size={14} /> Play Again
+                    <RotateCcw size={14} /> {t("triviaView.results.playAgain")}
                   </button>
                 </div>
 
@@ -1020,6 +1022,7 @@ function StatsTab({ isAuthenticated }: { isAuthenticated: boolean }) {
 // ─── REWARDS TAB ──────────────────────────────────────────────────────────────
 
 function RewardsTab({ isAuthenticated, userPoints }: { isAuthenticated: boolean; userPoints: number }) {
+  const t = useTranslation();
   const [gifts, setGifts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState<string | null>(null);
@@ -1118,13 +1121,13 @@ function RewardsTab({ isAuthenticated, userPoints }: { isAuthenticated: boolean;
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Gift size={16} className="text-[#F59E0B]" />
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B]">Real Gifts</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B]">{t('rewards.header')}</p>
             </div>
             <p className="text-2xl font-extrabold text-white">
               {isAuthenticated ? userPoints.toLocaleString() : "—"} FP
             </p>
             <p className="text-[11px] text-[#94A3B8] mt-0.5">
-              {isAuthenticated ? "Available to redeem" : "Sign in to view your points"}
+              {isAuthenticated ? t('rewards.available') : t('rewards.signInPrompt')}
             </p>
           </div>
         </div>
@@ -1139,7 +1142,7 @@ function RewardsTab({ isAuthenticated, userPoints }: { isAuthenticated: boolean;
             href="/auth/signin"
             className="inline-block mt-2 px-4 py-2 rounded-lg bg-[#38BDF8] text-slate-950 text-xs font-bold"
           >
-            Sign In
+            {t('rewards.signInButton')}
           </a>
         </div>
       )}
@@ -1213,12 +1216,12 @@ function RewardsTab({ isAuthenticated, userPoints }: { isAuthenticated: boolean;
                         : "bg-white/[0.04] text-[#475569] cursor-not-allowed"
                     }`}
                   >
-                    {claiming === gift.id ? "Claiming..." :
-                      isClaimed ? "✓ Claimed" :
-                      canClaim ? (hasVariations ? "Pick & Redeem" : "Redeem") :
-                      !isAuthenticated ? "Sign in" :
-                      gift.stock <= 0 ? "Out of stock" :
-                      `${gift.pointsRequired - userPoints} more FP`}
+                    {claiming === gift.id ? t('rewards.button.claiming') :
+                      isClaimed ? t('rewards.button.claimed') :
+                      canClaim ? (hasVariations ? t('rewards.button.pickAndRedeem') : t('rewards.button.redeem')) :
+                      !isAuthenticated ? t('rewards.button.signIn') :
+                      gift.stock <= 0 ? t('rewards.button.outOfStock') :
+                      t('rewards.button.moreFP', { points: gift.pointsRequired - userPoints })}
                   </button>
                 )}
               </div>
@@ -1307,7 +1310,7 @@ function RewardsTab({ isAuthenticated, userPoints }: { isAuthenticated: boolean;
                 {Array.isArray(pickerGift.attributes) && pickerGift.attributes.length > 0 && (
                   <div className="space-y-1.5">
                     <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">
-                      <Palette size={10} /> Specifications
+                      <Palette size={10} /> {t('rewards.specifications')}
                     </p>
                     <div className="grid grid-cols-2 gap-1.5">
                       {pickerGift.attributes.map((attr: any, aIdx: number) => (
@@ -1328,7 +1331,7 @@ function RewardsTab({ isAuthenticated, userPoints }: { isAuthenticated: boolean;
                 <div className="pt-1">
                   <div className="bg-[#F59E0B]/8 border border-[#F59E0B]/20 rounded-xl p-2.5 mb-2">
                     <p className="text-[9px] font-bold uppercase tracking-wider text-[#F59E0B] mb-0.5">
-                      Order Summary
+                      {t('rewards.orderSummary')}
                     </p>
                     <p className="text-[11px] text-white">
                       {pickerGift.title}
@@ -1342,7 +1345,7 @@ function RewardsTab({ isAuthenticated, userPoints }: { isAuthenticated: boolean;
                       )}
                     </p>
                     <p className="text-[10px] text-[#94A3B8] mt-0.5">
-                      {pickerGift.pointsRequired.toLocaleString()} FP will be deducted. Admin will contact you on WhatsApp.
+                      {t('rewards.orderSummary.disclaimer', { points: pickerGift.pointsRequired.toLocaleString() })}
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -1351,14 +1354,14 @@ function RewardsTab({ isAuthenticated, userPoints }: { isAuthenticated: boolean;
                       disabled={claiming === pickerGift.id}
                       className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-white/[0.04] text-[#94A3B8] hover:text-white border border-white/[0.06]"
                     >
-                      Cancel
+                      {t('rewards.cancel')}
                     </button>
                     <button
                       onClick={confirmPickerClaim}
                       disabled={claiming === pickerGift.id}
                       className="flex-1 py-2.5 rounded-xl text-sm font-bold text-slate-950 bg-[#F59E0B] hover:bg-[#E59E0B] transition-all disabled:opacity-50"
                     >
-                      {claiming === pickerGift.id ? "Claiming..." : `Redeem for ${pickerGift.pointsRequired.toLocaleString()} FP`}
+                      {claiming === pickerGift.id ? t('rewards.button.claiming') : t('rewards.redeemButton', { points: pickerGift.pointsRequired.toLocaleString() })}
                     </button>
                   </div>
                 </div>

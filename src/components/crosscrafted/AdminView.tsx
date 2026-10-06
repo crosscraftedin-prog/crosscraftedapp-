@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSupabaseUser } from "@/lib/supabase/use-user";
+import { useTranslation } from "@/lib/i18n/LanguageContext";
 import {
   Shield,
   LayoutDashboard,
@@ -62,21 +63,22 @@ type AdminTab =
   | "redemptions"
   | "analytics";
 
-const TABS: { id: AdminTab; icon: typeof Shield; label: string }[] = [
-  { id: "dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { id: "churches", icon: Building2, label: "Churches" },
-  { id: "events", icon: Calendar, label: "Events" },
-  { id: "marketplace", icon: Store, label: "Marketplace" },
-  { id: "prayers", icon: HeartHandshake, label: "Prayers" },
-  { id: "apologetics", icon: HelpCircle, label: "Apologetics" },
-  { id: "competitions", icon: Trophy, label: "Competitions" },
-  { id: "announcements", icon: Megaphone, label: "Announcements" },
-  { id: "redemptions", icon: Package, label: "Redemptions" },
-  { id: "analytics", icon: BarChart3, label: "Analytics" },
+const TABS: { id: AdminTab; icon: typeof Shield; labelKey: string }[] = [
+  { id: "dashboard",    icon: LayoutDashboard, labelKey: "admin.tab.dashboard" },
+  { id: "churches",     icon: Building2,        labelKey: "admin.tab.churches" },
+  { id: "events",       icon: Calendar,         labelKey: "admin.tab.events" },
+  { id: "marketplace",  icon: Store,             labelKey: "admin.tab.marketplace" },
+  { id: "prayers",      icon: HeartHandshake,   labelKey: "admin.tab.prayers" },
+  { id: "apologetics",  icon: HelpCircle,       labelKey: "admin.tab.apologetics" },
+  { id: "competitions", icon: Trophy,            labelKey: "admin.tab.competitions" },
+  { id: "announcements",icon: Megaphone,         labelKey: "admin.tab.announcements" },
+  { id: "redemptions",  icon: Package,           labelKey: "admin.tab.redemptions" },
+  { id: "analytics",    icon: BarChart3,         labelKey: "admin.tab.analytics" },
 ];
 
 export default function AdminView() {
   const { user, isAuthenticated, isAdmin, loading } = useSupabaseUser();
+  const t = useTranslation();
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
 
   // Loading state
@@ -101,7 +103,7 @@ export default function AdminView() {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#7C3AED]/15 border border-[#7C3AED]/30 mb-4">
               <Shield size={28} className="text-[#A78BFA]" />
             </div>
-            <h1 className="text-2xl font-extrabold text-white">Admin Access</h1>
+            <h1 className="text-2xl font-extrabold text-white">{t('admin.access.title')}</h1>
             <p className="text-sm text-[#A09DB1] mt-1">Sign in with an admin account</p>
           </div>
 
@@ -138,7 +140,7 @@ export default function AdminView() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#EF4444]/15 border border-[#EF4444]/30 mb-4">
             <Lock size={28} className="text-[#EF4444]" />
           </div>
-          <h1 className="text-2xl font-extrabold text-white mb-2">Access Denied</h1>
+          <h1 className="text-2xl font-extrabold text-white mb-2">{t('admin.accessDenied.title')}</h1>
           <p className="text-sm text-[#A09DB1] mb-4">
             You're signed in as <span className="font-bold text-white">{user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email}</span>,
             but your account doesn't have admin privileges.
@@ -162,26 +164,26 @@ export default function AdminView() {
             <Shield size={16} className="text-[#A78BFA]" />
           </div>
           <div>
-            <h1 className="text-lg font-extrabold text-white">Admin Panel</h1>
-            <p className="text-[10px] text-[#94A3B8]">Signed in as {user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email}</p>
+            <h1 className="text-lg font-extrabold text-white">{t('admin.title')}</h1>
+            <p className="text-[10px] text-[#94A3B8]">{t('admin.signedInAs', { name: user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email })}</p>
           </div>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-white/[0.04] border border-white/[0.06] rounded-2xl mb-5 overflow-x-auto">
-        {TABS.map((t) => (
+        {TABS.map((tab) => (
           <button
-            key={t.id}
-            onClick={() => setActiveTab(t.id)}
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-              activeTab === t.id
+              activeTab === tab.id
                 ? "bg-[#7C3AED] text-white shadow-lg shadow-[#7C3AED]/25"
                 : "text-[#94A3B8] hover:text-white"
             }`}
           >
-            <t.icon size={12} />
-            {t.label}
+            <tab.icon size={12} />
+            {t(tab.labelKey)}
           </button>
         ))}
       </div>
@@ -1618,6 +1620,7 @@ const REDEMPTION_STATUSES = [
 ] as const;
 
 function RedemptionsTab() {
+  const t = useTranslation();
   const [redemptions, setRedemptions] = useState<any[]>([]);
   const [counts, setCounts] = useState({ total: 0, pending: 0, contacted: 0, shipped: 0, delivered: 0 });
   const [loading, setLoading] = useState(true);
@@ -1690,7 +1693,7 @@ function RedemptionsTab() {
 
   return (
     <div className="space-y-3">
-      <AdminSectionHeader title="Gift Redemptions" count={counts.total} color="#F59E0B" />
+      <AdminSectionHeader title={t('admin.redemptions.title')} count={counts.total} color="#F59E0B" />
 
       {/* Stats grid */}
       <div className="grid grid-cols-5 gap-2">
@@ -1732,10 +1735,9 @@ function RedemptionsTab() {
       {redemptions.length === 0 ? (
         <div className="bg-[#1C1929] border border-dashed border-white/[0.12] rounded-2xl p-8 text-center">
           <Package size={28} className="mx-auto text-[#475569] mb-2" />
-          <p className="text-sm text-[#94A3B8]">No redemptions yet.</p>
+          <p className="text-sm text-[#94A3B8]">{t('admin.redemptions.empty')}</p>
           <p className="text-[10px] text-[#64748B] mt-1">
-            When players claim gifts from Trivia → Rewards, they&apos;ll appear here with the
-            size/color they picked.
+            {t('admin.redemptions.emptyDesc')}
           </p>
         </div>
       ) : (
@@ -1839,10 +1841,7 @@ function RedemptionsTab() {
       {/* Help footer */}
       <div className="bg-[#F59E0B]/8 border border-[#F59E0B]/20 rounded-xl p-3">
         <p className="text-[10px] text-[#A09DB1] leading-relaxed">
-          <span className="font-bold text-[#F59E0B]">Workflow:</span> When a player redeems a gift,
-          it appears here as <b>Pending</b>. Contact them via WhatsApp (use their email/username),
-          then mark as <b>Contacted</b> → <b>Shipped</b> → <b>Delivered</b>. The size/color they
-          selected is shown so you know what to ship.
+          {t('admin.redemptions.workflow')}
         </p>
       </div>
     </div>

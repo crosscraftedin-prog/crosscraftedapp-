@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useTranslation } from "@/lib/i18n/LanguageContext";
 import { LogIn, LogOut } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 
@@ -15,6 +16,7 @@ import type { User } from "@supabase/supabase-js";
  */
 export default function HeaderUserSection({ mobile = false }: { mobile?: boolean }) {
   const router = useRouter();
+  const t = useTranslation();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [points, setPoints] = useState<number>(0);
@@ -76,7 +78,7 @@ export default function HeaderUserSection({ mobile = false }: { mobile?: boolean
         }`}
       >
         <LogIn size={14} />
-        {!mobile && <span>Sign In</span>}
+        {!mobile && <span>{t("user.signIn")}</span>}
       </a>
     );
   }
@@ -94,13 +96,15 @@ export default function HeaderUserSection({ mobile = false }: { mobile?: boolean
           <span className="text-xs font-bold text-white truncate max-w-[80px]">
             {name}
           </span>
-          <span className="text-[9px] text-[#F59E0B] font-bold">{points.toLocaleString()} FP</span>
+          <span className="text-[9px] text-[#F59E0B] font-bold">
+            {t("common.faithPoints", { count: points.toLocaleString() })}
+          </span>
         </div>
       )}
       <button
         onClick={handleSignOut}
         className="p-1 rounded-lg hover:bg-white/5 transition-colors"
-        title="Sign out"
+        title={t("user.signOut")}
       >
         <LogOut size={12} className="text-[#64748B]" />
       </button>

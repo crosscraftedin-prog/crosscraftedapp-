@@ -26,6 +26,7 @@ import {
   type ProductVariation,
   type ProductAttribute,
 } from "@/lib/crosscrafted-data";
+import { useTranslation } from "@/lib/i18n/LanguageContext";
 import ImagePicker from "@/components/crosscrafted/ImagePicker";
 
 const CATEGORIES = ["All", "Bibles", "Books", "Music", "Apparel", "Gifts"];
@@ -50,6 +51,7 @@ const WhatsAppIcon = ({ size = 18 }: { size?: number }) => (
 );
 
 export default function ShopView() {
+  const t = useTranslation();
   const [products, setProducts] = useState<Product[]>(PRODUCTS);
   const [wishlist, setWishlist] = useState<Set<string>>(new Set());
   const [cart, setCart] = useState<Set<string>>(new Set());
@@ -173,8 +175,8 @@ export default function ShopView() {
     <div className="max-w-[680px] mx-auto px-4 py-5">
       <div className="flex justify-between items-center mb-4">
         <div>
-          <h1 className="text-xl font-bold text-white">Marketplace</h1>
-          <p className="text-xs text-[#94A3B8] mt-0.5">Bibles, books, music & more</p>
+          <h1 className="text-xl font-bold text-white">{t('marketplace.title')}</h1>
+          <p className="text-xs text-[#94A3B8] mt-0.5">{t('marketplace.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           {cart.size > 0 && (
@@ -191,7 +193,7 @@ export default function ShopView() {
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all hover:-translate-y-px"
             style={{ background: "linear-gradient(135deg, #9786E3, #38BDF8)" }}
           >
-            <Plus size={14} /> List Item
+            <Plus size={14} /> {t('marketplace.listItem')}
           </button>
         </div>
       </div>
@@ -199,7 +201,7 @@ export default function ShopView() {
       {/* Search */}
       <input
         type="text"
-        placeholder="Search products..."
+        placeholder={t('marketplace.search')}
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
         className="neo-input text-sm mb-3"
@@ -319,7 +321,7 @@ export default function ShopView() {
       {filtered.length === 0 && (
         <div className="text-center py-16">
           <Search size={40} className="mx-auto text-[#475569] mb-3" />
-          <p className="text-sm text-[#475569]">No products found.</p>
+          <p className="text-sm text-[#475569]">{t('marketplace.empty')}</p>
         </div>
       )}
 
@@ -534,7 +536,7 @@ export default function ShopView() {
                       rel="noopener noreferrer"
                       className="flex-1 py-3 rounded-xl text-sm font-bold text-white bg-[#25D366] hover:bg-[#1FB855] transition-all hover:-translate-y-px flex items-center justify-center gap-2"
                     >
-                      <WhatsAppIcon size={16} /> Contact Seller
+                      <WhatsAppIcon size={16} /> {t('marketplace.contactSeller')}
                     </a>
                   )}
                   <button
@@ -546,7 +548,7 @@ export default function ShopView() {
                     className="flex-1 py-3 rounded-xl text-sm font-bold text-white transition-all hover:-translate-y-px disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     style={{ background: "linear-gradient(135deg, #9786E3, #38BDF8)" }}
                   >
-                    <ShoppingCart size={16} /> Add to Cart
+                    <ShoppingCart size={16} /> {t('marketplace.addToCart')}
                   </button>
                 </div>
               </div>

@@ -8,12 +8,23 @@ import * as path from "path";
 
 const ROOT = "/home/z/my-project";
 const EN_PATH = path.join(ROOT, "src/lib/i18n/en.ts");
-const CHUNK_SIZE = 20; // smaller chunks for Odia retry
+const CHUNK_SIZE = 20; // strings per request — keeps output under token limit
 
 type Lang = { code: string; name: string };
 
 const TARGET_LANGUAGES: Lang[] = [
+  { code: "hi", name: "Hindi (Devanagari)" },
+  { code: "bn", name: "Bengali" },
+  { code: "te", name: "Telugu" },
+  { code: "mr", name: "Marathi" },
+  { code: "ta", name: "Tamil" },
+  { code: "gu", name: "Gujarati" },
+  { code: "ur", name: "Urdu (Nastaliq)" },
+  { code: "kn", name: "Kannada" },
   { code: "or", name: "Odia" },
+  { code: "ml", name: "Malayalam" },
+  { code: "pa", name: "Punjabi (Gurmukhi)" },
+  { code: "as", name: "Assamese" },
 ];
 
 async function loadEnglishStrings(): Promise<Record<string, string>> {
@@ -74,12 +85,21 @@ async function translateChunk(
 ): Promise<Record<string, string>> {
   const prompt = buildPrompt(strings, lang.name);
 
-  const completion = await zai.chat.completions.create({
-    messages: [
-      { role: "user", content: prompt }
-    ],
-    thinking: { type: "disabled" },
-  });
+  // Hard timeout — abort after 60s if API doesn't respond
+  const timeoutMs = 60000;
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`API timeout after ${timeoutMs}ms`)), timeoutMs)
+  );
+
+  const completion = await Promise.race([
+    zai.chat.completions.create({
+      messages: [
+        { role: "user", content: prompt }
+      ],
+      thinking: { type: "disabled" },
+    }),
+    timeoutPromise,
+  ]);
 
   const raw = completion.choices[0]?.message?.content?.trim() ?? "";
   const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
@@ -129,19 +149,29 @@ async function main() {
     let langFailed = false;
     for (let i = 0; i < chunks.length; i++) {
       process.stdout.write(`   chunk ${i + 1}/${chunks.length}... `);
-      try {
-        const chunk = await translateChunk(zai, chunks[i], lang, i + 1, chunks.length);
-        const keysTranslated = Object.keys(chunk).length;
-        process.stdout.write(`✅ ${keysTranslated} strings\n`);
-        Object.assign(merged, chunk);
-      } catch (e) {
-        process.stdout.write(`❌\n`);
-        console.error(`   ${(e as Error).message}`);
-        langFailed = true;
-        break;
+      // Retry each chunk up to 3 times
+      let chunk: Record<string, string> | null = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          chunk = await translateChunk(zai, chunks[i], lang, i + 1, chunks.length);
+          break;
+        } catch (e) {
+          if (attempt < 3) {
+            process.stdout.write(`(retry ${attempt}) `);
+            await new Promise((r) => setTimeout(r, 1500 * attempt));
+          } else {
+            process.stdout.write(`❌\n`);
+            console.error(`   ${(e as Error).message}`);
+            langFailed = true;
+          }
+        }
       }
-      // Small delay between requests
-      await new Promise((r) => setTimeout(r, 500));
+      if (!chunk) break;
+      const keysTranslated = Object.keys(chunk).length;
+      process.stdout.write(`✅ ${keysTranslated} strings\n`);
+      Object.assign(merged, chunk);
+      // Larger delay between requests to avoid rate limiting (429)
+      await new Promise((r) => setTimeout(r, 2000));
     }
 
     if (langFailed) {
