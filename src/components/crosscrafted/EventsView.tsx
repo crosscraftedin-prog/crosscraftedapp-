@@ -30,12 +30,16 @@ import { toast } from "sonner";
 import {
   EVENTS,
   EVENT_CATEGORIES,
+  EVENT_DATE_FILTERS,
   CHURCH_GRADIENTS,
   INDIAN_STATES,
+  INDIAN_CITIES_BY_STATE,
+  getCitiesForState,
   LANGUAGES,
   type EventItem,
 } from "@/lib/crosscrafted-data";
 import { useTranslation } from "@/lib/i18n/LanguageContext";
+import { MessageCircle, ExternalLink, Info } from "lucide-react";
 
 const CATEGORY_ICONS: Record<string, typeof Music> = {
   worship: Music,
@@ -78,26 +82,65 @@ export default function EventsView() {
   const [events] = useState<EventItem[]>(EVENTS);
   const [savedEvents, setSavedEvents] = useState<Set<string>>(new Set());
   const [filterState, setFilterState] = useState("");
+  const [filterCity, setFilterCity] = useState("");
   const [filterLanguage, setFilterLanguage] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [dateFilter, setDateFilter] = useState("all");
+  // Quick filter row: "near-you" | "all-india" | "online"
+  // - "near-you" applies the user's selected state+city (if any)
+  // - "all-india" clears all location filters
+  // - "online" filters to events where eventType is "online" or "hybrid"
+  const [quickFilter, setQuickFilter] = useState<"near-you" | "all-india" | "online">("all-india");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [openEvent, setOpenEvent] = useState<EventItem | null>(null);
 
   const filtered = useMemo(() => {
     return events.filter((e) => {
+      // Quick filter row
+      if (quickFilter === "online") {
+        // Online quick filter — only online + hybrid events
+        if (e.eventType !== "online" && e.eventType !== "hybrid") return false;
+      }
+      // "near-you" applies the user's selected state+city (if any).
+      // We don't silently assume a location — if no state is set, "near-you"
+      // falls through to showing all events (with a banner prompting the user
+      // to select their location).
+      if (quickFilter === "near-you" && filterState) {
+        if (e.state !== filterState) return false;
+        if (filterCity && e.city !== filterCity) return false;
+      }
+
+      // Manual filter row (works in combination with quick filter)
       if (filterState && e.state !== filterState) return false;
+      if (filterCity && e.city !== filterCity) return false;
       if (filterLanguage && !e.languages.includes(filterLanguage)) return false;
       if (filterCategory && e.category !== filterCategory) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        if (!e.title.toLowerCase().includes(q) && !e.city.toLowerCase().includes(q)) return false;
+        const haystack = `${e.title} ${e.description} ${e.city} ${e.state} ${e.church} ${e.category}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
       }
       const now = new Date();
       const ed = new Date(e.date);
       if (dateFilter === "today" && ed.toDateString() !== now.toDateString()) return false;
+      if (dateFilter === "tomorrow") {
+        const tomorrow = new Date(now);
+        tomorrow.setDate(now.getDate() + 1);
+        if (ed.toDateString() !== tomorrow.toDateString()) return false;
+      }
+      if (dateFilter === "weekend") {
+        // Find upcoming Saturday (or today if today is Sat/Sun)
+        const day = now.getDay(); // 0=Sun, 6=Sat
+        const sat = new Date(now);
+        sat.setDate(now.getDate() + ((6 - day + 7) % 7));
+        const sun = new Date(sat);
+        sun.setDate(sat.getDate() + 1);
+        const eventDay = ed.toDateString();
+        if (eventDay !== sat.toDateString() && eventDay !== sun.toDateString()) return false;
+        if (ed < now) return false;
+      }
       if (dateFilter === "week") {
         const weekEnd = new Date(now);
         weekEnd.setDate(now.getDate() + 7);
@@ -110,9 +153,18 @@ export default function EventsView() {
       }
       return true;
     });
-  }, [events, filterState, filterLanguage, filterCategory, searchQuery, dateFilter]);
+  }, [events, filterState, filterCity, filterLanguage, filterCategory, searchQuery, dateFilter, quickFilter]);
 
-  const activeFilters = [filterState, filterLanguage, filterCategory, searchQuery].filter(Boolean).length;
+  // Split into Featured + Upcoming for the default landing experience.
+  // Featured = explicitly marked featured. Upcoming = everything else that
+  // hasn't ended. Cancelled events show with a CANCELLED badge.
+  const featured = useMemo(() => filtered.filter((e) => e.featured), [filtered]);
+  const upcoming = useMemo(
+    () => filtered.filter((e) => !e.featured).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    [filtered]
+  );
+
+  const activeFilters = [filterState, filterCity, filterLanguage, filterCategory, searchQuery, dateFilter !== "all" ? dateFilter : ""].filter(Boolean).length;
 
   const toggleSave = (id: string) => {
     setSavedEvents((prev) => {
@@ -142,7 +194,7 @@ export default function EventsView() {
   };
 
   return (
-    <div className="max-w-[680px] mx-auto px-4 py-5">
+    <div className="max-w-[680px] mx-auto px-4 py-5 pb-28 md:pb-5">
       <div className="flex justify-between items-center mb-4">
         <div>
           <h1 className="text-xl font-bold text-white">{t("events.title")}</h1>
@@ -169,19 +221,64 @@ export default function EventsView() {
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all hover:-translate-y-px"
             style={{ background: "linear-gradient(135deg, #EC4899, #F59E0B)" }}
           >
-            <Plus size={14} /> Add Event
+            <Plus size={14} /> List Your Event
           </button>
         </div>
       </div>
 
+      {/* ─── QUICK FILTER ROW: Near You / All India / Online ─── */}
+      <div className="mb-3">
+        <div className="flex p-1 bg-white/[0.04] border border-white/[0.06] rounded-2xl">
+          <button
+            onClick={() => setQuickFilter("near-you")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-bold transition-all ${
+              quickFilter === "near-you"
+                ? "bg-gradient-to-r from-[#EC4899] to-[#F59E0B] text-white shadow-lg shadow-[#EC4899]/20"
+                : "text-[#94A3B8] hover:text-white"
+            }`}
+          >
+            <MapPin size={12} /> Near You
+          </button>
+          <button
+            onClick={() => {
+              setQuickFilter("all-india");
+              // Don't clear state/city — let user keep them as manual filters
+            }}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-bold transition-all ${
+              quickFilter === "all-india"
+                ? "bg-gradient-to-r from-[#EC4899] to-[#F59E0B] text-white shadow-lg shadow-[#EC4899]/20"
+                : "text-[#94A3B8] hover:text-white"
+            }`}
+          >
+            <Globe size={12} /> All India
+          </button>
+          <button
+            onClick={() => setQuickFilter("online")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-bold transition-all ${
+              quickFilter === "online"
+                ? "bg-gradient-to-r from-[#EC4899] to-[#F59E0B] text-white shadow-lg shadow-[#EC4899]/20"
+                : "text-[#94A3B8] hover:text-white"
+            }`}
+          >
+            <Video size={12} /> Online
+          </button>
+        </div>
+      </div>
+
+      {/* Near You banner — prompt user to select location if they tapped Near You without a state set */}
+      {quickFilter === "near-you" && !filterState && (
+        <div className="mb-3 bg-[#38BDF8]/8 border border-[#38BDF8]/20 rounded-xl p-3 flex items-start gap-2">
+          <Info size={14} className="text-[#38BDF8] mt-0.5 shrink-0" />
+          <p className="text-[11px] text-[#A09DB1] leading-relaxed">
+            <span className="font-bold text-[#38BDF8]">Select your location.</span>{" "}
+            We don't use precise GPS — pick your State (and optionally City) below to see events near you.
+          </p>
+        </div>
+      )}
+
       {/* Date Filter Pills */}
       <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 mb-3">
-        {([
-          { v: "all", l: "All Events" },
-          { v: "today", l: "Today" },
-          { v: "week", l: "This Week" },
-          { v: "month", l: "This Month" },
-        ] as const).map((d) => (
+        {EVENT_DATE_FILTERS.map((d) => (
           <button
             key={d.v}
             onClick={() => setDateFilter(d.v)}
@@ -205,7 +302,7 @@ export default function EventsView() {
             exit={{ opacity: 0, height: 0 }}
             className="mb-4 bg-white/[0.04] border border-white/[0.06] rounded-2xl p-4 overflow-hidden"
           >
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1">
                   <Search size={10} className="inline mr-0.5" /> Search
@@ -214,7 +311,7 @@ export default function EventsView() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Title, city..."
+                  placeholder="Title, city, host..."
                   className="neo-input text-sm"
                 />
               </div>
@@ -222,10 +319,34 @@ export default function EventsView() {
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1">
                   <MapPin size={10} className="inline mr-0.5" /> State
                 </label>
-                <select value={filterState} onChange={(e) => setFilterState(e.target.value)} className="neo-input text-sm">
+                <select
+                  value={filterState}
+                  onChange={(e) => {
+                    setFilterState(e.target.value);
+                    // Reset city when state changes — city list is state-dependent
+                    setFilterCity("");
+                  }}
+                  className="neo-input text-sm"
+                >
                   <option value="">All States</option>
                   {INDIAN_STATES.map((s) => (
                     <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1">
+                  <MapPin size={10} className="inline mr-0.5" /> City
+                </label>
+                <select
+                  value={filterCity}
+                  onChange={(e) => setFilterCity(e.target.value)}
+                  disabled={!filterState}
+                  className="neo-input text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="">{filterState ? "All Cities" : "Select state first"}</option>
+                  {filterState && getCitiesForState(filterState).map((c) => (
+                    <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
               </div>
@@ -270,6 +391,7 @@ export default function EventsView() {
               <button
                 onClick={() => {
                   setFilterState("");
+                  setFilterCity("");
                   setFilterLanguage("");
                   setFilterCategory("");
                   setSearchQuery("");
@@ -321,18 +443,41 @@ export default function EventsView() {
                       <Icon size={9} className="inline mr-0.5" />
                       {cat.label}
                     </span>
-                    {event.is_online && (
-                      <span className="px-2 py-0.5 rounded-full bg-[#EF4444]/15 text-[#EF4444] text-[9px] font-bold uppercase tracking-wider flex items-center gap-0.5">
-                        <Video size={9} /> Live
+                    {/* Event type badge */}
+                    {event.eventType === "online" && (
+                      <span className="px-2 py-0.5 rounded-full bg-[#38BDF8]/15 text-[#38BDF8] text-[9px] font-bold uppercase tracking-wider flex items-center gap-0.5">
+                        <Globe size={9} /> Online
+                      </span>
+                    )}
+                    {event.eventType === "hybrid" && (
+                      <span className="px-2 py-0.5 rounded-full bg-[#A855F7]/15 text-[#A855F7] text-[9px] font-bold uppercase tracking-wider flex items-center gap-0.5">
+                        <Radio size={9} /> Hybrid
+                      </span>
+                    )}
+                    {event.status === "cancelled" && (
+                      <span className="px-2 py-0.5 rounded-full bg-[#EF4444]/15 text-[#EF4444] text-[9px] font-bold uppercase tracking-wider">
+                        Cancelled
+                      </span>
+                    )}
+                    {event.featured && (
+                      <span className="px-2 py-0.5 rounded-full bg-[#F59E0B]/15 text-[#F59E0B] text-[9px] font-bold uppercase tracking-wider flex items-center gap-0.5">
+                        <Flame size={9} /> Featured
                       </span>
                     )}
                   </div>
                   <h3 className="text-sm font-bold text-white mb-1 line-clamp-1">{event.title}</h3>
                   <p className="text-[11px] text-[#94A3B8] line-clamp-1 mb-2">{event.description}</p>
-                  <div className="flex items-center gap-3 text-[10px] text-[#94A3B8]">
-                    <span className="flex items-center gap-1">
-                      <MapPin size={10} /> {event.city}
-                    </span>
+                  <div className="flex items-center gap-3 text-[10px] text-[#94A3B8] flex-wrap">
+                    {/* Location: city/state for in-person+hybrid; 🌐 Online for online-only */}
+                    {event.eventType === "online" ? (
+                      <span className="flex items-center gap-1 text-[#38BDF8]">
+                        <Globe size={10} /> Online Event
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1">
+                        <MapPin size={10} /> {event.city}{event.city && event.state ? ", " : ""}{event.state}
+                      </span>
+                    )}
                     <span className="flex items-center gap-1">
                       <Clock size={10} /> {date.time}
                     </span>
@@ -384,10 +529,12 @@ export default function EventsView() {
           <button
             onClick={() => {
               setFilterState("");
+              setFilterCity("");
               setFilterLanguage("");
               setFilterCategory("");
               setSearchQuery("");
               setDateFilter("all");
+              setQuickFilter("all-india");
             }}
             className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white"
             style={{ background: "linear-gradient(135deg, #EC4899, #F59E0B)" }}
@@ -470,8 +617,36 @@ export default function EventsView() {
                   </div>
                   <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1">Where</p>
-                    <p className="text-xs text-white">{openEvent.city}</p>
-                    <p className="text-[10px] text-[#94A3B8]">{openEvent.location}</p>
+                    {openEvent.eventType === "online" ? (
+                      <>
+                        <p className="text-xs text-[#38BDF8] flex items-center gap-1 font-bold">
+                          <Globe size={11} /> Online Event
+                        </p>
+                        {openEvent.onlineUrl && (
+                          <a
+                            href={openEvent.onlineUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-[#94A3B8] hover:text-white truncate block mt-1"
+                          >
+                            {openEvent.onlineUrl}
+                          </a>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-white">{openEvent.city}{openEvent.city && openEvent.state ? ", " : ""}{openEvent.state}</p>
+                        {openEvent.address && (
+                          <p className="text-[10px] text-[#94A3B8] mt-0.5">{openEvent.address}</p>
+                        )}
+                        <p className="text-[10px] text-[#94A3B8] mt-0.5">{openEvent.location}</p>
+                        {openEvent.eventType === "hybrid" && (
+                          <p className="text-[10px] text-[#A855F7] flex items-center gap-1 mt-1 font-bold">
+                            <Globe size={10} /> Also available online
+                          </p>
+                        )}
+                      </>
+                    )}
                   </div>
                   <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1">Attendees</p>
@@ -533,26 +708,56 @@ export default function EventsView() {
                   {openEvent.whatsapp_number && (
                     <a
                       href={`https://wa.me/${openEvent.whatsapp_number.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
-                        `Hello! I'm interested in "${openEvent.title}" on ${new Date(openEvent.date).toLocaleDateString()}. ${openEvent.is_free ? "" : `Ticket price: ₹${openEvent.price}.`} Could you share more details?`
+                        `Hi, I found your event "${openEvent.title}" on Believ and would like more information.`
                       )}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="px-4 rounded-xl bg-[#25D366] hover:bg-[#1FB855] text-white flex items-center justify-center transition-all"
-                      title="Contact host on WhatsApp"
+                      title="WhatsApp organizer"
                     >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
-                      </svg>
+                      <MessageCircle size={18} />
                     </a>
                   )}
-                  <button
-                    onClick={() => rsvp(openEvent)}
-                    className="flex-1 py-3 rounded-xl text-sm font-bold text-white transition-all hover:-translate-y-px"
-                    style={{ background: "linear-gradient(135deg, #EC4899, #F59E0B)" }}
-                  >
-                    {openEvent.is_free ? "RSVP Now" : "Get Tickets"}
-                  </button>
+                  {openEvent.ticketUrl ? (
+                    <a
+                      href={openEvent.ticketUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 py-3 rounded-xl text-sm font-bold text-white transition-all hover:-translate-y-px flex items-center justify-center gap-2"
+                      style={{ background: "linear-gradient(135deg, #EC4899, #F59E0B)" }}
+                    >
+                      <Ticket size={16} /> Get Tickets
+                      <ExternalLink size={12} className="opacity-80" />
+                    </a>
+                  ) : openEvent.eventType === "online" && openEvent.onlineUrl ? (
+                    <a
+                      href={openEvent.onlineUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 py-3 rounded-xl text-sm font-bold text-white transition-all hover:-translate-y-px flex items-center justify-center gap-2"
+                      style={{ background: "linear-gradient(135deg, #38BDF8, #A855F7)" }}
+                    >
+                      <Video size={16} /> Join Online
+                    </a>
+                  ) : (
+                    <button
+                      onClick={() => rsvp(openEvent)}
+                      className="flex-1 py-3 rounded-xl text-sm font-bold text-white transition-all hover:-translate-y-px"
+                      style={{ background: "linear-gradient(135deg, #EC4899, #F59E0B)" }}
+                    >
+                      {openEvent.is_free ? "RSVP Now" : "Get Tickets"}
+                    </button>
+                  )}
                 </div>
+
+                {/* Helper text — Believ does NOT process payments */}
+                {openEvent.ticketUrl && (
+                  <p className="text-[10px] text-[#64748B] text-center leading-relaxed">
+                    <Info size={9} className="inline mr-0.5" />
+                    Tickets and registration are handled by the event organizer.
+                    Believ does not process payments.
+                  </p>
+                )}
               </div>
             </motion.div>
           </motion.div>

@@ -25,18 +25,26 @@ export type Church = {
   whatsapp_number?: string;
 };
 
+export type EventType = "in-person" | "online" | "hybrid";
+
 export type EventItem = {
   id: string;
   title: string;
   description: string;
   date: string; // ISO
   end_date?: string;
-  state: string;
-  city: string;
-  location: string;
+  country: string;        // "India" (kept as a field so the architecture can scale to other countries later)
+  state: string;          // e.g. "Telangana" — empty for purely online events
+  city: string;           // e.g. "Hyderabad" — empty for purely online events
+  address?: string;       // full address for in-person / hybrid
+  location: string;       // short display location (kept for backward compat)
   languages: string[];
   category: string;
-  is_online: boolean;
+  eventType: EventType;   // in-person | online | hybrid (replaces the older is_online boolean as the source of truth)
+  is_online: boolean;     // derived: eventType === "online" || eventType === "hybrid" — kept for backward compat
+  onlineUrl?: string;     // for online / hybrid events
+  ticketUrl?: string;     // external ticket/registration URL — Believ does NOT process payments
+  organizerName?: string; // contact name (separate from hosting church)
   is_free: boolean;
   price: number;
   attendees: number;
@@ -45,6 +53,8 @@ export type EventItem = {
   images?: string[];
   church: string;
   whatsapp_number?: string;
+  status?: "upcoming" | "cancelled" | "ended";
+  featured?: boolean;
 };
 
 export type PrayerPost = {
@@ -147,6 +157,36 @@ export const INDIAN_STATES = [
   "Punjab", "Rajasthan", "Tamil Nadu", "Telangana", "Uttar Pradesh", "West Bengal",
 ];
 
+// Single source of truth for the city dropdown that depends on the selected state.
+// Add cities here as the platform grows — keep this colocated with INDIAN_STATES
+// so state/city data is never split across multiple files.
+export const INDIAN_CITIES_BY_STATE: Record<string, string[]> = {
+  "Andhra Pradesh": ["Visakhapatnam", "Vijayawada", "Guntur", "Tirupati", "Nellore", "Kurnool"],
+  "Assam": ["Guwahati", "Dibrugarh", "Silchar", "Jorhat"],
+  "Bihar": ["Patna", "Gaya", "Bhagalpur", "Muzaffarpur"],
+  "Chhattisgarh": ["Raipur", "Bhilai", "Bilaspur"],
+  "Delhi": ["New Delhi", "Dwarka", "Rohini", "Saket"],
+  "Goa": ["Panaji", "Margao", "Vasco da Gama"],
+  "Gujarat": ["Ahmedabad", "Surat", "Vadodara", "Rajkot", "Gandhinagar"],
+  "Haryana": ["Gurugram", "Faridabad", "Panipat", "Ambala"],
+  "Karnataka": ["Bengaluru", "Mysuru", "Mangaluru", "Hubli", "Belagavi"],
+  "Kerala": ["Kochi", "Thiruvananthapuram", "Kozhikode", "Thrissur", "Kollam"],
+  "Madhya Pradesh": ["Bhopal", "Indore", "Jabalpur", "Gwalior"],
+  "Maharashtra": ["Mumbai", "Pune", "Nagpur", "Nashik", "Aurangabad"],
+  "Odisha": ["Bhubaneswar", "Cuttack", "Rourkela"],
+  "Punjab": ["Ludhiana", "Amritsar", "Jalandhar", "Patiala"],
+  "Rajasthan": ["Jaipur", "Jodhpur", "Udaipur", "Kota", "Ajmer"],
+  "Tamil Nadu": ["Chennai", "Coimbatore", "Madurai", "Tiruchirappalli", "Salem"],
+  "Telangana": ["Hyderabad", "Warangal", "Nizamabad", "Karimnagar", "Khammam"],
+  "Uttar Pradesh": ["Lucknow", "Kanpur", "Agra", "Varanasi", "Meerut", "Noida"],
+  "West Bengal": ["Kolkata", "Howrah", "Durgapur", "Siliguri"],
+};
+
+// Returns the cities for a given state (or empty array if state has no city list yet).
+export function getCitiesForState(state: string): string[] {
+  return INDIAN_CITIES_BY_STATE[state] || [];
+}
+
 export const LANGUAGES = [
   "Hindi", "English", "Tamil", "Telugu", "Malayalam",
   "Kannada", "Marathi", "Gujarati", "Punjabi", "Bengali", "Odia",
@@ -163,15 +203,40 @@ export const CHURCH_GRADIENTS = [
   "linear-gradient(135deg, #14B8A6, #6366F1)",
 ];
 
+// Single source of truth for event categories.
+// Used by the Events filter row, the create-event form, and (eventually)
+// the admin event form / server-side validation. Do NOT duplicate this list.
 export const EVENT_CATEGORIES = [
-  { value: "worship", label: "Worship Service", color: "#EC4899" },
-  { value: "bible-study", label: "Bible Study", color: "#6366F1" },
+  { value: "worship", label: "Worship", color: "#EC4899" },
   { value: "conference", label: "Conference", color: "#F59E0B" },
+  { value: "prayer", label: "Prayer", color: "#A855F7" },
+  { value: "bible-study", label: "Bible Study", color: "#6366F1" },
+  { value: "youth", label: "Youth", color: "#3B82F6" },
+  { value: "young-adults", label: "Young Adults", color: "#0EA5E9" },
+  { value: "men", label: "Men", color: "#0284C7" },
+  { value: "women", label: "Women", color: "#DB2777" },
+  { value: "family", label: "Family", color: "#16A34A" },
+  { value: "children", label: "Children", color: "#65A30D" },
+  { value: "music", label: "Music", color: "#F43F5E" },
+  { value: "workshop", label: "Workshop", color: "#14B8A6" },
+  { value: "seminar", label: "Seminar", color: "#8B5CF6" },
+  { value: "outreach", label: "Outreach", color: "#06B6D4" },
+  { value: "fellowship", label: "Fellowship", color: "#22C55E" },
   { value: "retreat", label: "Retreat", color: "#10B981" },
-  { value: "youth", label: "Youth Event", color: "#3B82F6" },
-  { value: "concert", label: "Concert", color: "#F43F5E" },
-  { value: "prayer", label: "Prayer Meeting", color: "#A855F7" },
-  { value: "outreach", label: "Outreach", color: "#8B5CF6" },
+  { value: "concert", label: "Concert", color: "#EF4444" },
+  { value: "other", label: "Other", color: "#94A3B8" },
+] as const;
+
+// Date filter pills used by the Events filter row.
+// Single source of truth so the create-event date picker and the
+// admin filters don't drift.
+export const EVENT_DATE_FILTERS = [
+  { v: "all", l: "All Events" },
+  { v: "today", l: "Today" },
+  { v: "tomorrow", l: "Tomorrow" },
+  { v: "weekend", l: "This Weekend" },
+  { v: "week", l: "This Week" },
+  { v: "month", l: "This Month" },
 ] as const;
 
 export const QUIZ_LEVELS = [
@@ -415,19 +480,26 @@ export const EVENTS: EventItem[] = [
       "Join 1,000+ believers for an unforgettable night of Spirit-led worship, prayer, and a powerful message on revival. Featuring the Grace City Worship team and guest speaker Pastor Philip Cherian.",
     date: inDays(3),
     end_date: inDays(3),
+    country: "India",
     state: "Karnataka",
     city: "Bengaluru",
+    address: "Palace Grounds, Main Hall, Bengaluru, Karnataka 560001",
     location: "Palace Grounds, Main Hall",
     languages: ["English"],
     category: "worship",
+    eventType: "in-person",
     is_online: false,
-    is_free: true,
+    ticketUrl: "https://example-tickets.com/awakening-night",
+    organizerName: "Philip Cherian",
+    is_free: false,
     price: 0,
     attendees: 740,
     cover_gradient: 0,
     cover_image: "https://images.unsplash.com/photo-1516223298848-69b6c3c7a2d5?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     church: "Grace City Church",
     whatsapp_number: "+919876543210",
+    status: "upcoming",
+    featured: true,
   },
   {
     id: "e2",
@@ -435,12 +507,16 @@ export const EVENTS: EventItem[] = [
     description:
       "Deep dive into Paul's masterpiece letter to the Romans. Verse-by-verse teaching, small group discussion, and weekly reflection assignments. All materials provided.",
     date: inDays(7),
+    country: "India",
     state: "Maharashtra",
     city: "Mumbai",
+    address: "New Life Fellowship, Main Auditorium, Mumbai, Maharashtra 400050",
     location: "New Life Fellowship, Main Auditorium",
     languages: ["English", "Hindi"],
     category: "bible-study",
+    eventType: "in-person",
     is_online: false,
+    organizerName: "New Life Team",
     is_free: true,
     price: 0,
     attendees: 180,
@@ -448,20 +524,27 @@ export const EVENTS: EventItem[] = [
     cover_image: "https://images.unsplash.com/photo-1513475382585-d06e58bcb5c0?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     church: "New Life Fellowship",
     whatsapp_number: "+919876543211",
+    status: "upcoming",
+    featured: false,
   },
   {
     id: "e3",
-    title: "Rooted Youth Conference 2025",
+    title: "Rooted Youth Conference 2026",
     description:
       "Three days of teaching, worship, sports, and friendship for ages 13–19. Theme: 'Rooted in Christ' from Colossians 2. Speaker: Pastor Samuel Thomas. Registration includes meals and accommodation.",
     date: inDays(14),
     end_date: inDays(16),
+    country: "India",
     state: "Tamil Nadu",
     city: "Chennai",
+    address: "Bethel Campus, Tambaram, Chennai, Tamil Nadu 600045",
     location: "Bethel Campus, Tambaram",
     languages: ["English", "Tamil"],
-    category: "conference",
+    category: "youth",
+    eventType: "in-person",
     is_online: false,
+    ticketUrl: "https://example-tickets.com/rooted-youth-2026",
+    organizerName: "Samuel Thomas",
     is_free: false,
     price: 1500,
     attendees: 420,
@@ -469,6 +552,8 @@ export const EVENTS: EventItem[] = [
     cover_image: "https://images.unsplash.com/photo-1473773508845-188df298d2d1?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     church: "Bethel AG Church",
     whatsapp_number: "+919876543212",
+    status: "upcoming",
+    featured: true,
   },
   {
     id: "e4",
@@ -477,12 +562,17 @@ export const EVENTS: EventItem[] = [
       "A 2-day silent retreat focused on prayer, journaling, and listening to God. Limited to 30 participants. Meals provided. No phones in common areas — a true digital detox for the soul.",
     date: inDays(21),
     end_date: inDays(23),
+    country: "India",
     state: "Telangana",
     city: "Hyderabad",
+    address: "Covenant Retreat Center, Shamirpet, Hyderabad, Telangana 500101",
     location: "Covenant Retreat Center, Shamirpet",
     languages: ["English"],
     category: "retreat",
+    eventType: "in-person",
     is_online: false,
+    ticketUrl: "https://example-tickets.com/silent-retreat",
+    organizerName: "Covenant Team",
     is_free: false,
     price: 2200,
     attendees: 22,
@@ -490,6 +580,8 @@ export const EVENTS: EventItem[] = [
     cover_image: "https://images.unsplash.com/photo-1496950866446-3253e1470e8e?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     church: "Covenant Community Church",
     whatsapp_number: "+919876543213",
+    status: "upcoming",
+    featured: false,
   },
   {
     id: "e5",
@@ -497,12 +589,17 @@ export const EVENTS: EventItem[] = [
     description:
       "Can't make it in person? Join us online for our weekly Sunday service — live worship, sermon, and chat-based prayer requests. Available on YouTube and our website.",
     date: inDays(2),
-    state: "Kerala",
-    city: "Kochi",
+    country: "India",
+    state: "",
+    city: "",
+    address: undefined,
     location: "Online — YouTube Live",
     languages: ["Malayalam", "English"],
-    category: "livestream",
+    category: "worship",
+    eventType: "online",
     is_online: true,
+    onlineUrl: "https://youtube.com/live/example-sunday-worship",
+    organizerName: "Zion Mar Thoma Team",
     is_free: true,
     price: 0,
     attendees: 1200,
@@ -510,6 +607,8 @@ export const EVENTS: EventItem[] = [
     cover_image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     church: "Zion Mar Thoma Church",
     whatsapp_number: "+919876543214",
+    status: "upcoming",
+    featured: false,
   },
   {
     id: "e6",
@@ -517,12 +616,17 @@ export const EVENTS: EventItem[] = [
     description:
       "Believers from across the city uniting in prayer for revival, the nation, and the persecuted church. Bring a friend. Worship led by a combined city worship team.",
     date: inDays(5),
+    country: "India",
     state: "Delhi",
     city: "New Delhi",
+    address: "Delhi Bible Chapel Grounds, New Delhi, Delhi 110001",
     location: "Delhi Bible Chapel Grounds",
     languages: ["English", "Hindi"],
     category: "prayer",
-    is_online: false,
+    eventType: "hybrid",
+    is_online: true,
+    onlineUrl: "https://youtube.com/live/example-city-prayer",
+    organizerName: "Delhi Bible Chapel",
     is_free: true,
     price: 0,
     attendees: 290,
@@ -530,6 +634,8 @@ export const EVENTS: EventItem[] = [
     cover_image: "https://images.unsplash.com/photo-1520637836862-4d197d17c91a?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     church: "Delhi Bible Chapel",
     whatsapp_number: "+919876543215",
+    status: "upcoming",
+    featured: true,
   },
 ];
 
