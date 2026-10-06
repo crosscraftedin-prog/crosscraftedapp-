@@ -43,7 +43,7 @@ export type EventItem = {
   eventType: EventType;   // in-person | online | hybrid (replaces the older is_online boolean as the source of truth)
   is_online: boolean;     // derived: eventType === "online" || eventType === "hybrid" — kept for backward compat
   onlineUrl?: string;     // for online / hybrid events
-  ticketUrl?: string;     // external ticket/registration URL — Believ does NOT process payments
+  ticketUrl?: string;     // external ticket/registration URL — Koino does NOT process payments
   organizerName?: string; // contact name (separate from hosting church)
   is_free: boolean;
   price: number;
@@ -126,7 +126,7 @@ export type Product = {
   category: string;
   subcategory?: string;
   vendor: string;
-  sellerType: SellerType;        // believ = official Believ Store, marketplace = third-party seller
+  sellerType: SellerType;        // believ = official Koino Store, marketplace = third-party seller
   state: string;                 // e.g. "Karnataka" — empty for online-only
   city: string;                  // e.g. "Bengaluru"
   rating: number;
@@ -136,7 +136,7 @@ export type Product = {
   images?: string[];
   in_stock: boolean;
   whatsapp_number?: string;
-  buyUrl?: string;              // external buy/checkout link — Believ does NOT process payments
+  buyUrl?: string;              // external buy/checkout link — Koino does NOT process payments
   status?: "draft" | "pending_review" | "published" | "rejected" | "unlisted";
   featured?: boolean;
   // Optional variations (e.g. sizes, colors) and attributes (e.g. material, weight).
@@ -315,10 +315,10 @@ export const PRAYER_CATEGORIES = [
 ] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MARKETPLACE / BELIEV STORE
+// MARKETPLACE / KOINO STORE
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Single source of truth for Marketplace + Believ Store product categories.
+// Single source of truth for Marketplace + Koino Store product categories.
 // Used by the ShopView filter row, the List Item form, and (eventually) the
 // admin product form / server-side validation. Do NOT duplicate this list.
 export const MARKETPLACE_CATEGORIES = [
@@ -1065,14 +1065,14 @@ export const PRODUCTS: Product[] = [
   },
   {
     id: "pr7",
-    name: "Believ Signature T-Shirt",
+    name: "Koino Signature T-Shirt",
     description:
-      "Official Believ T-shirt with the Believ wordmark. 100% premium combed cotton. Every purchase supports Believ's mission to bring the Bible to every language. Available exclusively from the Believ Store.",
+      "Official Koino T-shirt with the Koino wordmark. 100% premium combed cotton. Every purchase supports Koino's mission to bring the Bible to every language. Available exclusively from the Koino Store.",
     price: 699,
     mrp: 999,
     category: "T-Shirts",
-    subcategory: "Believ Merchandise",
-    vendor: "Believ",
+    subcategory: "Koino Merchandise",
+    vendor: "Koino",
     sellerType: "believ",
     state: "Telangana",
     city: "Hyderabad",
@@ -1096,19 +1096,19 @@ export const PRODUCTS: Product[] = [
     attributes: [
       { label: "Material", value: "100% Combed Cotton" },
       { label: "Fit", value: "Regular Fit" },
-      { label: "Brand", value: "Believ" },
+      { label: "Brand", value: "Koino" },
     ],
   },
   {
     id: "pr8",
-    name: "Believ Hoodie - Scripture Edition",
+    name: "Koino Hoodie - Scripture Edition",
     description:
-      "Official Believ hoodie with embroidered John 3:16 reference. Heavyweight 320 GSM fleece interior, perfect for cooler weather. Official Believ Store product.",
+      "Official Koino hoodie with embroidered John 3:16 reference. Heavyweight 320 GSM fleece interior, perfect for cooler weather. Official Koino Store product.",
     price: 1499,
     mrp: 1999,
     category: "Hoodies",
-    subcategory: "Believ Merchandise",
-    vendor: "Believ",
+    subcategory: "Koino Merchandise",
+    vendor: "Koino",
     sellerType: "believ",
     state: "Telangana",
     city: "Hyderabad",
@@ -1132,7 +1132,7 @@ export const PRODUCTS: Product[] = [
     attributes: [
       { label: "Material", value: "80% Cotton, 20% Polyester" },
       { label: "Weight", value: "320 GSM" },
-      { label: "Brand", value: "Believ" },
+      { label: "Brand", value: "Koino" },
     ],
   },
 ];
@@ -1698,8 +1698,8 @@ export type TriviaGift = {
 export const TRIVIA_GIFTS: TriviaGift[] = [
   {
     id: "g1",
-    title: "Believ T-Shirt",
-    description: "Premium cotton tee with the Believ logo. Available in S, M, L, XL. Choose your size at checkout.",
+    title: "Koino T-Shirt",
+    description: "Premium cotton tee with the Koino logo. Available in S, M, L, XL. Choose your size at checkout.",
     image_url: "https://images.unsplash.com/photo-1438032005730-c779502df39b?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
     points_required: 500,
     tier: "bronze",
@@ -1779,7 +1779,7 @@ export const TRIVIA_COMPETITIONS: TriviaCompetition[] = [
     end_date: inDays(9),
     prize: "₹25,000 cash + Trophy + Personalized Bibles",
     prize_image: "https://images.unsplash.com/photo-1546484959-f9a381d1330d?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
-    organizer: "Believ + Grace City Church",
+    organizer: "Koino + Grace City Church",
     status: "upcoming",
     participants: [
       { church_id: "c1", church_name: "Grace City Church", score: 0, players: 5 },
@@ -1793,9 +1793,9 @@ export const TRIVIA_COMPETITIONS: TriviaCompetition[] = [
       "Inter-state competition for churches in Tamil Nadu, Kerala, Karnataka, and Telangana. 7-day trivia marathon. Categories: Full Bible, NT, OT, Apologetics.",
     start_date: inDays(-3),
     end_date: inDays(4),
-    prize: "₹50,000 + Featured spot on Believ home page",
+    prize: "₹50,000 + Featured spot on Koino home page",
     prize_image: "https://images.unsplash.com/photo-1565728744382-61accd4aa148?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
-    organizer: "Believ",
+    organizer: "Koino",
     status: "live",
     participants: [
       { church_id: "c1", church_name: "Grace City Church", score: 4280, players: 12 },
@@ -1808,10 +1808,10 @@ export const TRIVIA_COMPETITIONS: TriviaCompetition[] = [
     id: "comp3",
     title: "Mumbai Revival Trivia Challenge",
     description:
-      "Solo player competition for individuals across Maharashtra. Top 10 players win worship album bundles and Believ merchandise.",
+      "Solo player competition for individuals across Maharashtra. Top 10 players win worship album bundles and Koino merchandise.",
     start_date: inDays(-30),
     end_date: inDays(-1),
-    prize: "Worship Album Bundle + Believ T-Shirts",
+    prize: "Worship Album Bundle + Koino T-Shirts",
     prize_image: "https://images.unsplash.com/photo-1513475382585-d06e58bcb5c0?crop=entropy&cs=srgb&fm=jpg&w=400&q=80",
     organizer: "New Life Fellowship",
     status: "ended",
@@ -1824,7 +1824,7 @@ export const TRIVIA_COMPETITIONS: TriviaCompetition[] = [
 
 // Player invitations - share links for inviting friends/groups
 export function generateInviteLink(competitionId: string, playerName: string): string {
-  const invite = `Hey! ${playerName} invited you to join a Bible Trivia competition on Believ. Play now: https://crosscrafted.app/trivia?comp=${competitionId}&invited_by=${encodeURIComponent(playerName)}`;
+  const invite = `Hey! ${playerName} invited you to join a Bible Trivia competition on Koino. Play now: https://crosscrafted.app/trivia?comp=${competitionId}&invited_by=${encodeURIComponent(playerName)}`;
   return invite;
 }
 

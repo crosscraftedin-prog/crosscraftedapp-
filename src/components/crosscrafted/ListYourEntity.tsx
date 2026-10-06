@@ -113,7 +113,7 @@ export default function ListYourEntity({ variant }: Props) {
         </motion.div>
         <h2 className="text-2xl font-extrabold text-white mb-2">Submission Received!</h2>
         <p className="text-sm text-[#A09DB1] mb-6 max-w-sm mx-auto">
-          Thanks for adding your {variant === "church" ? "church" : "business"} to Believ.
+          Thanks for adding your {variant === "church" ? "church" : "business"} to Koino.
           Our team will review your submission and approve it within 48 hours. You'll receive
           an email confirmation once it's live.
         </p>

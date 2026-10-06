@@ -153,16 +153,16 @@ export default function Home() {
       >
         <div className="flex justify-between items-center h-12 md:h-14 px-4 md:px-5">
           <button onClick={goHome} className="flex items-center gap-2">
-            {/* Believ Logo */}
+            {/* Koino Logo */}
             <Image
-              src="/believ-logo.png"
-              alt="Believ"
+              src="/koino-logo.png"
+              alt="Koino"
               width={32}
               height={32}
               className="rounded-lg shrink-0"
               priority
             />
-            <h1 className="text-base md:text-lg font-black tracking-tight text-white">Believ</h1>
+            <h1 className="text-base md:text-lg font-black tracking-tight text-white">Koino</h1>
           </button>
           <div className="hidden md:flex items-center gap-3">
             <LanguageSwitcher />
@@ -482,7 +482,7 @@ function ComingSoonView({ title }: { title: string }) {
       <h2 className="text-xl font-extrabold text-white mb-2">{title}</h2>
       <p className="text-sm text-[#A09DB1] max-w-sm mx-auto">
         This section is coming soon. We're building {title.toLowerCase()} with the same care and
-        prayer as everything else on Believ. Check back shortly — or explore Churches, Trivia,
+        prayer as everything else on Koino. Check back shortly — or explore Churches, Trivia,
         Apologetics, and more in the meantime!
       </p>
     </div>

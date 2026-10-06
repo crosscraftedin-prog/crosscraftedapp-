@@ -137,12 +137,12 @@ export default function ComicView({ bookId, chapter, onNavigateChapter, onReadCh
   const handleShare = async () => {
     if (!chapterData) return;
     const shareUrl = `${window.location.origin}/?comic=${chapterData.bookId}/${chapterData.chapter}`;
-    const shareText = `${chapterData.title} — Believ Bible Comics\n\nRead the story. See the bigger picture. Grow in your faith.\n\n${shareUrl}`;
+    const shareText = `${chapterData.title} — Koino Bible Comics\n\nRead the story. See the bigger picture. Grow in your faith.\n\n${shareUrl}`;
 
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Believ Bible Comics — ${chapterData.title}`,
+          title: `Koino Bible Comics — ${chapterData.title}`,
           text: shareText,
           url: shareUrl,
         });

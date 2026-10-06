@@ -1,4 +1,4 @@
-// Streak tracking utility — shared across all Believ activities.
+// Streak tracking utility — shared across all Koino activities.
 // Tracks consecutive-day streaks for daily habits (Bible reading, trivia, prayer).
 // All data persisted in localStorage.
 

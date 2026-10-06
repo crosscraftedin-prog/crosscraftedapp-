@@ -120,8 +120,8 @@ function SignInForm() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Image
-            src="/believ-logo.png"
-            alt="Believ"
+            src="/koino-logo.png"
+            alt="Koino"
             width={64}
             height={64}
             className="rounded-2xl mb-4 mx-auto"

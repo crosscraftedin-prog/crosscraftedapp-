@@ -181,7 +181,7 @@ export default function EventsView() {
   };
 
   const shareEvent = (e: EventItem) => {
-    const text = `Check out "${e.title}" on Believ — ${formatDate(e.date).weekday} ${e.date} at ${e.location}, ${e.city}!`;
+    const text = `Check out "${e.title}" on Koino — ${formatDate(e.date).weekday} ${e.date} at ${e.location}, ${e.city}!`;
     navigator.clipboard.writeText(text);
     toast.success("Event link copied!");
   };
@@ -708,7 +708,7 @@ export default function EventsView() {
                   {openEvent.whatsapp_number && (
                     <a
                       href={`https://wa.me/${openEvent.whatsapp_number.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
-                        `Hi, I found your event "${openEvent.title}" on Believ and would like more information.`
+                        `Hi, I found your event "${openEvent.title}" on Koino and would like more information.`
                       )}`}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -750,12 +750,12 @@ export default function EventsView() {
                   )}
                 </div>
 
-                {/* Helper text — Believ does NOT process payments */}
+                {/* Helper text — Koino does NOT process payments */}
                 {openEvent.ticketUrl && (
                   <p className="text-[10px] text-[#64748B] text-center leading-relaxed">
                     <Info size={9} className="inline mr-0.5" />
                     Tickets and registration are handled by the event organizer.
-                    Believ does not process payments.
+                    Koino does not process payments.
                   </p>
                 )}
               </div>

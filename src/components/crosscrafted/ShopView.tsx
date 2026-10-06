@@ -103,7 +103,7 @@ export default function ShopView() {
       mrp: formData.mrp ? Number(formData.mrp) : Number(formData.price),
       category: formData.category,
       vendor: formData.vendor || "Individual Seller",
-      sellerType: "marketplace", // user-submitted products are always marketplace (not official Believ Store)
+      sellerType: "marketplace", // user-submitted products are always marketplace (not official Koino Store)
       state: formData.state || "",
       city: formData.city || "—",
       rating: 0,
@@ -259,7 +259,7 @@ export default function ShopView() {
                 : "text-[#94A3B8] hover:text-white"
             }`}
           >
-            <BadgeCheck size={12} /> Believ Store
+            <BadgeCheck size={12} /> Koino Store
           </button>
           <button
             onClick={() => setFilterSellerType("marketplace")}
@@ -339,7 +339,7 @@ export default function ShopView() {
                   />
                 ) : null}
                 {/* Fallback placeholder — shown when no image OR image fails to load.
-                    Uses a labeled Believ placeholder instead of a broken-image icon. */}
+                    Uses a labeled Koino placeholder instead of a broken-image icon. */}
                 <div
                   className="w-full h-full flex flex-col items-center justify-center gap-1 text-center px-2"
                   style={{
@@ -348,13 +348,13 @@ export default function ShopView() {
                   }}
                 >
                   <ImageOff size={20} className="text-white/60" />
-                  <p className="text-[9px] font-bold uppercase tracking-wider text-white/60">Believ</p>
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-white/60">Koino</p>
                   <p className="text-[8px] text-white/40 leading-tight">Product image unavailable</p>
                 </div>
-                {/* Seller type badge — official Believ Store vs Marketplace */}
+                {/* Seller type badge — official Koino Store vs Marketplace */}
                 {product.sellerType === "believ" ? (
                   <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-[#9786E3] text-white text-[8px] font-bold uppercase tracking-wider flex items-center gap-0.5">
-                    <BadgeCheck size={9} /> Believ
+                    <BadgeCheck size={9} /> Koino
                   </span>
                 ) : (
                   <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-[#38BDF8]/20 backdrop-blur-sm text-[#38BDF8] text-[8px] font-bold uppercase tracking-wider border border-[#38BDF8]/30">
@@ -472,7 +472,7 @@ export default function ShopView() {
                       style={{ background: CHURCH_GRADIENTS[openProduct.cover_gradient % CHURCH_GRADIENTS.length] }}
                     >
                       <ImageOff size={28} className="text-white/60" />
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">Believ</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">Koino</p>
                       <p className="text-[9px] text-white/40 leading-tight">Product image unavailable</p>
                     </div>
                   );
@@ -616,7 +616,7 @@ export default function ShopView() {
                       <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">Seller</p>
                       {openProduct.sellerType === "believ" ? (
                         <span className="px-1.5 py-0.5 rounded bg-[#9786E3]/15 text-[#9786E3] text-[8px] font-bold uppercase tracking-wider flex items-center gap-0.5">
-                          <BadgeCheck size={8} /> Believ Store
+                          <BadgeCheck size={8} /> Koino Store
                         </span>
                       ) : (
                         <span className="px-1.5 py-0.5 rounded bg-[#38BDF8]/15 text-[#38BDF8] text-[8px] font-bold uppercase tracking-wider">
@@ -646,7 +646,7 @@ export default function ShopView() {
                     <a
                       href={`https://wa.me/${openProduct.whatsapp_number.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
                         (() => {
-                          const base = `Hi, I found your product "${openProduct.name}" on Believ and I'd like more information. Is it available?`;
+                          const base = `Hi, I found your product "${openProduct.name}" on Koino and I'd like more information. Is it available?`;
                           const sel = Object.entries(selectedVariations);
                           if (sel.length === 0) return base;
                           const specs = sel.map(([n, v]) => `${n}: ${v}`).join(", ");
@@ -687,11 +687,11 @@ export default function ShopView() {
                   )}
                 </div>
 
-                {/* Helper text — Believ does NOT process payments for marketplace products */}
+                {/* Helper text — Koino does NOT process payments for marketplace products */}
                 {openProduct.sellerType === "marketplace" && openProduct.buyUrl && (
                   <p className="text-[10px] text-[#64748B] text-center leading-relaxed pt-1">
                     Payment, shipping, and refunds are handled by the seller.
-                    Believ does not process payments.
+                    Koino does not process payments.
                   </p>
                 )}
               </div>
@@ -1036,7 +1036,7 @@ export default function ShopView() {
                   </p>
                 </div>
 
-                {/* External Buy Link — Believ does NOT process payments.
+                {/* External Buy Link — Koino does NOT process payments.
                     Sellers can link to their own checkout/website. */}
                 <div>
                   <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
@@ -1050,7 +1050,7 @@ export default function ShopView() {
                     placeholder="https://yourstore.com/product/..."
                   />
                   <p className="text-[10px] text-[#64748B] mt-1">
-                    Optional. Add your website, store, or checkout link. If provided, buyers see a "Buy Now" button that opens this link. Believ does not process payments — payment, shipping, and refunds are handled by you.
+                    Optional. Add your website, store, or checkout link. If provided, buyers see a "Buy Now" button that opens this link. Koino does not process payments — payment, shipping, and refunds are handled by you.
                   </p>
                 </div>
                 <div className="flex gap-2 pt-1">

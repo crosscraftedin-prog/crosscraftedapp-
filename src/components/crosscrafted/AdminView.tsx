@@ -618,7 +618,7 @@ function CompetitionsTab() {
     description: "",
     prize: "",
     duration: "7",
-    organizer: "Believ",
+    organizer: "Koino",
   });
 
   const create = (e: React.FormEvent) => {
@@ -630,7 +630,7 @@ function CompetitionsTab() {
     toast.success("Competition created!", {
       description: "It's now visible in the Trivia > Compete tab.",
     });
-    setForm({ title: "", description: "", prize: "", duration: "7", organizer: "Believ" });
+    setForm({ title: "", description: "", prize: "", duration: "7", organizer: "Koino" });
     setShowCreate(false);
   };
 
@@ -1020,7 +1020,7 @@ function GiftsManagement() {
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
                 className="neo-input text-sm"
-                placeholder="e.g. Believ Hoodie"
+                placeholder="e.g. Koino Hoodie"
                 required
               />
             </div>
@@ -1408,7 +1408,7 @@ function GiftsManagement() {
 
 function AnnouncementsTab() {
   const [announcements, setAnnouncements] = useState<{ id: string; text: string; type: string; date: string }[]>([
-    { id: "a1", text: "Welcome to Believ! Explore churches, play trivia, and grow in faith.", type: "info", date: "2025-01-20" },
+    { id: "a1", text: "Welcome to Koino! Explore churches, play trivia, and grow in faith.", type: "info", date: "2025-01-20" },
   ]);
   const [text, setText] = useState("");
   const [type, setType] = useState("info");

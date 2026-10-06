@@ -9,16 +9,16 @@
 
 export const en: Record<string, string> = {
   // ─── Branding ───
-  "brand.name": "Believ",
-  "brand.tagline": "Believe. Connect. Grow.",
+  "brand.name": "Koino",
+  "brand.tagline": "Faith. Fellowship. Belong.",
 
   // ─── Landing hero ───
   "landing.badge": "Faith Community Platform",
-  "landing.title": "Believ",
-  "landing.titleGradient": "Believe. Connect. Grow. Play.",
+  "landing.title": "Koino",
+  "landing.titleGradient": "Faith. Fellowship. Belong.",
   "landing.subtitle":
-    "Your all-in-one Christian community platform — Bible, churches, events, prayer, trivia, marketplace, business directory and more. Built to help believers grow in faith and connect with the Christian community.",
-  "landing.cta.enterBeliev": "Enter Believ",
+    "An all-in-one Christian community platform where believers can grow in faith, connect with churches and communities, discover events, pray together, explore Scripture, and support Christian businesses.",
+  "landing.cta.enterBeliev": "Enter Koino",
   "landing.cta.readBible": "Read the Bible",
   "landing.cta.tryTrivia": "Try Trivia",
   "landing.stats.questions": "Bible Questions",
@@ -89,8 +89,8 @@ export const en: Record<string, string> = {
   // ─── CTA section ───
   "cta.title": "Grow in Faith, Together",
   "cta.subtitle":
-    "Join the Believ community — explore the Bible, read Bible Comics, find churches and events, share prayer, test your Bible knowledge, and discover Christian businesses and products.",
-  "cta.button": "Enter Believ",
+    "Join the Koino community — explore the Bible, read Bible Comics, find churches and events, share prayer, test your Bible knowledge, and discover Christian businesses and products.",
+  "cta.button": "Enter Koino",
 
   // ─── Header nav ───
   "nav.bible": "Bible",
@@ -99,12 +99,12 @@ export const en: Record<string, string> = {
   "nav.trivia": "Trivia",
   "nav.prayer": "Prayer",
   "nav.shop": "Marketplace",
-  "nav.enterApp": "Enter Believ",
+  "nav.enterApp": "Enter Koino",
   "nav.admin": "Admin",
 
   // ─── Sign-in page ───
-  "signin.title": "Believ",
-  "signin.subtitle": "Believe. Connect. Grow. — Sign in to track your Faith Points",
+  "signin.title": "Koino",
+  "signin.subtitle": "Faith. Fellowship. Belong. — Sign in to track your Faith Points",
   "signin.google": "Continue with Google",
   "signin.google.loading": "Redirecting...",
   "signin.divider.signin": "or sign in with email",
@@ -232,7 +232,7 @@ export const en: Record<string, string> = {
   // ─── Coming soon / placeholder ───
   "comingSoon.title": "Coming Soon",
   "comingSoon.body":
-    "This section is coming soon. We're building {title} with the same care and prayer as everything else on Believ. Check back shortly — or explore Churches, Trivia, Apologetics, and more in the meantime!",
+    "This section is coming soon. We're building {title} with the same care and prayer as everything else on Koino. Check back shortly — or explore Churches, Trivia, Apologetics, and more in the meantime!",
 
   // ─── TriviaView ───
   "triviaView.title": "Bible Trivia",
@@ -256,7 +256,7 @@ export const en: Record<string, string> = {
   "triviaView.results.correct": "Correct: {count}/{total}",
   "triviaView.results.pointsEarned": "{points} FP earned",
   "triviaView.results.noPoints": "Practice mode — no points earned",
-  "triviaView.results.shareText": "Bible Trivia! Correct: {correct}/{total}. Play on Believ!",
+  "triviaView.results.shareText": "Bible Trivia! Correct: {correct}/{total}. Play on Koino!",
   "triviaView.results.playAgain": "Play Again",
   "triviaView.results.backToSetup": "Back to Setup",
   "triviaView.setup.difficulty": "Choose Difficulty",

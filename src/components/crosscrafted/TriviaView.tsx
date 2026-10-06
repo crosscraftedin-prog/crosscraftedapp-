@@ -304,7 +304,7 @@ export default function TriviaView() {
     const text = `${t("triviaView.title")} ${gameMode === "EARN_POINTS" ? `(${t("triviaView.setup.mode.earn")})` : `(${t("triviaView.setup.mode.practice")})`}!\n\n${t("triviaView.results.correct", { count: submitResult.correctCount, total: submitResult.totalQuestions })}\n${gameMode === "EARN_POINTS" ? `${t("triviaView.results.pointsEarned", { points: submitResult.totalPointsEarned })}\n` : ""}Level: ${selectedLevel ? levelLabel(selectedLevel.id) : ""} | ${t("triviaView.setup.category")}: ${selectedCategory ? categoryLabel(selectedCategory.id) : ""}\n\n${t("triviaView.results.shareText", { correct: submitResult.correctCount, total: submitResult.totalQuestions })}`;
     if (navigator.share) {
       try {
-        await navigator.share({ title: "Believ Bible Trivia", text });
+        await navigator.share({ title: "Koino Bible Trivia", text });
         return;
       } catch {}
     }
@@ -313,11 +313,11 @@ export default function TriviaView() {
   };
 
   const inviteFriend = async () => {
-    const text = `Hey! Come play Bible Trivia with me on Believ. ${gameMode === "EARN_POINTS" ? "Earn Faith Points for new questions you answer correctly!" : ""}`;
+    const text = `Hey! Come play Bible Trivia with me on Koino. ${gameMode === "EARN_POINTS" ? "Earn Faith Points for new questions you answer correctly!" : ""}`;
     const url = `${window.location.origin}/`;
     if (navigator.share) {
       try {
-        await navigator.share({ title: "Join me on Believ", text, url });
+        await navigator.share({ title: "Join me on Koino", text, url });
         return;
       } catch {}
     }

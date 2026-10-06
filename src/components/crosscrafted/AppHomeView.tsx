@@ -36,7 +36,7 @@ type FeatureCard = {
   title: string;
   desc: string;
   view: View;
-  group: "BELIEVE" | "CONNECT" | "GROW" | "PLAY" | "DISCOVER";
+  group: "FAITH" | "CONNECT" | "GROW" | "PLAY" | "DISCOVER";
 };
 
 // Single source of truth for the App Home feature grid.
@@ -48,7 +48,7 @@ const FEATURE_CARDS: FeatureCard[] = [
     title: "Holy Bible",
     desc: "Read Scripture and explore Bible resources.",
     view: "bible",
-    group: "BELIEVE",
+    group: "FAITH",
   },
   {
     icon: Sparkles,
@@ -109,7 +109,7 @@ const FEATURE_CARDS: FeatureCard[] = [
 ];
 
 const GROUPS: { label: string; color: string }[] = [
-  { label: "BELIEVE", color: "#7C3AED" },
+  { label: "FAITH", color: "#7C3AED" },
   { label: "CONNECT", color: "#F39B9B" },
   { label: "GROW", color: "#38BDF8" },
   { label: "PLAY", color: "#EC4899" },
@@ -131,7 +131,7 @@ export default function AppHomeView({ onNavigate }: Props) {
 
   const greeting = displayName
     ? `Welcome, ${String(displayName).split(" ")[0]}`
-    : "Welcome to Believ";
+    : "Welcome to Koino";
 
   return (
     <div className="max-w-[680px] mx-auto px-4 py-5 pb-28 md:pb-5">
@@ -143,20 +143,20 @@ export default function AppHomeView({ onNavigate }: Props) {
         className="text-center mb-6 pt-2"
       >
         <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#F39B9B] mb-2">
-          BELIEV
+          KOINO
         </p>
         <h1 className="text-2xl font-black text-white mb-1">
           {greeting}
         </h1>
         <p className="text-sm text-[#A09DB1]">
-          Believe. Connect. Grow. Play.
+          Faith. Fellowship. Belong.
         </p>
         <p className="text-[11px] text-[#726E88] mt-2 max-w-md mx-auto">
-          Choose where you'd like to go. Everything in Believ is one tap away.
+          Choose where you'd like to go. Everything in Koino is one tap away.
         </p>
       </motion.div>
 
-      {/* ─── FEATURE CARDS GROUPED BY BELIEVE / CONNECT / GROW / PLAY / DISCOVER ─── */}
+      {/* ─── FEATURE CARDS GROUPED BY FAITH / CONNECT / GROW / PLAY / DISCOVER ─── */}
       <div className="space-y-6">
         {GROUPS.map((group) => {
           const cards = FEATURE_CARDS.filter((c) => c.group === group.label);

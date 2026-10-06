@@ -344,7 +344,7 @@ function BusinessCard({
           }}
         >
           <Building2 size={28} className="text-white/60" />
-          <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">Believ</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">Koino</p>
           <p className="text-[9px] text-white/40 leading-tight">Image unavailable</p>
         </div>
 
@@ -470,7 +470,7 @@ function BusinessDetailModal({
             }}
           >
             <Building2 size={32} className="text-white/60" />
-            <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">Believ</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">Koino</p>
             <p className="text-[9px] text-white/40 leading-tight">Image unavailable</p>
           </div>
           <div className="absolute inset-0 bg-gradient-to-t from-[#1C1929] via-transparent to-transparent pointer-events-none" />
@@ -580,7 +580,7 @@ function BusinessDetailModal({
             {business.whatsapp_number && (
               <a
                 href={`https://wa.me/${business.whatsapp_number.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
-                  `Hi, I found your business "${business.name}" on Believ and I'd like more information.`
+                  `Hi, I found your business "${business.name}" on Koino and I'd like more information.`
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -621,11 +621,11 @@ function BusinessDetailModal({
             )}
           </div>
 
-          {/* Helper text — Believ does NOT verify products/services, only the listing */}
+          {/* Helper text — Koino does NOT verify products/services, only the listing */}
           {business.verified && (
             <p className="text-[10px] text-[#64748B] text-center leading-relaxed">
               <BadgeCheck size={9} className="inline mr-0.5" />
-              "Verified" means Believ has reviewed this listing. It does not mean Believ guarantees the business's products or services.
+              "Verified" means Koino has reviewed this listing. It does not mean Koino guarantees the business's products or services.
             </p>
           )}
         </div>

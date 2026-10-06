@@ -17,36 +17,39 @@ export const metadata: Metadata = {
       ? "https://crosscraftedapp.vercel.app"
       : "http://localhost:3000")
   ),
-  title: "Believ — Believe. Connect. Grow.",
+  title: "Koino — Faith. Fellowship. Belong.",
   description:
-    "Your all-in-one Christian community platform — Bible trivia, apologetics, church directory, marketplace, and more. Built to strengthen faith and connect believers across India.",
+    "Koino is a Christian community platform for Scripture, churches, prayer, events, Bible trivia, Christian businesses, marketplace and fellowship.",
   keywords: [
-    "Believ",
+    "Koino",
+    "Koinonia",
     "Christian community",
     "Bible trivia",
     "church directory India",
     "apologetics",
     "prayer wall",
     "Christian marketplace",
+    "Christian business directory",
   ],
-  authors: [{ name: "Believ Team" }],
+  authors: [{ name: "Koino Team" }],
+  manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/believ-logo.png",
-    apple: "/believ-logo.png",
+    icon: "/koino-logo.png",
+    apple: "/koino-logo.png",
   },
   openGraph: {
-    title: "Believ — Believe. Connect. Grow.",
+    title: "Koino — Faith. Fellowship. Belong.",
     description:
-      "Your all-in-one Christian community platform — Bible trivia, apologetics, church directory, marketplace, and more.",
-    siteName: "Believ",
+      "Connect, grow and belong with the Christian community on Koino.",
+    siteName: "Koino",
     type: "website",
-    images: ["/believ-logo.png"],
+    images: ["/koino-logo.png"],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Believ",
-    description: "Believe. Connect. Grow.",
-    images: ["/believ-logo.png"],
+    title: "Koino",
+    description: "Faith. Fellowship. Belong.",
+    images: ["/koino-logo.png"],
   },
 };
 

@@ -111,8 +111,8 @@ export default function LandingHero({ onEnterApp }: Props) {
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Image
-              src="/believ-logo.png"
-              alt="Believ"
+              src="/koino-logo.png"
+              alt="Koino"
               width={32}
               height={32}
               className="rounded-lg"
@@ -158,7 +158,7 @@ export default function LandingHero({ onEnterApp }: Props) {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight leading-tight"
           >
-            Believ <br />
+            Koino <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#F39B9B] to-[#9786E3]">
               {t('landing.titleGradient')}
             </span>
@@ -373,7 +373,7 @@ export default function LandingHero({ onEnterApp }: Props) {
               onClick={() => onEnterApp("home")}
               className="px-8 py-3.5 bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 font-extrabold rounded-2xl text-xs uppercase tracking-widest shadow-lg transition-all inline-flex items-center gap-2 hover:-translate-y-px"
             >
-              Enter Believ <ArrowRight size={16} strokeWidth={2.5} />
+              Enter Koino <ArrowRight size={16} strokeWidth={2.5} />
             </button>
           </div>
         </div>
@@ -384,13 +384,13 @@ export default function LandingHero({ onEnterApp }: Props) {
         <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Image
-              src="/believ-logo.png"
-              alt="Believ"
+              src="/koino-logo.png"
+              alt="Koino"
               width={24}
               height={24}
               className="rounded-md"
             />
-            <span className="text-sm font-bold text-[#94A3B8]">Believ</span>
+            <span className="text-sm font-bold text-[#94A3B8]">Koino</span>
           </div>
           <p className="text-xs text-[#726E88]">Built with faith, for the body of Christ. Soli Deo Gloria.</p>
         </div>
