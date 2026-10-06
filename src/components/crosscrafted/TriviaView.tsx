@@ -95,6 +95,26 @@ export default function TriviaView() {
   const [selectedLevel, setSelectedLevel] = useState<(typeof QUIZ_LEVELS)[number] | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<(typeof QUIZ_CATEGORIES)[number] | null>(null);
   const [quizMode, setQuizMode] = useState<number>(10);
+
+  // Map quiz level IDs to translation keys (the source data has English labels)
+  const levelLabel = (id: string) => {
+    switch (id) {
+      case "beginners": return t("triviaView.setup.level.beginner");
+      case "intermediate": return t("triviaView.setup.level.intermediate");
+      case "skilled": return t("triviaView.setup.level.skilled");
+      case "expert": return t("triviaView.setup.level.expert");
+      default: return id;
+    }
+  };
+  const categoryLabel = (id: string) => {
+    switch (id) {
+      case "full_bible": return t("triviaView.setup.cat.full");
+      case "new_testament": return t("triviaView.setup.cat.nt");
+      case "old_testament": return t("triviaView.setup.cat.ot");
+      case "apologetics": return t("triviaView.setup.cat.apologetics");
+      default: return id;
+    }
+  };
   const [gameMode, setGameMode] = useState<QuizMode>("EARN_POINTS");
   const [gameState, setGameState] = useState<GameState>("setup");
   const [questions, setQuestions] = useState<ServerQuestion[]>([]);
@@ -281,7 +301,7 @@ export default function TriviaView() {
 
   const shareResults = async () => {
     if (!submitResult) return;
-    const text = `Bible Trivia ${gameMode === "EARN_POINTS" ? "(Earn Points)" : "(Practice)"}!\n\nCorrect: ${submitResult.correctCount}/${submitResult.totalQuestions}\n${gameMode === "EARN_POINTS" ? `Points earned: ${submitResult.totalPointsEarned} FP\n` : ""}Level: ${selectedLevel?.label} | Category: ${selectedCategory?.label}\n\nPlay now on Believ!`;
+    const text = `${t("triviaView.title")} ${gameMode === "EARN_POINTS" ? `(${t("triviaView.setup.mode.earn")})` : `(${t("triviaView.setup.mode.practice")})`}!\n\n${t("triviaView.results.correct", { count: submitResult.correctCount, total: submitResult.totalQuestions })}\n${gameMode === "EARN_POINTS" ? `${t("triviaView.results.pointsEarned", { points: submitResult.totalPointsEarned })}\n` : ""}Level: ${selectedLevel ? levelLabel(selectedLevel.id) : ""} | ${t("triviaView.setup.category")}: ${selectedCategory ? categoryLabel(selectedCategory.id) : ""}\n\n${t("triviaView.results.shareText", { correct: submitResult.correctCount, total: submitResult.totalQuestions })}`;
     if (navigator.share) {
       try {
         await navigator.share({ title: "Believ Bible Trivia", text });
@@ -432,7 +452,7 @@ export default function TriviaView() {
 
                 {/* Level Selection */}
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">Choose Level</p>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">{t("triviaView.setup.difficulty")}</p>
                   <div className="grid grid-cols-2 gap-2">
                     {QUIZ_LEVELS.map((lvl) => {
                       const selected = selectedLevel?.id === lvl.id;
@@ -454,7 +474,7 @@ export default function TriviaView() {
                               {lvl.points} FP
                             </span>
                           </div>
-                          <p className="text-sm font-bold text-white">{lvl.label}</p>
+                          <p className="text-sm font-bold text-white">{levelLabel(lvl.id)}</p>
                           <p className="text-[10px] text-[#94A3B8]">{lvl.description}</p>
                         </button>
                       );
@@ -464,7 +484,7 @@ export default function TriviaView() {
 
                 {/* Category Selection */}
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">Choose Category</p>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">{t("triviaView.setup.category")}</p>
                   <div className="grid grid-cols-2 gap-2">
                     {QUIZ_CATEGORIES.map((cat) => {
                       const selected = selectedCategory?.id === cat.id;
@@ -486,7 +506,7 @@ export default function TriviaView() {
                             {cat.icon === "Scroll" && <Scroll size={16} />}
                             {cat.icon === "Shield" && <Shield size={16} />}
                           </div>
-                          <p className="text-sm font-bold text-white">{cat.label}</p>
+                          <p className="text-sm font-bold text-white">{categoryLabel(cat.id)}</p>
                         </button>
                       );
                     })}
@@ -595,7 +615,7 @@ export default function TriviaView() {
                         color: selectedLevel?.color,
                       }}
                     >
-                      {selectedLevel?.label} · {selectedLevel?.points} FP
+                      {selectedLevel ? `${levelLabel(selectedLevel.id)} · ${selectedLevel.points} FP` : ""}
                     </span>
                   </div>
                   <p className="text-base font-bold text-white leading-relaxed mb-4">
@@ -692,7 +712,7 @@ export default function TriviaView() {
                           onClick={advanceQuestion}
                           className="w-full mt-3 py-2.5 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2"
                         >
-                          {currentQ + 1 >= questions.length ? "Submit Quiz" : "Next Question"}
+                          {currentQ + 1 >= questions.length ? t("triviaView.playing.submit") : t("triviaView.playing.next")}
                           <ArrowRight size={14} />
                         </button>
                       </motion.div>
@@ -717,7 +737,7 @@ export default function TriviaView() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-extrabold text-white mb-1">
-                    {gameMode === "EARN_POINTS" ? "Quiz Complete!" : "Practice Complete!"}
+                    {gameMode === "EARN_POINTS" ? t("triviaView.results.title") : t("triviaView.results.title")}
                   </h2>
                   <p className="text-sm text-[#94A3B8]">
                     {gameMode === "EARN_POINTS"

@@ -26,6 +26,7 @@ import {
   type ServiceTime,
 } from "@/lib/crosscrafted-data";
 import ImagePicker from "@/components/crosscrafted/ImagePicker";
+import { useTranslation } from "@/lib/i18n/LanguageContext";
 import { toast } from "sonner";
 
 type Props = {
@@ -33,6 +34,7 @@ type Props = {
 };
 
 export default function ChurchesView({ initialOpenChurchId }: Props) {
+  const t = useTranslation();
   const [churches, setChurches] = useState<Church[]>(CHURCHES);
   const [followed, setFollowed] = useState<Set<string>>(new Set());
   const [filterState, setFilterState] = useState("");
@@ -176,8 +178,8 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <div>
-          <h1 className="text-xl font-bold text-white">Discover</h1>
-          <p className="text-xs text-[#94A3B8] mt-0.5">Find churches across India</p>
+          <h1 className="text-xl font-bold text-white">{t("churches.title")}</h1>
+          <p className="text-xs text-[#94A3B8] mt-0.5">{t("churches.subtitle")}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -533,7 +535,7 @@ export default function ChurchesView({ initialOpenChurchId }: Props) {
                   <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
                     <div className="flex items-center gap-2 mb-2">
                       <Clock size={14} className="text-[#A855F7]" />
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">Service Times</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">{t("churches.serviceTimes")}</p>
                     </div>
                     <div className="space-y-1.5">
                       {openChurch.service_times.map((s, idx) => (

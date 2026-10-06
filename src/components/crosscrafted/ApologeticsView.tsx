@@ -27,8 +27,10 @@ import {
   type ApologeticsQuestion,
   type ApologeticsAnswer,
 } from "@/lib/crosscrafted-data";
+import { useTranslation } from "@/lib/i18n/LanguageContext";
 
 export default function ApologeticsView() {
+  const t = useTranslation();
   const [activeTab, setActiveTab] = useState<"articles" | "qa">("articles");
   const [posts] = useState<ApologeticsPost[]>(APOLOGETICS_POSTS);
   const [questions, setQuestions] = useState<ApologeticsQuestion[]>(APOLOGETICS_QUESTIONS);
@@ -170,8 +172,8 @@ export default function ApologeticsView() {
     <div className="max-w-[680px] mx-auto px-4 py-5">
       <div className="flex justify-between items-center mb-4">
         <div>
-          <h1 className="text-xl font-bold text-white">Apologetics</h1>
-          <p className="text-xs text-[#94A3B8] mt-0.5">Defend the faith with reason &amp; Scripture</p>
+          <h1 className="text-xl font-bold text-white">{t("apologetics.title")}</h1>
+          <p className="text-xs text-[#94A3B8] mt-0.5">{t("apologetics.subtitle")}</p>
         </div>
         {activeTab === "qa" && (
           <button

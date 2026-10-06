@@ -20,9 +20,11 @@ import {
   DAILY_VERSES,
   type PrayerPost,
 } from "@/lib/crosscrafted-data";
+import { useTranslation } from "@/lib/i18n/LanguageContext";
 import StreakBadge from "@/components/crosscrafted/StreakBadge";
 
 export default function PrayerWallView() {
+  const t = useTranslation();
   const [prayers, setPrayers] = useState<PrayerPost[]>(PRAYERS);
   const [prayedSet, setPrayedSet] = useState<Set<string>>(new Set());
   const [activeCategory, setActiveCategory] = useState("All");
@@ -163,8 +165,8 @@ export default function PrayerWallView() {
     <div className="max-w-[680px] mx-auto px-4 py-5">
       <div className="flex justify-between items-center mb-4">
         <div>
-          <h1 className="text-xl font-bold text-white">Prayer Wall</h1>
-          <p className="text-xs text-[#94A3B8] mt-0.5">Lift each other up in prayer</p>
+          <h1 className="text-xl font-bold text-white">{t("prayer.title")}</h1>
+          <p className="text-xs text-[#94A3B8] mt-0.5">{t("prayer.subtitle")}</p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}

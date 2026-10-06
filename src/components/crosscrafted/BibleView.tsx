@@ -38,10 +38,12 @@ import {
   type Bookmark as BookmarkType,
 } from "@/lib/bible-data";
 import StreakBadge from "@/components/crosscrafted/StreakBadge";
+import { useTranslation } from "@/lib/i18n/LanguageContext";
 
 type View = "books" | "chapters" | "reader" | "search" | "bookmarks";
 
 export default function BibleView() {
+  const t = useTranslation();
   const [view, setView] = useState<View>("books");
   const [selectedBook, setSelectedBook] = useState<BibleBook | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
@@ -226,8 +228,8 @@ export default function BibleView() {
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <div>
-          <h1 className="text-xl font-bold text-white">Bible</h1>
-          <p className="text-xs text-[#94A3B8] mt-0.5">Read, search & bookmark Scripture</p>
+          <h1 className="text-xl font-bold text-white">{t("nav.bible")}</h1>
+          <p className="text-xs text-[#94A3B8] mt-0.5">{t("bible.subtitle")}</p>
         </div>
         <div className="flex items-center gap-2">
           <button

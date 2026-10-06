@@ -406,6 +406,8 @@ export const en: Record<string, string> = {
   "apologetics.topic.worldReligions": "World Religions",
 
   // ─── Bible ───
+  "bible.title": "Bible",
+  "bible.subtitle": "Read, search & bookmark Scripture",
   "bible.read": "Read",
   "bible.search": "Search the Bible...",
   "bible.bookmark": "Bookmark",
