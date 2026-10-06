@@ -140,6 +140,7 @@ export const en: Record<string, string> = {
   "admin.tab.announcements": "Announcements",
   "admin.tab.redemptions": "Redemptions",
   "admin.tab.analytics": "Analytics",
+  "admin.tab.bibleComics": "Bible Comics",
 
   // ─── Trivia view ───
   "triviaView.title": "Bible Trivia",
@@ -445,6 +446,7 @@ export const en: Record<string, string> = {
   "admin.tab.announcements": "Announcements",
   "admin.tab.redemptions": "Redemptions",
   "admin.tab.analytics": "Analytics",
+  "admin.tab.bibleComics": "Bible Comics",
   "admin.gifts.title": "Reward Gifts",
   "admin.gifts.addGift": "Add Gift",
   "admin.gifts.cancel": "Cancel",

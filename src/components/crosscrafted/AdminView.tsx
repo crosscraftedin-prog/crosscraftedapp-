@@ -33,6 +33,7 @@ import {
   Mail,
   Truck,
   CheckCircle,
+  BookOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -50,6 +51,7 @@ import {
   type TriviaGift,
 } from "@/lib/crosscrafted-data";
 import ImagePicker from "@/components/crosscrafted/ImagePicker";
+import BibleComicsAdmin from "@/components/crosscrafted/BibleComicsAdmin";
 
 type AdminTab =
   | "dashboard"
@@ -61,7 +63,8 @@ type AdminTab =
   | "competitions"
   | "announcements"
   | "redemptions"
-  | "analytics";
+  | "analytics"
+  | "bible-comics";
 
 const TABS: { id: AdminTab; icon: typeof Shield; labelKey: string }[] = [
   { id: "dashboard",    icon: LayoutDashboard, labelKey: "admin.tab.dashboard" },
@@ -74,6 +77,7 @@ const TABS: { id: AdminTab; icon: typeof Shield; labelKey: string }[] = [
   { id: "announcements",icon: Megaphone,         labelKey: "admin.tab.announcements" },
   { id: "redemptions",  icon: Package,           labelKey: "admin.tab.redemptions" },
   { id: "analytics",    icon: BarChart3,         labelKey: "admin.tab.analytics" },
+  { id: "bible-comics", icon: BookOpen,          labelKey: "admin.tab.bibleComics" },
 ];
 
 export default function AdminView() {
@@ -207,6 +211,7 @@ export default function AdminView() {
           {activeTab === "announcements" && <AnnouncementsTab />}
           {activeTab === "redemptions" && <RedemptionsTab />}
           {activeTab === "analytics" && <AnalyticsTab />}
+          {activeTab === "bible-comics" && <BibleComicsAdmin />}
         </motion.div>
       </AnimatePresence>
     </div>

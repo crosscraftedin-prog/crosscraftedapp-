@@ -337,6 +337,14 @@ model ComicChapter {
   title           String             // English default title
   coverArtUrl     String?            // optional chapter cover image
   sortOrder       Int      @default(0)
+  // Publishing workflow state.
+  // draft    — admin started but not finished
+  // review   — ready for someone else to QA
+  // ready    — QA passed, awaiting publish
+  // published — visible to end users (isActive = true AND status = "published")
+  status          String   @default("draft") // "draft" | "review" | "ready" | "published"
+  description     String?            // short summary shown in CMS + maybe on chapter cards
+  adminNotes      String?            // private internal notes for the editorial team
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -347,6 +355,7 @@ model ComicChapter {
 
   @@unique([bookId, chapter]) // one comic per book+chapter
   @@index([bookId])
+  @@index([status])
 }
 
 model ComicPanel {
@@ -355,6 +364,7 @@ model ComicPanel {
   comicChapterId  String
   sortOrder       Int      @default(0)
   artworkUrl      String             // ONE image — language-independent
+  altText         String?            // accessibility text (screen readers + image fallback)
   verseStart      Int                // e.g. 1
   verseEnd        Int                // e.g. 3
   bookId          String             // denormalized from ComicChapter for quick verse lookups
