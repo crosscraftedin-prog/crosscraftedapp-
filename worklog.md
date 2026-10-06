@@ -234,3 +234,43 @@ Stage Summary:
 - MOBILE NAV CLEARANCE: pb-28 added on mobile so fixed bottom-4 nav doesn't cover content.
 - NO CHANGES TO: Bible Comics CMS, Prisma models, Supabase Storage, upload API, Genesis 1/2/3/4 content, Bible reader, Trivia, Faith Points, auth, admin.
 - TESTING REQUIRED (admin-only, browser-based): verify desktop 3×2 layout, mobile stacked layout, overlay legibility against real Genesis 2 artwork, and that mobile bottom nav no longer covers the final panel.
+
+---
+Task ID: comic-default-chapter-naming-cover
+Agent: main
+Task: Final navigation + naming + chapter cover fix — Bible Comics must open Genesis 1 by default, feature name standardized to BIBLE COMICS.
+
+Work Log:
+- Searched page.tsx for the Bible Comics entry point and found `useState(2)` hardcoded as the default comicChapter — this was the root cause of Bible Comics opening Genesis 2 instead of Genesis 1.
+- Verified DB state: Genesis 1 already has sortOrder=0 (correct earliest), isActive=true, status=published. So no DB changes needed — only the frontend default.
+- Searched codebase for inconsistent naming and found 4 occurrences of "Comic Bible" / "Believ Comic Bible":
+  * src/app/page.tsx:62   SIDEBAR_LINKS: "Comic Bible"
+  * src/app/page.tsx:86   MOBILE_MORE_VIEWS: "Comic Bible"
+  * src/app/page.tsx:102  comment: "Comic Bible state"
+  * src/app/api/comic/share/[panelId]/route.ts:42  share fallback title: "Believ Comic Bible"
+- Verified ComicChapter.coverArtUrl already exists as a Prisma field and Genesis 1 has a cover URL stored in DB (verified via /api/comic/list: cover=yes for genesis-1, cover=no for genesis-2/3/4).
+- Verified BibleComicsAdmin.tsx already displays chapter covers in the admin chapter list (line 518-519), which is the appropriate chapter/list/preview location. No changes needed there.
+- Verified the i18n admin tab label was already correct: "admin.tab.bibleComics": "Bible Comics".
+- Verified ComicView intentionally does NOT display the chapter cover in the comic panel area (only panel artwork) — per user spec, did not force a large cover into the comic panel area.
+- Changes:
+  * src/app/page.tsx:102-106  Changed default comicChapter from useState(2) → useState(1). Updated comment to "Bible Comics state".
+  * src/app/page.tsx:62       SIDEBAR_LINKS label: "Comic Bible" → "Bible Comics"
+  * src/app/page.tsx:86       MOBILE_MORE_VIEWS label: "Comic Bible" → "Bible Comics"
+  * src/app/api/comic/share/[panelId]/route.ts:42  Share fallback title: "Believ Comic Bible" → "Believ Bible Comics"
+- Type-check passed: no new TypeScript errors.
+- Committed as aacce20 and pushed to main → Vercel deploy triggered.
+- Verified production APIs after deploy:
+  * Genesis 1 API: HTTP 200, 6 panels (GEN1-P01..P06), each panel has its own Supabase Storage URL ✅
+  * Genesis 2 API: HTTP 200, 7 panels ✅
+  * Genesis 3 API: HTTP 200 ✅
+  * Genesis 4 API: HTTP 200 ✅
+  * Comic list API: HTTP 200, 4 chapters in correct order: genesis-1 (sort=0, cover=yes) → genesis-2 (sort=1) → genesis-3 (sort=2) → genesis-4 (sort=3) ✅
+  * Homepage: HTTP 200 ✅
+
+Stage Summary:
+- ROOT CAUSE #1: useState(2) hardcoded as default comicChapter in src/app/page.tsx. FIXED → useState(1).
+- ROOT CAUSE #2: Inconsistent "Comic Bible" labels in 4 places (2 nav arrays, 1 comment, 1 share title). FIXED → all standardized to "Bible Comics" / "Believ Bible Comics".
+- CHAPTER COVER: ComicChapter.coverArtUrl already exists, Genesis 1 already has cover stored, already displayed in admin chapter list (BibleComicsAdmin.tsx:518-519). No changes needed.
+- NO CHANGES TO: Genesis 1/2/3/4 content, panel artwork URLs, 6-panel structure, mobile 1×6 layout, desktop 3×2 layout, panel number/title/verse overlays, narration below artwork, bottom action bar, chapter navigation, mobile bottom nav, Bible reader, Trivia, Faith Points, auth, admin, CMS architecture, Prisma models, Supabase Storage, artwork upload API.
+- FILES CHANGED: src/app/page.tsx (default chapter + 2 labels + 1 comment), src/app/api/comic/share/[panelId]/route.ts (1 share fallback title).
+- BROWSER TESTS REQUIRED (admin-only, user must verify): open Bible Comics feature → should land on Genesis 1, not Genesis 2.
