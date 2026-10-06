@@ -338,3 +338,47 @@ Stage Summary:
 - FILES CHANGED: src/app/page.tsx (removed 2 sidebar entries + added onOpenComic prop), src/components/crosscrafted/BibleView.tsx (added mode state + switcher + ComicsBrowserView component, +357/-146 lines).
 - NO CHANGES TO: ComicView.tsx (reused as-is), comic APIs, comic DB schema, comic CMS, comic artwork (Genesis 1/2/3/4 panels unchanged), coverArtUrl field semantics (still stored on ComicChapter + returned by /api/comic/list + now also displayed in ComicsBrowserView + still displayed in admin chapter list), Bible reader functionality, Trivia, Faith Points, auth, admin, LandingHero Enter App button.
 - BROWSER TESTS REQUIRED (admin-only, user must verify): open Bible → switch to COMICS → see chapter cards → click Genesis 1 → ComicView opens with all 6 panels → back to Bible → still in COMICS mode → switch to READ → existing Bible reader works.
+
+---
+Task ID: bible-hub-3-modes-full-book-names
+Agent: main
+Task: Complete Bible hub redesign — 3 modes (READ / BIBLE COMICS / READING PLANS) + full Bible book names.
+
+Work Log:
+- Removed "Reading Plans" from SIDEBAR_LINKS and MOBILE_MORE_VIEWS in src/app/page.tsx. Sidebar now has ONE "Bible" entry — Reading Plans is accessed inside the Bible hub via the mode switcher. Removed unused BookMarked import.
+- Standalone /bible-plans view route preserved in page.tsx for backward compatibility (any direct links still work).
+- Updated BibleView.tsx:
+  * Added "plans" to BibleMode type: now "read" | "comics" | "plans"
+  * Mode switcher now has 3 tabs: [📖 READ] [✨ COMICS] [📚 PLANS]
+  * Tab labels kept short ("READ", "COMICS", "PLANS") so all 3 fit on small mobile screens without horizontal overflow
+  * Icon size reduced (14→13) and gap tightened (2→1.5) for compactness
+  * Added gap-1 between tabs so active gradient doesn't bleed into inactive tabs
+  * PLANS mode renders the existing BiblePlansView component (no rebuild) with translation prop + onOpenChapter callback that switches to READ mode and loads the chosen chapter inline
+  * Imported BiblePlansView from "@/components/crosscrafted/BiblePlansView"
+- Updated BooksView book cards (in BibleView.tsx):
+  * Cards now show book.name (e.g. "Genesis") instead of book.abbr (e.g. "Ge")
+  * Card grid changed from grid-cols-3 sm:grid-cols-4 to grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 so long names ("1 Thessalonians", "2 Thessalonians", "Ecclesiastes", "Lamentations", "Song of Solomon") fit on mobile without horizontal overflow
+  * Card now has min-h-[60px] and flex flex-col justify-center so long names wrap cleanly
+  * "chapters" spelled out on sm+ screens, "ch" on mobile (compact)
+- Audited all 66 books in src/lib/bible-data.ts: all 66 already have full display names. No data changes needed — only the display layer was using abbreviations.
+- Updated BiblePlansView.tsx day reading labels to use book.name instead of book.abbr:
+  was: "Ge 1 · Ex 2"
+  now:  "Genesis 1 · Exodus 2"
+- Committed as b1c09de and pushed to main → Vercel deploy triggered.
+- Verified production after deploy:
+  * Homepage: HTTP 200 ✅
+  * Comic list API: HTTP 200, 4 chapters in correct order (genesis-1 sort=0 → genesis-2 sort=1 → genesis-3 sort=2 → genesis-4 sort=3) ✅
+  * Genesis 1 API: HTTP 200 ✅
+  * Genesis 2 API: HTTP 200 ✅
+  * Genesis 3 API: HTTP 200 ✅
+  * Genesis 4 API: HTTP 200 ✅
+  * Bible verse API (KJV John 3:16): HTTP 200 ✅
+
+Stage Summary:
+- FILES CHANGED: src/app/page.tsx (removed Reading Plans sidebar entry + unused import), src/components/crosscrafted/BibleView.tsx (added "plans" mode + 3-tab switcher + full book names + responsive grid), src/components/crosscrafted/BiblePlansView.tsx (day labels use book.name).
+- ALL 66 BOOKS use full display names (Genesis, Exodus, ... Revelation). Audited via script. "Job" is the only 3-letter name — it IS the canonical full name.
+- GENESIS 1 STILL APPEARS BEFORE GENESIS 2 in comic list (verified via API).
+- EXISTING ComicView reused unchanged.
+- EXISTING BiblePlansView reused unchanged (only 1 line changed for display).
+- NO CHANGES TO: comic DB schema, comic artwork, comic CMS, comic APIs, Genesis 1/2/3/4 panel counts, coverArtUrl field semantics, Bible reader functionality, Trivia, Faith Points, auth, admin, LandingHero, routing architecture.
+- BROWSER TESTS REQUIRED (admin-only, user must verify): open Bible → switch between READ / BIBLE COMICS / READING PLANS → verify each mode shows the expected content → in PLANS mode, click a day → verify it switches to READ mode with the chosen chapter loaded → in READ mode, verify all 66 books use full names → verify mobile layout has no horizontal overflow.
