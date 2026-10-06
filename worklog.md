@@ -752,3 +752,50 @@ Stage Summary:
   * Analytics member growth charts (requires analytics event tracking)
   * Notification system integration for onboarding completion
 - NO CHANGES TO: Existing auth (Google + Email via Supabase), Bible Comics (Genesis 1/2/3/4 unchanged), Bible/Trivia/Prayer Wall/Churches/Marketplace/Business Directory/Events/Admin, Brand colors / Koino logo, Mobile bottom nav, Routing architecture.
+
+---
+Task ID: koino-trivia-competition-prize-system
+Agent: main
+Task: Bible Trivia competition + real prize system — Competition/Prize/Winner models + server-authoritative scoring.
+
+Work Log:
+- Inspected existing trivia architecture: TriviaQuestion (800+ in DB), TriviaQuestionAttempt (@@unique [userId, questionId] anti-farming), TriviaQuizSession, TriviaPointTransaction, DailyChallenge, DailySpin, UserBadge, StreakFreeze. Existing APIs: /api/trivia/start, /api/trivia/submit, /api/trivia/leaderboard, /api/trivia/stats, /api/trivia/gifts, /api/trivia/claim-gift, /api/gamification/daily-challenge, /api/gamification/daily-spin.
+- Added 4 new Prisma models:
+  1. TriviaCompetition — title, type, category, difficulty, questionCount, attemptLimit, winnerCount, rules, status, startAt, endAt, claimDeadlineDays, prizeId, createdById
+  2. TriviaCompetitionAttempt — questionIds (server-selected), score (competition score), correctCount, accuracy, durationMs. Indexed on [competitionId, score] for leaderboard queries.
+  3. TriviaPrize — name, description, imageUrl, sourceType (koino_merch/custom), productId (references Product — no duplication), quantity, assignedQuantity, remainingQuantity, requiresShipping, terms
+  4. TriviaWinner — rank, score, status (pending_verification → phone_verified → contacted → address_pending → address_verified → processing → shipped → delivered → claimed → cancelled/disqualified/expired), phoneVerified, shipping fields, adminNotes, disqualifiedReason
+- Added relations to User model: competitionAttempts[], triviaWins[]
+- Ran `prisma db push` successfully — all 4 new tables created in production Supabase.
+- Created 5 new API endpoints:
+  1. GET /api/trivia/competitions — public, returns competitions with prize info, participant count, user's rank + attempts
+  2. POST /api/trivia/competitions/[id]/submit — SERVER-AUTHORITATIVE scoring (userId from auth, answers validated server-side, attempt limit enforced via DB count, competition score separate from lifetime FP)
+  3. GET/POST /api/admin/trivia/competitions — admin CRUD
+  4. GET/POST /api/admin/trivia/prizes — admin CRUD with inventory tracking
+  5. GET /api/admin/trivia/winners — admin winner list with user info
+- Updated TriviaView.tsx CompeteView: replaced the old "Church vs Church coming soon" placeholder with a REAL competition browser that fetches from /api/trivia/competitions. Shows LIVE / UPCOMING / ENDED sections with prize images, participant counts, time remaining, user's rank + attempts remaining.
+- Committed as 9b3a0c8 and pushed to main → Vercel deploy triggered.
+- Verified production after deploy:
+  * Homepage: HTTP 200 ✅
+  * /api/trivia/competitions: 200 with {competitions:[]} (empty — admin must create competitions) ✅
+  * /api/trivia/competitions/[id]/submit: 401 for unauthenticated ✅
+  * /api/admin/trivia/prizes: 403 for non-admin ✅
+  * /api/admin/trivia/winners: 403 for non-admin ✅
+  * Genesis 1: HTTP 200 ✅ (no regression)
+
+Stage Summary:
+- PRISMA MIGRATION: 4 new models (TriviaCompetition, TriviaCompetitionAttempt, TriviaPrize, TriviaWinner) + User relations. All created in production DB.
+- FILES CHANGED: 7 files (1 schema + 5 new API routes + 1 modified TriviaView).
+- REAL DB-BACKED: Competition/Prize/Winner Prisma models, competition submit API (server-authoritative scoring), admin CRUD APIs (all 403 for non-admins).
+- KEY DESIGN: Competition Score is SEPARATE from lifetime FP. Attempt limits enforced server-side. Correct answers never sent to browser. Prize inventory tracked. Winner records immutable.
+- HONEST LIMITATIONS (not yet built — requires future work):
+  * Competition quiz PLAY flow (the "Enter Challenge" button is visual only — the quiz UI that fetches questions + renders the quiz + submits answers is not wired yet)
+  * Winner calculation cron job (server-side auto-calculation when endAt passes — currently admin must manually trigger)
+  * OTP mobile verification for prize claims (requires OTP provider integration)
+  * Shipping details collection form
+  * Admin Prize/Competition/Winner management UI in AdminView (APIs exist, admin panel tabs not wired)
+  * Real-time leaderboard refresh
+  * Anti-cheat detection (impossible submissions, rapid answers)
+  * Audit log model + API
+  * Notification system integration for winner notification
+- NO CHANGES TO: Existing TriviaQuestion model (800+ questions preserved), existing Faith Points system (server-authoritative, anti-farming), existing Daily Challenge/Spin/Badges/Stats/Leaderboard, existing difficulty values, existing Practice Mode, Bible Comics, Authentication, Brand colors/Koino logo.
