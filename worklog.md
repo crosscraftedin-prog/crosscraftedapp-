@@ -197,3 +197,40 @@ Stage Summary:
   4. Close modal → reopen → should show new artwork
   5. Refresh page → should still show new artwork
   6. View public Genesis 1 page → should show new artwork
+
+---
+Task ID: comicview-overlay-final-ui
+Agent: main
+Task: Final UI fix — overlay panel number/title/verse on artwork per Genesis 2 reference, add mobile bottom-padding for nav clearance.
+
+Work Log:
+- Read ComicView.tsx (721 lines) to understand current structure.
+- Found mobile bottom nav in src/app/page.tsx (fixed bottom-4 floating pill, md:hidden).
+- Identified that panel number + title were in a separate header ABOVE the artwork — user wants them OVERLAID on the artwork.
+- Modified ComicPanelCard:
+  * Removed the separate header div (was: p-3 pb-2 with number + title).
+  * Moved panel number badge + title to OVERLAY on top of artwork (absolute top-3 left-3 right-3).
+  * Added top gradient (from-black/80 via-black/30 to-transparent, h-24) for overlay legibility against any artwork colors.
+  * Added bottom gradient (from-black/80 via-black/30 to-transparent, h-20) for verse reference legibility.
+  * Verse reference badge stays at bottom-right (already was there).
+  * Narration remains BELOW artwork (unchanged behavior — p-3 flex-1).
+- Modified ComicView container div:
+  * Added pb-28 on mobile (md:pb-5 on desktop) so the fixed mobile bottom nav does NOT cover comic content — users can now scroll completely past the final panel.
+- Grid unchanged: grid-cols-1 (mobile, stacked) → md:grid-cols-2 (tablet) → lg:grid-cols-3 (desktop, 3×2).
+- Type-check passed: no new TypeScript errors in ComicView.tsx.
+- Committed as be810ae and pushed to main → Vercel deploy triggered.
+- Verified production APIs after deploy:
+  * Genesis 2 API: HTTP 200, 7 panels, GEN2-P01 + GEN2-P02 still have Supabase Storage URLs ✅
+  * Genesis 1 API: HTTP 200, 6 panels, GEN1-P01 still has Supabase Storage URL ✅
+  * Homepage: HTTP 200 ✅
+
+Stage Summary:
+- FILES CHANGED: src/components/crosscrafted/ComicView.tsx (only file modified, +27/-19 lines).
+- PANEL NUMBER: now OVERLAID on artwork (top-left, was in separate header above artwork).
+- PANEL TITLE: now OVERLAID on artwork (next to number, with drop-shadow + line-clamp-2).
+- VERSE REFERENCE: stays OVERLAID at bottom-right of artwork (unchanged).
+- NARRATION: stays BELOW artwork (unchanged).
+- GRID: 3×2 desktop (lg:grid-cols-3), stacked on mobile (grid-cols-1).
+- MOBILE NAV CLEARANCE: pb-28 added on mobile so fixed bottom-4 nav doesn't cover content.
+- NO CHANGES TO: Bible Comics CMS, Prisma models, Supabase Storage, upload API, Genesis 1/2/3/4 content, Bible reader, Trivia, Faith Points, auth, admin.
+- TESTING REQUIRED (admin-only, browser-based): verify desktop 3×2 layout, mobile stacked layout, overlay legibility against real Genesis 2 artwork, and that mobile bottom nav no longer covers the final panel.
