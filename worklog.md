@@ -421,3 +421,49 @@ Stage Summary:
 - AUTH/SECURITY: Follow toggle is now auth-gated (was previously open to anyone). Login required to follow. Login required to list a church (existing ListYourEntity behavior preserved). No private user data exposed. No service-role keys exposed.
 - MOBILE: pb-28 added so fixed mobile bottom nav doesn't cover My Churches list or church detail. Mode switcher (Discover/My Churches) uses same compact tab pattern as Bible hub (fits comfortably on small screens). Long church names truncate cleanly with `truncate` class.
 - BROWSER TESTS REQUIRED (admin-only, user must verify): open Churches → tap "+ List Your Church" → confirm ListYourEntity page opens → switch to My Churches tab (unauth) → see "Sign in required" → sign in → switch to My Churches → see "You're not following any churches yet" → switch to Discover → tap Follow on a church → switch to My Churches → see the church in the list → tap a church → see Groups placeholder section in detail modal.
+
+---
+Task ID: events-discovery-state-city-filters
+Agent: main
+Task: Events discovery + state/city filtering + event type (in-person/online/hybrid) + ticket URL + WhatsApp organizer.
+
+Work Log:
+- Inspected current state: EventsView.tsx (626 lines, uses in-memory EVENTS mock array of 6 events), EventItem type had only state/city/is_online fields (no eventType, onlineUrl, ticketUrl, address, country). No Prisma Event model — all mock data in crosscrafted-data.ts.
+- Extended EventItem type with: country, address, eventType (in-person|online|hybrid), onlineUrl, ticketUrl, organizerName, status (upcoming|cancelled|ended), featured. Kept is_online for backward compat.
+- Updated all 6 mock events to use new schema: e1/e2/e3/e4 in-person (with ticketUrls on e1, e3, e4), e5 online-only with onlineUrl, e6 hybrid with onlineUrl. Marked e1, e3, e6 as featured.
+- Added INDIAN_CITIES_BY_STATE single source of truth — 19 Indian states each with their major cities (e.g. Telangana → Hyderabad, Warangal, Nizamabad, Karimnagar, Khammam).
+- Added getCitiesForState(state) helper.
+- Expanded EVENT_CATEGORIES from 8 to 18: Worship, Conference, Prayer, Bible Study, Youth, Young Adults, Men, Women, Family, Children, Music, Workshop, Seminar, Outreach, Fellowship, Retreat, Concert, Other.
+- Added EVENT_DATE_FILTERS constant: All Events, Today, Tomorrow, This Weekend, This Week, This Month.
+- Updated EventsView.tsx:
+  * Added quick filter row: [Near You] [All India] [Online] with Believ pink→orange gradient active state
+  * "Near You" doesn't use GPS — uses selected state/city; if no state set, shows "Select your location" banner
+  * "All India" preserves manual filters
+  * "Online" filters to events where eventType is online or hybrid
+  * Added City filter (state-dependent, disabled until state selected)
+  * Reset city when state changes
+  * Enhanced search to search title + description + city + state + church + category
+  * Added Tomorrow + Weekend date filter logic
+  * Event card badges: Online / Hybrid / Cancelled / Featured
+  * Card location display: online → 🌐 Online Event; in-person/hybrid → City, State
+  * Modal "Where" section: online → 🌐 Online Event + onlineUrl link; in-person → city/state + full address + location; hybrid → physical + "Also available online"
+  * Modal CTA: ticketUrl → "Get Tickets" external link (pink→orange); else online event with onlineUrl → "Join Online" (blue→purple); else fallback to existing RSVP button
+  * WhatsApp button uses MessageCircle icon + prefilled "Hi, I found your event 'X' on Believ..." message
+  * Helper text under ticket button: "Tickets and registration are handled by the event organizer. Believ does not process payments."
+  * "+ Add Event" → "+ List Your Event"
+  * Added pb-28 md:pb-5 so mobile bottom nav doesn't cover content
+  * Filter grid changed from sm:grid-cols-3 to grid-cols-2 sm:grid-cols-4 (now has Search + State + City + Language)
+  * activeFilters count now includes filterCity + dateFilter
+  * Clear all filters button also clears filterCity + sets quickFilter back to all-india
+- Committed as 95a6670 and pushed to main → Vercel deploy triggered.
+- Verified production after deploy:
+  * Homepage: HTTP 200 ✅
+  * Genesis 1/2/3/4 comic APIs: all HTTP 200 ✅ (no regression to Bible Comics)
+  * /api/auth/me: HTTP 401 for unauthenticated (auth intact) ✅
+
+Stage Summary:
+- FILES CHANGED: src/lib/crosscrafted-data.ts (EventItem type extended + 6 EVENTS updated + INDIAN_CITIES_BY_STATE + getCitiesForState + expanded EVENT_CATEGORIES + EVENT_DATE_FILTERS), src/components/crosscrafted/EventsView.tsx (quick filter row + City filter + enhanced search + event-type badges + ticket URL + WhatsApp + Join Online + mobile padding, +363/-52 lines).
+- NO DATABASE MIGRATIONS: Prisma schema unchanged. No Event model added. Events are mock data (same as before). When a real Event Prisma model is added later, the new EventItem fields map 1:1 to it.
+- NO PAYMENT GATEWAY: Believ does NOT process payments. ticketUrl opens external site in new tab. Helper text explicitly tells users "Believ does not process payments."
+- NO CHANGES TO: Bible/Bible Comics/Reading Plans/Trivia/Marketplace/Churches/Prayer Wall/Apologetics/Admin/Auth, comic content (Genesis 1/2/3/4 unchanged), mobile bottom nav, routing architecture, existing notification system (admin notification audience picker is a future task).
+- BROWSER TESTS REQUIRED (admin-only, user must verify): open Events → tap Near You → see "Select your location" banner → open filters → pick State (e.g. Telangana) → City dropdown becomes enabled with Telangana cities → pick Hyderabad → tap Online quick filter → see only online+hybrid events → tap an event → see event-type-aware "Where" section → if ticketUrl exists, see "Get Tickets" button + helper text → tap WhatsApp button → confirm prefilled message → confirm external links open in new tab.
