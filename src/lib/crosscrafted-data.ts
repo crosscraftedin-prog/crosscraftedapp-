@@ -115,6 +115,8 @@ export type ProductAttribute = {
   value: string;  // e.g. "100% Cotton"
 };
 
+export type SellerType = "believ" | "marketplace";
+
 export type Product = {
   id: string;
   name: string;
@@ -122,8 +124,11 @@ export type Product = {
   price: number;
   mrp: number;
   category: string;
+  subcategory?: string;
   vendor: string;
-  city: string;
+  sellerType: SellerType;        // believ = official Believ Store, marketplace = third-party seller
+  state: string;                 // e.g. "Karnataka" — empty for online-only
+  city: string;                  // e.g. "Bengaluru"
   rating: number;
   reviews: number;
   cover_gradient: number;
@@ -131,9 +136,34 @@ export type Product = {
   images?: string[];
   in_stock: boolean;
   whatsapp_number?: string;
+  buyUrl?: string;              // external buy/checkout link — Believ does NOT process payments
+  status?: "draft" | "pending_review" | "published" | "rejected" | "unlisted";
+  featured?: boolean;
   // Optional variations (e.g. sizes, colors) and attributes (e.g. material, weight).
   variations?: ProductVariation[];
   attributes?: ProductAttribute[];
+};
+
+export type Business = {
+  id: string;
+  name: string;
+  description: string;
+  category: string;             // see BUSINESS_CATEGORIES
+  country: string;              // "India"
+  state: string;
+  city: string;
+  address?: string;
+  languages: string[];
+  logo?: string;
+  cover_image?: string;
+  whatsapp_number?: string;
+  website?: string;
+  phone?: string;
+  email?: string;
+  cover_gradient: number;
+  status?: "pending" | "approved" | "rejected";
+  featured?: boolean;
+  productIds?: string[];        // IDs of Marketplace products associated with this business
 };
 
 export type TriviaQuestion = {
@@ -274,6 +304,61 @@ export const APOLOGETICS_TOPICS = [
 
 export const PRAYER_CATEGORIES = [
   "All", "Healing", "Family", "Guidance", "Thanksgiving", "Salvation", "Provision",
+] as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MARKETPLACE / BELIEV STORE
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Single source of truth for Marketplace + Believ Store product categories.
+// Used by the ShopView filter row, the List Item form, and (eventually) the
+// admin product form / server-side validation. Do NOT duplicate this list.
+export const MARKETPLACE_CATEGORIES = [
+  "Bibles",
+  "Books",
+  "Christian Clothing",
+  "T-Shirts",
+  "Hoodies",
+  "Accessories",
+  "Phone Covers",
+  "Christian Art",
+  "Wall Art",
+  "Gifts",
+  "Home & Living",
+  "Music",
+  "Kids",
+  "Stationery",
+  "Apparel",
+  "Other",
+] as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHRISTIAN BUSINESS DIRECTORY
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Single source of truth for Business Directory categories.
+// Used by the ListYourEntity (business variant) form, the future Business
+// Directory browse page, and admin category management. Do NOT duplicate.
+export const BUSINESS_CATEGORIES = [
+  "Christian Clothing",
+  "Christian Books & Bibles",
+  "Christian Wedding Services",
+  "Christian Caterers",
+  "Christian Event Planners",
+  "Christian Photographers",
+  "Christian Home Bakers",
+  "Christian Gifts",
+  "Christian Music",
+  "Christian Media",
+  "Christian Designers",
+  "Christian Education",
+  "Christian Schools",
+  "Christian Travel",
+  "Christian Counseling",
+  "Christian Printing",
+  "Christian Technology",
+  "Christian Services",
+  "Other",
 ] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -804,7 +889,10 @@ export const PRODUCTS: Product[] = [
     price: 1299,
     mrp: 1899,
     category: "Bibles",
+    subcategory: "Study Bible",
     vendor: "Word of Life Books",
+    sellerType: "marketplace",
+    state: "Karnataka",
     city: "Bengaluru",
     rating: 4.8,
     reviews: 234,
@@ -817,6 +905,9 @@ export const PRODUCTS: Product[] = [
     ],
     in_stock: true,
     whatsapp_number: "+919876543220",
+    buyUrl: "https://example-store.com/esv-study-bible",
+    status: "published",
+    featured: true,
   },
   {
     id: "pr2",
@@ -826,7 +917,10 @@ export const PRODUCTS: Product[] = [
     price: 899,
     mrp: 1499,
     category: "Gifts",
+    subcategory: "Decor",
     vendor: "Holy Land Crafts",
+    sellerType: "marketplace",
+    state: "Maharashtra",
     city: "Mumbai",
     rating: 4.9,
     reviews: 156,
@@ -839,83 +933,193 @@ export const PRODUCTS: Product[] = [
     ],
     in_stock: true,
     whatsapp_number: "+919876543221",
+    status: "published",
+    featured: false,
   },
   {
     id: "pr3",
     name: "Worship Album: 'Awake My Soul'",
     description:
       "12 original worship songs by the Grace City Worship team. Recorded live. Includes chord charts and lyric sheets. Streaming + CD bundle.",
-    price: 399,
-    mrp: 599,
+    price: 499,
+    mrp: 699,
     category: "Music",
+    subcategory: "Worship",
     vendor: "Grace City Music",
+    sellerType: "marketplace",
+    state: "Karnataka",
     city: "Bengaluru",
     rating: 4.7,
     reviews: 89,
     cover_gradient: 2,
-    cover_image: "https://images.unsplash.com/photo-1513475382585-d06e58bcb5c0?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    cover_image: "https://images.unsplash.com/photo-1516223298848-69b6c3c7a2d5?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     in_stock: true,
     whatsapp_number: "+919876543222",
+    buyUrl: "https://example-store.com/awake-my-soul",
+    status: "published",
+    featured: false,
   },
   {
     id: "pr4",
-    name: "Faith Over Fear — Christian Tee",
+    name: "Faith Over Fear T-Shirt",
     description:
-      "Premium 100% cotton t-shirt with 'Faith Over Fear' screen-printed design. Unisex fit. Available in black, white, and navy. Sizes S–XXL.",
-    price: 599,
-    mrp: 899,
-    category: "Apparel",
+      "Premium 100% cotton T-shirt with 'Faith Over Fear' design printed using water-based eco-friendly ink. Available in multiple sizes and colors. Pre-shrunk fabric, machine washable.",
+    price: 799,
+    mrp: 999,
+    category: "T-Shirts",
+    subcategory: "Christian Clothing",
     vendor: "CrossThread Co.",
+    sellerType: "marketplace",
+    state: "Tamil Nadu",
     city: "Chennai",
     rating: 4.6,
-    reviews: 178,
+    reviews: 24,
     cover_gradient: 3,
-    cover_image: "https://images.unsplash.com/photo-1438032005730-c779502df39b?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    cover_image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    images: [
+      "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+      "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+      "https://images.unsplash.com/photo-1576566588028-4147f3842f27?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    ],
     in_stock: true,
     whatsapp_number: "+919876543223",
+    buyUrl: "https://crossthread.example-shop.com/faith-over-fear",
+    status: "published",
+    featured: true,
     variations: [
       { name: "Size", options: ["S", "M", "L", "XL", "XXL"] },
       { name: "Color", options: ["Black", "White", "Navy"] },
     ],
     attributes: [
-      { label: "Material", value: "100% Combed Cotton" },
-      { label: "Fit", value: "Unisex Regular Fit" },
-      { label: "Care", value: "Machine Wash Cold" },
+      { label: "Material", value: "100% Cotton" },
+      { label: "Fit", value: "Regular Fit" },
+      { label: "Weight", value: "180 GSM" },
+      { label: "Care", value: "Machine Wash" },
     ],
   },
   {
     id: "pr5",
-    name: "Devotional: 'My Utmost for His Highest'",
+    name: "Romans Bible Study Guide",
     description:
-      "Oswald Chambers' timeless daily devotional, now in a beautiful leather-bound edition with ribbon marker. 365 days of depth and challenge.",
-    price: 499,
-    mrp: 799,
+      "A 6-week deep-dive Bible study guide through the book of Romans. Includes daily reflection prompts, group discussion questions, and a free downloadable companion app.",
+    price: 299,
+    mrp: 399,
     category: "Books",
+    subcategory: "Bible Study",
     vendor: "Word of Life Books",
+    sellerType: "marketplace",
+    state: "Karnataka",
     city: "Bengaluru",
     rating: 4.9,
-    reviews: 412,
+    reviews: 178,
     cover_gradient: 4,
-    cover_image: "https://images.unsplash.com/photo-1520637836862-4d197d17c91a?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    cover_image: "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     in_stock: true,
     whatsapp_number: "+919876543220",
+    status: "published",
+    featured: false,
   },
   {
     id: "pr6",
-    name: "Leather Journal — His Mercies",
+    name: "Christian Phone Cover - Cross Design",
     description:
-      "Hand-stitched genuine leather journal with 'His mercies are new every morning' embossed on the cover. 240 unlined pages. Perfect for prayer journaling.",
-    price: 749,
-    mrp: 1199,
-    category: "Gifts",
+      "Premium hard-case phone cover with minimalist cross design. Compatible with iPhone 13/14/15 and Samsung Galaxy S21-S24. Shock-absorbing edges, precise cutouts.",
+    price: 499,
+    mrp: 799,
+    category: "Phone Covers",
+    subcategory: "Accessories",
     vendor: "Holy Land Crafts",
+    sellerType: "marketplace",
+    state: "Maharashtra",
     city: "Mumbai",
-    rating: 4.8,
+    rating: 4.5,
     reviews: 67,
     cover_gradient: 5,
-    cover_image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    cover_image: "https://images.unsplash.com/photo-1592434134753-a70baf7979d5?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
     in_stock: false,
     whatsapp_number: "+919876543221",
+    buyUrl: "https://example-store.com/cross-phone-cover",
+    status: "published",
+    featured: false,
+    variations: [
+      { name: "Model", options: ["iPhone 13/14/15", "Samsung Galaxy S21-S24"] },
+    ],
+    attributes: [
+      { label: "Material", value: "Hard PC + TPU" },
+      { label: "Compatibility", value: "Multiple models" },
+    ],
+  },
+  {
+    id: "pr7",
+    name: "Believ Signature T-Shirt",
+    description:
+      "Official Believ T-shirt with the Believ wordmark. 100% premium combed cotton. Every purchase supports Believ's mission to bring the Bible to every language. Available exclusively from the Believ Store.",
+    price: 699,
+    mrp: 999,
+    category: "T-Shirts",
+    subcategory: "Believ Merchandise",
+    vendor: "Believ",
+    sellerType: "believ",
+    state: "Telangana",
+    city: "Hyderabad",
+    rating: 4.8,
+    reviews: 312,
+    cover_gradient: 6,
+    cover_image: "https://images.unsplash.com/photo-1576566588028-4147f3842f27?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    images: [
+      "https://images.unsplash.com/photo-1576566588028-4147f3842f27?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+      "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    ],
+    in_stock: true,
+    whatsapp_number: "+919876543200",
+    buyUrl: "https://shop.believ.app/signature-tee",
+    status: "published",
+    featured: true,
+    variations: [
+      { name: "Size", options: ["S", "M", "L", "XL", "XXL"] },
+      { name: "Color", options: ["Black", "White"] },
+    ],
+    attributes: [
+      { label: "Material", value: "100% Combed Cotton" },
+      { label: "Fit", value: "Regular Fit" },
+      { label: "Brand", value: "Believ" },
+    ],
+  },
+  {
+    id: "pr8",
+    name: "Believ Hoodie - Scripture Edition",
+    description:
+      "Official Believ hoodie with embroidered John 3:16 reference. Heavyweight 320 GSM fleece interior, perfect for cooler weather. Official Believ Store product.",
+    price: 1499,
+    mrp: 1999,
+    category: "Hoodies",
+    subcategory: "Believ Merchandise",
+    vendor: "Believ",
+    sellerType: "believ",
+    state: "Telangana",
+    city: "Hyderabad",
+    rating: 4.9,
+    reviews: 145,
+    cover_gradient: 7,
+    cover_image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    images: [
+      "https://images.unsplash.com/photo-1556821840-3a63f95609a7?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+      "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?crop=entropy&cs=srgb&fm=jpg&w=800&q=80",
+    ],
+    in_stock: true,
+    whatsapp_number: "+919876543200",
+    buyUrl: "https://shop.believ.app/hoodie-scripture",
+    status: "published",
+    featured: true,
+    variations: [
+      { name: "Size", options: ["S", "M", "L", "XL", "XXL"] },
+      { name: "Color", options: ["Black", "Navy"] },
+    ],
+    attributes: [
+      { label: "Material", value: "80% Cotton, 20% Polyester" },
+      { label: "Weight", value: "320 GSM" },
+      { label: "Brand", value: "Believ" },
+    ],
   },
 ];
 

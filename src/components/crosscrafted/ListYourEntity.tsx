@@ -17,7 +17,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { INDIAN_STATES, LANGUAGES, type ServiceTime } from "@/lib/crosscrafted-data";
+import { INDIAN_STATES, LANGUAGES, BUSINESS_CATEGORIES, type ServiceTime } from "@/lib/crosscrafted-data";
 import ImagePicker from "@/components/crosscrafted/ImagePicker";
 
 type Props = {
@@ -37,6 +37,7 @@ export default function ListYourEntity({ variant }: Props) {
     contact_phone: string;
     service_times: string;
     denomination: string;
+    businessCategory: string;
     languages: string[];
     images: string[];
     whatsapp_number: string;
@@ -52,6 +53,7 @@ export default function ListYourEntity({ variant }: Props) {
     contact_phone: "",
     service_times: "",
     denomination: "",
+    businessCategory: "",
     languages: [],
     images: [],
     whatsapp_number: "",
@@ -129,6 +131,7 @@ export default function ListYourEntity({ variant }: Props) {
               contact_phone: "",
               service_times: "",
               denomination: "",
+              businessCategory: "",
               languages: [],
               images: [],
               whatsapp_number: "",
@@ -356,6 +359,26 @@ export default function ListYourEntity({ variant }: Props) {
               max={5}
               label="Business Photos"
             />
+            {/* Business Category — single source of truth (BUSINESS_CATEGORIES) */}
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                Business Category *
+              </label>
+              <select
+                value={formData.businessCategory || ""}
+                onChange={(e) => setFormData({ ...formData, businessCategory: e.target.value })}
+                className="neo-input text-sm"
+                required
+              >
+                <option value="">Select a category</option>
+                {BUSINESS_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+              <p className="text-[10px] text-[#64748B] mt-1">
+                Helps users discover your business by category in the Christian Business Directory.
+              </p>
+            </div>
             <div>
               <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
                 <Phone size={10} className="inline mr-0.5" /> WhatsApp Number *
@@ -369,7 +392,7 @@ export default function ListYourEntity({ variant }: Props) {
                 required
               />
               <p className="text-[10px] text-[#64748B] mt-1">
-                Buyers will see a "Contact Seller" button that opens WhatsApp with this number.
+                Visitors can contact your business directly on WhatsApp for inquiries.
               </p>
             </div>
           </>

@@ -22,14 +22,19 @@ import {
   PRODUCTS,
   CHURCH_GRADIENTS,
   INDIAN_STATES,
+  getCitiesForState,
+  MARKETPLACE_CATEGORIES,
   type Product,
   type ProductVariation,
   type ProductAttribute,
 } from "@/lib/crosscrafted-data";
 import { useTranslation } from "@/lib/i18n/LanguageContext";
 import ImagePicker from "@/components/crosscrafted/ImagePicker";
+import { ImageOff, ExternalLink, BadgeCheck, Store as StoreIcon, Globe } from "lucide-react";
 
-const CATEGORIES = ["All", "Bibles", "Books", "Music", "Apparel", "Gifts"];
+// Single source of truth — pulled from crosscrafted-data so the List Item form,
+// the filter pills, and the admin product form all share the same list.
+const CATEGORIES = ["All", ...MARKETPLACE_CATEGORIES];
 
 const StarRating = ({ rating, size = 11 }: { rating: number; size?: number }) => (
   <div className="flex items-center gap-0.5">
@@ -57,6 +62,9 @@ export default function ShopView() {
   const [cart, setCart] = useState<Set<string>>(new Set());
   const [activeCategory, setActiveCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterState, setFilterState] = useState("");
+  const [filterCity, setFilterCity] = useState("");
+  const [filterSellerType, setFilterSellerType] = useState<"all" | "believ" | "marketplace">("all");
   const [openProduct, setOpenProduct] = useState<Product | null>(null);
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [selectedVariations, setSelectedVariations] = useState<Record<string, string>>({});
@@ -70,6 +78,7 @@ export default function ShopView() {
     vendor: "",
     city: "",
     state: "",
+    buyUrl: "",
     images: [] as string[],
     whatsapp_number: "",
     variations: [] as ProductVariation[],
@@ -94,6 +103,8 @@ export default function ShopView() {
       mrp: formData.mrp ? Number(formData.mrp) : Number(formData.price),
       category: formData.category,
       vendor: formData.vendor || "Individual Seller",
+      sellerType: "marketplace", // user-submitted products are always marketplace (not official Believ Store)
+      state: formData.state || "",
       city: formData.city || "—",
       rating: 0,
       reviews: 0,
@@ -102,6 +113,9 @@ export default function ShopView() {
       images: formData.images.length > 0 ? formData.images : undefined,
       in_stock: true,
       whatsapp_number: formData.whatsapp_number,
+      buyUrl: formData.buyUrl || undefined,
+      status: "published",
+      featured: false,
       variations: formData.variations
         .filter((v) => v.name.trim() && v.options.length > 0)
         .map((v) => ({ name: v.name.trim(), options: v.options })),
@@ -119,6 +133,7 @@ export default function ShopView() {
       vendor: "",
       city: "",
       state: "",
+      buyUrl: "",
       images: [],
       whatsapp_number: "",
       variations: [],
@@ -133,18 +148,17 @@ export default function ShopView() {
   const filtered = useMemo(() => {
     return products.filter((p) => {
       if (activeCategory !== "All" && p.category !== activeCategory) return false;
+      if (filterSellerType !== "all" && p.sellerType !== filterSellerType) return false;
+      if (filterState && p.state !== filterState) return false;
+      if (filterCity && p.city !== filterCity) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        if (
-          !p.name.toLowerCase().includes(q) &&
-          !p.description.toLowerCase().includes(q) &&
-          !p.vendor.toLowerCase().includes(q)
-        )
-          return false;
+        const haystack = `${p.name} ${p.description} ${p.vendor} ${p.category} ${p.subcategory || ""} ${p.state} ${p.city}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
       }
       return true;
     });
-  }, [products, activeCategory, searchQuery]);
+  }, [products, activeCategory, filterSellerType, filterState, filterCity, searchQuery]);
 
   const toggleWishlist = (id: string) => {
     setWishlist((prev) => {
@@ -172,7 +186,7 @@ export default function ShopView() {
   };
 
   return (
-    <div className="max-w-[680px] mx-auto px-4 py-5">
+    <div className="max-w-[680px] mx-auto px-4 py-5 pb-28 md:pb-5">
       <div className="flex justify-between items-center mb-4">
         <div>
           <h1 className="text-xl font-bold text-white">{t('marketplace.title')}</h1>
@@ -224,6 +238,69 @@ export default function ShopView() {
         ))}
       </div>
 
+      {/* ─── SELLER TYPE + STATE / CITY FILTER ROW ─── */}
+      <div className="mb-3">
+        <div className="flex p-1 bg-white/[0.04] border border-white/[0.06] rounded-2xl mb-2">
+          <button
+            onClick={() => setFilterSellerType("all")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-bold transition-all ${
+              filterSellerType === "all"
+                ? "bg-gradient-to-r from-[#9786E3] to-[#38BDF8] text-white shadow-lg shadow-[#9786E3]/20"
+                : "text-[#94A3B8] hover:text-white"
+            }`}
+          >
+            <StoreIcon size={12} /> All
+          </button>
+          <button
+            onClick={() => setFilterSellerType("believ")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-bold transition-all ${
+              filterSellerType === "believ"
+                ? "bg-gradient-to-r from-[#9786E3] to-[#38BDF8] text-white shadow-lg shadow-[#9786E3]/20"
+                : "text-[#94A3B8] hover:text-white"
+            }`}
+          >
+            <BadgeCheck size={12} /> Believ Store
+          </button>
+          <button
+            onClick={() => setFilterSellerType("marketplace")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-bold transition-all ${
+              filterSellerType === "marketplace"
+                ? "bg-gradient-to-r from-[#9786E3] to-[#38BDF8] text-white shadow-lg shadow-[#9786E3]/20"
+                : "text-[#94A3B8] hover:text-white"
+            }`}
+          >
+            <StoreIcon size={12} /> Marketplace
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <select
+            value={filterState}
+            onChange={(e) => {
+              setFilterState(e.target.value);
+              setFilterCity("");
+            }}
+            className="neo-input text-xs py-2"
+          >
+            <option value="">All States</option>
+            {INDIAN_STATES.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          <select
+            value={filterCity}
+            onChange={(e) => setFilterCity(e.target.value)}
+            disabled={!filterState}
+            className="neo-input text-xs py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <option value="">{filterState ? "All Cities" : "Select state first"}</option>
+            {filterState && getCitiesForState(filterState).map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {/* Products Grid */}
       <div className="grid grid-cols-2 gap-3">
         {filtered.map((product, i) => {
@@ -246,22 +323,46 @@ export default function ShopView() {
               }}
               className="bg-[#1C1929] border border-white/[0.06] rounded-2xl overflow-hidden cursor-pointer hover:border-white/[0.12] transition-all group"
             >
-              <div className="relative h-32">
+              <div className="relative w-full aspect-square bg-[#0f0f1a] overflow-hidden">
                 {product.cover_image ? (
                   <img
                     src={product.cover_image}
                     alt={product.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    className="w-full h-full object-contain group-hover:scale-[1.03] transition-transform duration-500"
+                    onError={(e) => {
+                      // Hide broken img and reveal the fallback placeholder
+                      const img = e.currentTarget;
+                      img.style.display = "none";
+                      const fallback = img.nextElementSibling as HTMLElement | null;
+                      if (fallback) fallback.style.display = "flex";
+                    }}
                   />
+                ) : null}
+                {/* Fallback placeholder — shown when no image OR image fails to load.
+                    Uses a labeled Believ placeholder instead of a broken-image icon. */}
+                <div
+                  className="w-full h-full flex flex-col items-center justify-center gap-1 text-center px-2"
+                  style={{
+                    background: CHURCH_GRADIENTS[product.cover_gradient % CHURCH_GRADIENTS.length],
+                    display: product.cover_image ? "none" : "flex",
+                  }}
+                >
+                  <ImageOff size={20} className="text-white/60" />
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-white/60">Believ</p>
+                  <p className="text-[8px] text-white/40 leading-tight">Product image unavailable</p>
+                </div>
+                {/* Seller type badge — official Believ Store vs Marketplace */}
+                {product.sellerType === "believ" ? (
+                  <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-[#9786E3] text-white text-[8px] font-bold uppercase tracking-wider flex items-center gap-0.5">
+                    <BadgeCheck size={9} /> Believ
+                  </span>
                 ) : (
-                  <div
-                    className="w-full h-full"
-                    style={{ background: CHURCH_GRADIENTS[product.cover_gradient] }}
-                  />
+                  <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-[#38BDF8]/20 backdrop-blur-sm text-[#38BDF8] text-[8px] font-bold uppercase tracking-wider border border-[#38BDF8]/30">
+                    Marketplace
+                  </span>
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#1C1929]/40 to-transparent" />
                 {discount > 0 && (
-                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-[#EF4444] text-white text-[9px] font-bold uppercase tracking-wider">
+                  <span className="absolute top-2 right-9 px-1.5 py-0.5 rounded-md bg-[#EF4444] text-white text-[8px] font-bold uppercase tracking-wider">
                     -{discount}%
                   </span>
                 )}
@@ -342,7 +443,7 @@ export default function ShopView() {
               transition={{ type: "spring", damping: 30, stiffness: 350 }}
               className="bg-[#1C1929] border border-white/[0.08] rounded-t-[28px] md:rounded-[24px] w-full max-w-lg max-h-[90vh] overflow-y-auto"
             >
-              <div className="relative h-56">
+              <div className="relative w-full aspect-square bg-[#0f0f1a] overflow-hidden">
                 {(() => {
                   const allImages = openProduct.images && openProduct.images.length > 0
                     ? openProduct.images
@@ -355,18 +456,28 @@ export default function ShopView() {
                       <img
                         src={activeImg}
                         alt={openProduct.name}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          const img = e.currentTarget;
+                          img.style.display = "none";
+                          const fallback = img.nextElementSibling as HTMLElement | null;
+                          if (fallback) fallback.style.display = "flex";
+                        }}
                       />
                     );
                   }
                   return (
                     <div
-                      className="w-full h-full"
-                      style={{ background: CHURCH_GRADIENTS[openProduct.cover_gradient] }}
-                    />
+                      className="w-full h-full flex flex-col items-center justify-center gap-1 text-center px-2"
+                      style={{ background: CHURCH_GRADIENTS[openProduct.cover_gradient % CHURCH_GRADIENTS.length] }}
+                    >
+                      <ImageOff size={28} className="text-white/60" />
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">Believ</p>
+                      <p className="text-[9px] text-white/40 leading-tight">Product image unavailable</p>
+                    </div>
                   );
                 })()}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#1C1929] via-transparent to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#1C1929] via-transparent to-transparent pointer-events-none" />
                 <button
                   onClick={() => setOpenProduct(null)}
                   className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white/80 hover:text-white"
@@ -399,7 +510,7 @@ export default function ShopView() {
                           : "border-transparent opacity-60 hover:opacity-100"
                       }`}
                     >
-                      <img src={img} alt="" className="w-full h-full object-cover" />
+                      <img src={img} alt="" className="w-full h-full object-contain bg-[#0f0f1a]" />
                     </button>
                   ))}
                 </div>
@@ -500,14 +611,24 @@ export default function ShopView() {
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#9786E3] to-[#38BDF8] flex items-center justify-center">
                     <Store size={16} className="text-white" />
                   </div>
-                  <div className="flex-1">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">Vendor</p>
-                    <p className="text-sm font-bold text-white">{openProduct.vendor}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">Seller</p>
+                      {openProduct.sellerType === "believ" ? (
+                        <span className="px-1.5 py-0.5 rounded bg-[#9786E3]/15 text-[#9786E3] text-[8px] font-bold uppercase tracking-wider flex items-center gap-0.5">
+                          <BadgeCheck size={8} /> Believ Store
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded bg-[#38BDF8]/15 text-[#38BDF8] text-[8px] font-bold uppercase tracking-wider">
+                          Marketplace
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm font-bold text-white truncate">{openProduct.vendor}</p>
                     <p className="text-[10px] text-[#94A3B8] flex items-center gap-1">
-                      <MapPin size={9} /> {openProduct.city}
+                      <MapPin size={9} /> {openProduct.city}{openProduct.city && openProduct.state ? ", " : ""}{openProduct.state}
                     </p>
                   </div>
-                  <Truck size={18} className="text-[#22C55E]" />
                 </div>
 
                 <div className="flex gap-2 pt-2">
@@ -525,7 +646,7 @@ export default function ShopView() {
                     <a
                       href={`https://wa.me/${openProduct.whatsapp_number.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
                         (() => {
-                          const base = `Hello! I'm interested in buying "${openProduct.name}" listed for ₹${openProduct.price} on CrossCrafted. Is it available?`;
+                          const base = `Hi, I found your product "${openProduct.name}" on Believ and I'd like more information. Is it available?`;
                           const sel = Object.entries(selectedVariations);
                           if (sel.length === 0) return base;
                           const specs = sel.map(([n, v]) => `${n}: ${v}`).join(", ");
@@ -539,18 +660,40 @@ export default function ShopView() {
                       <WhatsAppIcon size={16} /> {t('marketplace.contactSeller')}
                     </a>
                   )}
-                  <button
-                    onClick={() => {
-                      addToCart(openProduct);
-                      setOpenProduct(null);
-                    }}
-                    disabled={!openProduct.in_stock}
-                    className="flex-1 py-3 rounded-xl text-sm font-bold text-white transition-all hover:-translate-y-px disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    style={{ background: "linear-gradient(135deg, #9786E3, #38BDF8)" }}
-                  >
-                    <ShoppingCart size={16} /> {t('marketplace.addToCart')}
-                  </button>
+                  {openProduct.buyUrl ? (
+                    <a
+                      href={openProduct.in_stock ? openProduct.buyUrl : undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-disabled={!openProduct.in_stock}
+                      className={`flex-1 py-3 rounded-xl text-sm font-bold text-white transition-all flex items-center justify-center gap-2 ${openProduct.in_stock ? "hover:-translate-y-px" : "opacity-40 cursor-not-allowed pointer-events-none"}`}
+                      style={{ background: "linear-gradient(135deg, #9786E3, #38BDF8)" }}
+                    >
+                      <ShoppingCart size={16} /> Buy Now
+                      <ExternalLink size={12} className="opacity-80" />
+                    </a>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        addToCart(openProduct);
+                        setOpenProduct(null);
+                      }}
+                      disabled={!openProduct.in_stock}
+                      className="flex-1 py-3 rounded-xl text-sm font-bold text-white transition-all hover:-translate-y-px disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      style={{ background: "linear-gradient(135deg, #9786E3, #38BDF8)" }}
+                    >
+                      <ShoppingCart size={16} /> {t('marketplace.addToCart')}
+                    </button>
+                  )}
                 </div>
+
+                {/* Helper text — Believ does NOT process payments for marketplace products */}
+                {openProduct.sellerType === "marketplace" && openProduct.buyUrl && (
+                  <p className="text-[10px] text-[#64748B] text-center leading-relaxed pt-1">
+                    Payment, shipping, and refunds are handled by the seller.
+                    Believ does not process payments.
+                  </p>
+                )}
               </div>
             </motion.div>
           </motion.div>
@@ -664,7 +807,7 @@ export default function ShopView() {
                     </label>
                     <select
                       value={formData.state}
-                      onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, state: e.target.value, city: "" })}
                       className="neo-input text-sm"
                     >
                       <option value="">Select state</option>
@@ -679,13 +822,17 @@ export default function ShopView() {
                     <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
                       City
                     </label>
-                    <input
-                      type="text"
+                    <select
                       value={formData.city}
                       onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                      className="neo-input text-sm"
-                      placeholder="Mumbai"
-                    />
+                      disabled={!formData.state}
+                      className="neo-input text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">{formData.state ? "Select city" : "Select state first"}</option>
+                      {formData.state && getCitiesForState(formData.state).map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
@@ -886,6 +1033,24 @@ export default function ShopView() {
                   />
                   <p className="text-[10px] text-[#64748B] mt-1">
                     Buyers will see a "Contact Seller" button that opens WhatsApp with this number.
+                  </p>
+                </div>
+
+                {/* External Buy Link — Believ does NOT process payments.
+                    Sellers can link to their own checkout/website. */}
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                    <ExternalLink size={10} className="inline mr-0.5" /> External Buy Link (optional)
+                  </label>
+                  <input
+                    type="url"
+                    value={formData.buyUrl}
+                    onChange={(e) => setFormData({ ...formData, buyUrl: e.target.value })}
+                    className="neo-input text-sm"
+                    placeholder="https://yourstore.com/product/..."
+                  />
+                  <p className="text-[10px] text-[#64748B] mt-1">
+                    Optional. Add your website, store, or checkout link. If provided, buyers see a "Buy Now" button that opens this link. Believ does not process payments — payment, shipping, and refunds are handled by you.
                   </p>
                 </div>
                 <div className="flex gap-2 pt-1">
