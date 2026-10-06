@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import ImagePicker from "@/components/crosscrafted/ImagePicker";
+import ComicArtworkUploader from "@/components/crosscrafted/ComicArtworkUploader";
 import { BIBLE_BOOKS } from "@/lib/bible-data";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -1564,6 +1565,10 @@ function PanelFormModal({
   const [sortOrder, setSortOrder] = useState<number>(panel?.sortOrder ?? nextSortOrder);
   const [saving, setSaving] = useState(false);
 
+  // Compute a panel ID for the artwork uploader filename.
+  // In edit mode: use the existing panelId. In add mode: generate from book/chapter/sortOrder.
+  const panelIdValue = panel?.panelId || `${bookId.toUpperCase().slice(0, 3)}${chapterNum}-P${String(sortOrder).padStart(2, "0")}`;
+
   const submit = async () => {
     if (!artwork) {
       toast.error("Artwork is required");
@@ -1632,18 +1637,15 @@ function PanelFormModal({
         </div>
 
         <div className="space-y-3">
-          {/* Artwork */}
-          <ImagePicker
-            images={artwork ? [artwork] : []}
-            onChange={(imgs) => setArtwork(imgs[0] || "")}
-            max={1}
+          {/* Artwork — uses dedicated ComicArtworkUploader (uploads to server, NOT base64) */}
+          <ComicArtworkUploader
+            artworkUrl={artwork || null}
+            onChange={(url) => setArtwork(url || "")}
+            bookId={bookId}
+            chapter={chapterNum}
+            panelId={panelIdValue}
             label="Panel Artwork (required)"
           />
-          {artwork && (
-            <div className="relative w-full aspect-[16/9] rounded-xl overflow-hidden border border-white/[0.06]">
-              <img src={artwork} alt="Panel artwork preview" className="w-full h-full object-cover" />
-            </div>
-          )}
 
           {/* Verse range */}
           <div className="grid grid-cols-2 gap-2">
