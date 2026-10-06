@@ -34,6 +34,7 @@ import {
   LogIn,
   Tag,
   Palette,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -1394,21 +1395,167 @@ function RewardsTab({ isAuthenticated, userPoints }: { isAuthenticated: boolean;
   );
 }
 
-// ─── COMPETE TAB (placeholder — same as before) ──────────────────────────────
+// ─── COMPETE TAB ──────────────────────────────────────────────────────────
+// Fetches real competitions from /api/trivia/competitions and displays
+// LIVE / UPCOMING / ENDED sections with prize info + user rank.
 
 function CompeteView() {
-  return (
-    <div className="space-y-3">
-      <div className="bg-gradient-to-br from-[#1C1929] to-[#2B254E] border border-[#7C3AED]/20 rounded-2xl p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Trophy size={16} className="text-[#F59E0B]" />
-          <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B]">Church vs Church</p>
-        </div>
-        <p className="text-sm font-bold text-white mb-1">Compete with other churches</p>
-        <p className="text-[11px] text-[#A09DB1] leading-relaxed">
-          Church competitions are coming soon. Your Faith Points will count toward your church's score.
-        </p>
+  const { isAuthenticated } = useSupabaseUser();
+  const [competitions, setCompetitions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/trivia/competitions")
+      .then((r) => r.json())
+      .then((data) => { setCompetitions(data.competitions || []); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 size={24} className="text-[#F39B9B] animate-spin" />
       </div>
+    );
+  }
+
+  const live = competitions.filter((c) => c.status === "live");
+  const upcoming = competitions.filter((c) => c.status === "scheduled");
+  const ended = competitions.filter((c) => c.status === "ended");
+
+  const formatTimeRemaining = (ms: number) => {
+    if (ms <= 0) return "Ended";
+    const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    if (days > 0) return `${days}d ${hours}h`;
+    const mins = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+    return `${hours}h ${mins}m`;
+  };
+
+  const renderCompetitionCard = (c: any) => (
+    <div
+      key={c.id}
+      className="bg-[#1C1929] border border-white/[0.06] rounded-2xl overflow-hidden"
+    >
+      {/* Prize image (if available) */}
+      {c.prize?.imageUrl && (
+        <div className="relative h-32 bg-[#0f0f1a]">
+          <img src={c.prize.imageUrl} alt={c.prize.name} className="w-full h-full object-contain" />
+          <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-[#F59E0B] text-slate-950 text-[9px] font-bold uppercase tracking-wider">
+            🏆 Prize
+          </div>
+        </div>
+      )}
+      <div className="p-4 space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-wider text-[#F59B9B]">{c.type}</p>
+            <h3 className="text-sm font-bold text-white leading-tight">{c.title}</h3>
+          </div>
+          <span
+            className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider shrink-0 ${
+              c.status === "live"
+                ? "bg-[#22C55E]/15 text-[#22C55E]"
+                : c.status === "ended"
+                ? "bg-white/[0.06] text-[#64748B]"
+                : "bg-[#38BDF8]/15 text-[#38BDF8]"
+            }`}
+          >
+            {c.status}
+          </span>
+        </div>
+
+        {c.prize && (
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <span className="text-[#F59E0B]">🏆</span>
+            <span className="font-bold text-white">{c.prize.name}</span>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2 text-[10px] text-[#94A3B8]">
+          <span className="flex items-center gap-0.5"><Clock size={9} /> {c.questionCount} Q</span>
+          <span>·</span>
+          <span className="capitalize">{c.difficulty}</span>
+          <span>·</span>
+          <span className="capitalize">{c.category.replace("_", " ")}</span>
+          <span>·</span>
+          <span>{c.participantCount} players</span>
+        </div>
+
+        {c.status === "live" && (
+          <p className="text-[10px] text-[#F59E0B] font-bold">
+            ⏱ Ends in {formatTimeRemaining(c.timeRemaining)}
+          </p>
+        )}
+
+        {/* User's rank if authenticated + has attempts */}
+        {isAuthenticated && c.userBestScore !== null && (
+          <div className="flex items-center gap-2 bg-[#7C3AED]/10 border border-[#7C3AED]/20 rounded-lg px-2 py-1">
+            <span className="text-[10px] font-bold text-[#A78BFA]">Your rank: #{c.userRank}</span>
+            <span className="text-[10px] text-[#94A3B8]">·</span>
+            <span className="text-[10px] text-[#94A3B8]">{c.userBestScore} pts</span>
+            <span className="text-[10px] text-[#64748B] ml-auto">
+              {c.userAttemptsRemaining} attempt{c.userAttemptsRemaining === 1 ? "" : "s"} left
+            </span>
+          </div>
+        )}
+
+        {c.status === "live" && isAuthenticated && c.userAttemptsRemaining > 0 && (
+          <button className="w-full py-2 rounded-xl bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 text-xs font-extrabold uppercase tracking-wider transition-all">
+            {c.userAttemptsUsed > 0 ? "Play Again" : "Enter Challenge"}
+          </button>
+        )}
+        {c.status === "live" && !isAuthenticated && (
+          <p className="text-[10px] text-[#64748B] text-center">Sign in to participate</p>
+        )}
+        {c.status === "scheduled" && (
+          <p className="text-[10px] text-[#38BDF8] font-bold">
+            📅 Starts {new Date(c.startAt).toLocaleDateString()}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      {/* LIVE */}
+      {live.length > 0 && (
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[#22C55E] mb-2 flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-[#22C55E] animate-pulse" /> Live Now
+          </p>
+          <div className="space-y-3">{live.map(renderCompetitionCard)}</div>
+        </div>
+      )}
+
+      {/* UPCOMING */}
+      {upcoming.length > 0 && (
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[#38BDF8] mb-2">📅 Upcoming</p>
+          <div className="space-y-3">{upcoming.map(renderCompetitionCard)}</div>
+        </div>
+      )}
+
+      {/* ENDED */}
+      {ended.length > 0 && (
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[#64748B] mb-2">🏁 Ended</p>
+          <div className="space-y-3">{ended.map(renderCompetitionCard)}</div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {competitions.length === 0 && (
+        <div className="text-center py-12">
+          <Trophy size={32} className="mx-auto text-[#475569] mb-3" />
+          <p className="text-sm text-[#94A3B8]">No competitions yet.</p>
+          <p className="text-[11px] text-[#64748B] mt-1">
+            Koino Bible Challenges are coming soon. Keep practicing and earning Faith Points!
+          </p>
+        </div>
+      )}
     </div>
   );
 }

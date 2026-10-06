@@ -63,6 +63,10 @@ model User {
   streakFreezes     StreakFreeze[]
 
   posts Post[]
+
+  // Trivia competition relations
+  competitionAttempts TriviaCompetitionAttempt[]
+  triviaWins          TriviaWinner[]
 }
 
 // ─── NEXTAUTH TABLES ────────────────────────────────────────────────────────
@@ -445,4 +449,137 @@ model ComicChapterQuiz {
 
   @@unique([comicChapterId, questionId]) // one link per chapter+question
   @@index([comicChapterId])
+}
+
+// ─── TRIVIA COMPETITIONS ───────────────────────────────────────────────────
+// A Competition is a time-boxed Bible Trivia contest with its own
+// server-authoritative score (separate from lifetime Faith Points).
+// Examples: Daily Challenge, Weekly Bible Challenge, Monthly Championship.
+//
+// KEY DESIGN DECISIONS:
+// - Competition Score is SEPARATE from lifetime FP. The weekly leaderboard
+//   ranks by competition score, NOT by lifetime FP.
+// - attemptLimit is enforced SERVER-SIDE (not in localStorage).
+// - Questions are server-selected — the client never sees correct answers
+//   before submitting.
+// - Winners are calculated server-side when endAt passes. Immutable records.
+
+model TriviaCompetition {
+  id              String   @id @default(cuid())
+  title           String
+  description     String?
+  imageUrl        String?
+  type            String   // "daily" | "weekly" | "monthly" | "custom"
+  category        String   // "full_bible" | "new_testament" | "old_testament" | "apologetics" | "mixed"
+  difficulty      String   // "beginners" | "intermediate" | "skilled" | "expert" | "mixed"
+  questionCount   Int      @default(10)
+  attemptLimit    Int      @default(1)
+  winnerCount     Int      @default(3)
+  rules           String?  // free-text rules displayed to users before participating
+  status          String   @default("draft") // "draft" | "scheduled" | "live" | "ended" | "cancelled"
+  startAt         DateTime
+  endAt           DateTime
+  claimDeadlineDays Int    @default(7) // days after competition ends to claim prize
+  prizeId         String?  // references TriviaPrize.id (optional — some competitions may not have prizes)
+  createdById     String?  // admin userId who created it
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  prize           TriviaPrize?  @relation(fields: [prizeId], references: [id])
+  attempts        TriviaCompetitionAttempt[]
+  winners         TriviaWinner[]
+
+  @@index([status])
+  @@index([type])
+  @@index([endAt])
+}
+
+// ─── COMPETITION ATTEMPTS ──────────────────────────────────────────────────
+// Records a single user's attempt at a competition. The server enforces
+// attemptLimit via a count query before accepting a new submission.
+// The score here is the COMPETITION score (not lifetime FP).
+
+model TriviaCompetitionAttempt {
+  id              String   @id @default(cuid())
+  competitionId   String
+  userId          String
+  questionIds     String   // JSON array of questionId strings (server-selected)
+  score           Int      @default(0) // competition score for this attempt
+  correctCount    Int      @default(0)
+  totalQuestions  Int
+  accuracy        Float    @default(0) // 0.0 - 1.0
+  durationMs      Int      @default(0) // time taken to complete
+  createdAt       DateTime @default(now())
+
+  competition     TriviaCompetition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([competitionId, userId, createdAt]) // one attempt per submission
+  @@index([competitionId, score]) // for leaderboard queries
+  @@index([userId])
+}
+
+// ─── PRIZES ─────────────────────────────────────────────────────────────────
+// A Prize can be a Koino Merch Store product (sourceType="koino_merch") or
+// a custom prize (sourceType="custom"). When linked to a Merch product, the
+// prize references the product — it does NOT duplicate product information.
+
+model TriviaPrize {
+  id                 String   @id @default(cuid())
+  name               String
+  description        String?
+  imageUrl           String?
+  sourceType         String   // "koino_merch" | "custom"
+  productId          String?  // references Product.id when sourceType="koino_merch"
+  quantity           Int      @default(1) // total available
+  assignedQuantity   Int      @default(0) // how many assigned to winners
+  remainingQuantity  Int      @default(1) // quantity - assignedQuantity
+  approximateValue   Float?   // optional, for display
+  requiresShipping   Boolean  @default(true)
+  active             Boolean  @default(true)
+  terms              String?  // terms & conditions
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  competitions       TriviaCompetition[]
+  winners            TriviaWinner[]
+}
+
+// ─── WINNERS ───────────────────────────────────────────────────────────────
+// Immutable record of a competition winner. Created server-side when a
+// competition ends. The status tracks the prize claim workflow.
+
+model TriviaWinner {
+  id              String   @id @default(cuid())
+  competitionId   String
+  userId          String
+  rank            Int      // 1st, 2nd, 3rd, etc.
+  score           Int      // competition score at time of winning
+  correctCount    Int
+  accuracy        Float
+  durationMs      Int
+  prizeId         String?
+  status          String   @default("pending_verification")
+  // "pending_verification" | "phone_verified" | "contacted" | "address_pending"
+  // | "address_verified" | "processing" | "shipped" | "delivered" | "claimed"
+  // | "cancelled" | "disqualified" | "expired"
+  phoneVerified   Boolean  @default(false)
+  phoneVerifiedAt DateTime?
+  shippingName    String?
+  shippingAddress String?
+  shippingCity    String?
+  shippingState   String?
+  shippingPincode String?
+  adminNotes      String?
+  disqualifiedReason String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  competition     TriviaCompetition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prize           TriviaPrize?      @relation(fields: [prizeId], references: [id])
+
+  @@unique([competitionId, userId]) // one winner record per competition per user
+  @@index([competitionId, rank])
+  @@index([userId])
 }
