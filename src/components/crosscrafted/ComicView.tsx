@@ -209,7 +209,7 @@ export default function ComicView({ bookId, chapter, onNavigateChapter, onReadCh
     `Lord, thank You for the story of ${chapterData.title}. Help me grow in faith through Your Word.`;
 
   return (
-    <div className="max-w-[1200px] mx-auto px-4 py-5">
+    <div className="max-w-[1200px] mx-auto px-4 py-5 pb-28 md:pb-5">
       {/* ─── HEADER ─── */}
       <div className="text-center mb-6">
         <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#F39B9B] mb-2">
@@ -226,7 +226,7 @@ export default function ComicView({ bookId, chapter, onNavigateChapter, onReadCh
         </p>
       </div>
 
-      {/* ─── COMIC PANEL GRID (3×2) ─── */}
+      {/* ─── COMIC PANEL GRID (3×2 on desktop, stacked on mobile) ─── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         {panels.map((panel, idx) => (
           <ComicPanelCard
@@ -313,35 +313,43 @@ function ComicPanelCard({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.1 }}
-      className="bg-[#1C1929] border border-white/[0.06] rounded-2xl overflow-hidden"
+      className="bg-[#1C1929] border border-white/[0.06] rounded-2xl overflow-hidden flex flex-col"
     >
-      {/* Panel number + title */}
-      <div className="p-3 pb-2">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="w-7 h-7 rounded-full bg-[#F39B9B] text-slate-950 text-xs font-black flex items-center justify-center shrink-0">
-            {index}
-          </span>
-          <h3 className="text-sm font-bold text-white leading-tight">
-            {panel.title}
-          </h3>
-        </div>
-      </div>
-
-      {/* Artwork */}
+      {/* ─── ARTWORK with overlays ─── */}
       <div className="relative w-full aspect-[16/9] bg-[#0f0f1a] overflow-hidden">
         <img
           src={panel.artworkUrl}
           alt={panel.title || `Panel ${index}`}
           className="w-full h-full object-cover"
         />
-        {/* Verse reference badge */}
+
+        {/* Top gradient (for overlay legibility) */}
+        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/80 via-black/30 to-transparent pointer-events-none" />
+
+        {/* Bottom gradient (for verse reference legibility) */}
+        <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
+
+        {/* Panel number + title OVERLAID on top of artwork (top-left) */}
+        <div className="absolute top-3 left-3 right-3 flex items-start gap-2">
+          <span
+            className="shrink-0 w-7 h-7 rounded-full bg-[#F39B9B] text-slate-950 text-xs font-black flex items-center justify-center shadow-lg"
+            aria-label={`Panel ${index}`}
+          >
+            {index}
+          </span>
+          <h3 className="text-sm font-bold text-white leading-tight drop-shadow-md line-clamp-2">
+            {panel.title}
+          </h3>
+        </div>
+
+        {/* Verse reference OVERLAID near bottom-right of artwork */}
         <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-sm text-white text-[9px] font-bold">
           {verseRef}
         </div>
       </div>
 
-      {/* Narration */}
-      <div className="p-3">
+      {/* ─── Narration below artwork ─── */}
+      <div className="p-3 flex-1">
         <p className="text-[12px] text-[#A09DB1] leading-relaxed line-clamp-3">
           {panel.narration}
         </p>
