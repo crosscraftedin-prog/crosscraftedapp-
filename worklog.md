@@ -161,3 +161,39 @@ Stage Summary:
 - VERCEL ENV: SUPABASE_SERVICE_ROLE_KEY is already configured (verified by existing GEN2-P01 upload). NEXT_PUBLIC_SUPABASE_URL also configured.
 - TESTS: GET → 405 JSON ✅ | POST no-auth → 403 JSON ✅ | route exists on Vercel ✅ | bucket publicly readable ✅ | placeholder SVGs still serve ✅.
 - PRODUCTION STATE: ready for admin to upload artwork to GEN1-P01 and GEN2-P02.
+
+---
+Task ID: bugfix-artwork-revert-cache
+Agent: main
+Task: Fix artwork preview reverting to OLD test image when re-uploading to GEN1-P01.
+
+Work Log:
+- Verified DB state for GEN1-P01: artworkUrl was correctly updated to https://ffslazyedqbbuuyfytnq.supabase.co/storage/v1/object/public/believ-comic-artwork/bible-comics/genesis/1/GEN1-P01.webp (clean URL, no ?v=).
+- Verified Supabase Storage serves the new file (HTTP 200, image/webp, 307KB, last-modified 17:27:35).
+- Verified public API /api/comic/genesis/1 returns the new URL for GEN1-P01.
+- Root cause identified: Supabase Storage path is deterministic (bible-comics/{bookId}/{chapter}/{panelId}.webp). Re-uploading to the same panel UPSERTS at the SAME URL. This caused two failure modes:
+  1) React: setArtwork(sameUrlString) is a no-op (state value unchanged) → <img> never re-renders → preview shows OLD image.
+  2) Browser cache: even if <img> did re-render, browser serves cached image at that URL.
+- Fix: Append cache-busting ?v={Date.now()} query param to URLs returned from /api/admin/comics/upload.
+  - Upload API response: url + artworkUrl now include ?v=<timestamp>
+  - DB stores artworkUrl WITH ?v=<timestamp> (so reopening editor shows the version that was last uploaded)
+  - Each new upload bumps ?v= → URL string differs from previous state → React re-renders <img>
+  - Browser sees different URL → fetches freshly-uploaded file
+  - Query param is harmless — Supabase Storage ignores it
+- Verified ComicView.tsx uses panel.artworkUrl directly in <img src> — works fine with ?v= query param.
+- Verified PATCH endpoint /api/admin/comics/[id]/panels/[panelId]/route.ts stores artworkUrl as-is (no change needed).
+- Committed as 7782cdc and pushed to main → Vercel deploy triggered.
+- Verified production endpoint after deploy: GET → 405 JSON {"success":false,"error":"Method not allowed — use POST"}.
+
+Stage Summary:
+- ROOT CAUSE: Deterministic storage path → URL string unchanged on re-upload → React state didn't trigger re-render + browser served cached image.
+- FIX: Append ?v=Date.now() to URLs returned from upload API. DB stores URL with ?v= (harmless).
+- FILES CHANGED: src/app/api/admin/comics/upload/route.ts (only file modified).
+- NO CHANGES TO: PATCH endpoint, ComicArtworkUploader, ComicView, BibleComicsAdmin, DB schema, comic content (Genesis 1/2/3/4 unchanged), ComicView layout/design.
+- TESTING REQUIRED (admin-only, browser-based):
+  1. Sign in as admin → Bible Comics → Genesis 1 → Edit Panel GEN1-P01
+  2. Upload new artwork → preview should immediately show new image
+  3. Click Save Changes → DB updated with new URL+?v=
+  4. Close modal → reopen → should show new artwork
+  5. Refresh page → should still show new artwork
+  6. View public Genesis 1 page → should show new artwork
