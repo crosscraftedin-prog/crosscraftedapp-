@@ -1,15 +1,19 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 /**
  * Client-side hooks for the trivia API.
  * All scoring is server-side — the client just sends answers and
  * receives verified results.
+ *
+ * The user's selected language is auto-included in the startQuiz call
+ * so the API returns translated questions if available.
  */
-
 export function useTriviaApi() {
   const [loading, setLoading] = useState(false);
+  const { lang } = useLanguage();
 
   const startQuiz = useCallback(async (params: {
     difficulty: string;
@@ -22,7 +26,7 @@ export function useTriviaApi() {
       const res = await fetch("/api/trivia/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(params),
+        body: JSON.stringify({ ...params, lang }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -30,7 +34,7 @@ export function useTriviaApi() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [lang]);
 
   const submitQuiz = useCallback(async (params: {
     difficulty: string;

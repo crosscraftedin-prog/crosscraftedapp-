@@ -7,15 +7,19 @@ import { selectQuizQuestions } from "@/lib/trivia-server";
  *
  * Returns questions for a quiz, prioritizing UNSCORED questions.
  *
- * Body: { difficulty, category, count, mode }
+ * Body: { difficulty, category, count, mode, lang }
  * mode: "EARN_POINTS" | "PRACTICE"
+ * lang: optional — "en" (default), "hi", "bn", "te", "mr", "ta", "gu",
+ *       "ur", "kn", "or", "ml", "pa", "as". If a question has a translation
+ *       for the requested language, the translated question + options +
+ *       explanation are returned. Otherwise falls back to English.
  *
- * Response: { questions, newCount, totalCount, allNew }
+ * Response: { questions, newCount, totalCount, allNew, mode, lang }
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { difficulty, category, count = 10, mode = "EARN_POINTS" } = body;
+    const { difficulty, category, count = 10, mode = "EARN_POINTS", lang = "en" } = body;
 
     // Validate
     if (!difficulty || !category) {
@@ -34,6 +38,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid mode" }, { status: 400 });
     }
 
+    const validLangs = ["en", "hi", "bn", "te", "mr", "ta", "gu", "ur", "kn", "or", "ml", "pa", "as"];
+    if (!validLangs.includes(lang)) {
+      return NextResponse.json({ error: "Invalid language code" }, { status: 400 });
+    }
+
     const user = await getAuthUser();
 
     // EARN_POINTS mode requires authentication
@@ -49,16 +58,29 @@ export async function POST(req: NextRequest) {
       mode
     );
 
-    // Return questions WITHOUT correct answers (client doesn't know which is right)
-    const questions = result.questions.map((q) => ({
-      id: q.questionId,
-      question: q.question,
-      options: JSON.parse(q.options),
-      difficulty: q.difficulty,
-      category: q.category,
-      basePoints: q.basePoints,
-      scriptureReference: q.scriptureReference,
-    }));
+    // Return questions WITHOUT correct answers (client doesn't know which is right).
+    // If the user requested a non-English language AND the question has a translation
+    // for that language, use the translated question + options + explanation.
+    const questions = result.questions.map((q) => {
+      let translated: { question?: string; options?: string[]; explanation?: string } | null = null;
+      try {
+        const allTranslations = JSON.parse(q.translations || "{}");
+        translated = allTranslations[lang] || null;
+      } catch {
+        // Malformed JSON — fall back to English
+      }
+
+      return {
+        id: q.questionId,
+        question: translated?.question || q.question,
+        options: translated?.options || JSON.parse(q.options),
+        difficulty: q.difficulty,
+        category: q.category,
+        basePoints: q.basePoints,
+        scriptureReference: q.scriptureReference,
+        explanation: translated?.explanation || q.explanation,
+      };
+    });
 
     return NextResponse.json({
       questions,
@@ -66,6 +88,7 @@ export async function POST(req: NextRequest) {
       totalCount: result.totalCount,
       allNew: result.allNew,
       mode,
+      lang,
     });
   } catch (error: any) {
     console.error("[trivia/start] Error:", error);

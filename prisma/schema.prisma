@@ -98,6 +98,11 @@ model TriviaQuestion {
   bibleBook          String?
   topic              String?
   basePoints         Int      // 10 | 20 | 30 | 50
+  // JSON-encoded object mapping language code → translated content:
+  //   { "hi": { "question": "...", "options": ["...","..."], "explanation": "..." },
+  //     "te": { "question": "...", "options": [...], "explanation": "..." }, ... }
+  // Empty object {} means no translations yet — fall back to English fields above.
+  translations       String   @default("{}")
   isActive           Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
