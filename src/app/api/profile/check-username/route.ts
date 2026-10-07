@@ -26,8 +26,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ available: false, error: "Username must be at least 3 characters" });
     }
 
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-      return NextResponse.json({ available: false, error: "Only letters, numbers, and underscores" });
+    if (!/^[a-zA-Z0-9_.]+$/.test(username)) {
+      return NextResponse.json({ available: false, error: "Only letters, numbers, underscores, and periods" });
     }
 
     // Check if taken by another user (case-insensitive)

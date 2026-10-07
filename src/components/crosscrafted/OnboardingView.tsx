@@ -71,7 +71,7 @@ export default function OnboardingView({ onComplete }: Props) {
             if (p.faithStatus) setFaithStatus(p.faithStatus);
             if (p.faithJourney) setFaithJourney(p.faithJourney);
             // If user already has profile fields, start from the appropriate step
-            if (p.username && p.state && p.city && p.dateOfBirth) {
+            if (p.username && p.state && p.city && p.mobileNumber) {
               setStep(2); // skip to faith
             }
           }
@@ -86,12 +86,16 @@ export default function OnboardingView({ onComplete }: Props) {
       .catch(() => {});
   }, []);
 
-  // Suggest username from Google display name + use Google profile photo as initial suggestion
+  // Suggest username from Google display name ONLY as a placeholder suggestion.
+  // The user must be free to replace it with any username they choose.
+  // Do NOT auto-set the username from email prefix or Google name.
+  // The suggestion appears in the input as a starting point the user can edit.
   useEffect(() => {
+    // Only suggest if user hasn't entered anything yet
     if (!username && user?.user_metadata?.full_name) {
       const suggested = (user.user_metadata.full_name as string)
         .toLowerCase()
-        .replace(/[^a-z0-9]/g, "")
+        .replace(/[^a-z0-9_.]/g, "")
         .slice(0, 20);
       if (suggested.length >= 3) {
         setUsername(suggested);
@@ -127,7 +131,7 @@ export default function OnboardingView({ onComplete }: Props) {
   const validateUsername = (val: string): string | null => {
     if (!val || val.trim().length === 0) return "Please choose a username.";
     if (val.trim().length < 3) return "Username must be at least 3 characters.";
-    if (!/^[a-zA-Z0-9_]+$/.test(val)) return "Only letters, numbers, and underscores.";
+    if (!/^[a-zA-Z0-9_.]+$/.test(val)) return "Only letters, numbers, underscores, and periods.";
     if (usernameAvailable === false) return "This username is already taken.";
     return null;
   };
@@ -135,7 +139,7 @@ export default function OnboardingView({ onComplete }: Props) {
   const validateProfile = (): string | null => {
     const uErr = validateUsername(username);
     if (uErr) return uErr;
-    if (!dateOfBirth) return "Date of birth is required.";
+    if (!mobileNumber) return "Mobile number is required.";
     if (!state) return "State is required.";
     if (!city) return "City is required.";
     return null;
@@ -149,7 +153,7 @@ export default function OnboardingView({ onComplete }: Props) {
       return;
     }
     setUsernameError(null);
-    if (!dateOfBirth || !state || !city) {
+    if (!mobileNumber || !state || !city) {
       toast.error("Please fill in all required fields.");
       return;
     }
@@ -317,17 +321,18 @@ export default function OnboardingView({ onComplete }: Props) {
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1">
                     Username *
                   </label>
+                  <p className="text-[9px] text-[#64748B] mb-1">This is how people will know you on Koino.</p>
                   <input
                     type="text"
                     value={username}
                     onChange={(e) => {
-                      const val = e.target.value.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 20);
+                      const val = e.target.value.replace(/[^a-zA-Z0-9_.]/g, "").slice(0, 20);
                       setUsername(val);
                       // Clear error when user types
                       if (usernameError) setUsernameError(null);
                     }}
                     className={`neo-input text-sm ${usernameError ? "border-[#EF4444]/40" : ""}`}
-                    placeholder="Choose a username"
+                    placeholder="Choose your username"
                   />
                   {/* Inline username validation error */}
                   {usernameError && (
@@ -365,7 +370,7 @@ export default function OnboardingView({ onComplete }: Props) {
                 {/* Date of Birth */}
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1">
-                    Date of Birth *
+                    Date of Birth <span className="text-[#64748B] normal-case font-normal">(optional)</span>
                   </label>
                   <input
                     type="date"
@@ -436,10 +441,10 @@ export default function OnboardingView({ onComplete }: Props) {
                   </select>
                 </div>
 
-                {/* Mobile Number (optional) */}
+                {/* Mobile Number (required) */}
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1">
-                    Mobile Number <span className="text-[#64748B] normal-case font-normal">(optional)</span>
+                    Mobile Number *
                   </label>
                   <input
                     type="tel"
@@ -449,14 +454,14 @@ export default function OnboardingView({ onComplete }: Props) {
                     placeholder="+91 98765 43210"
                   />
                   <p className="text-[9px] text-[#64748B] mt-1">
-                    Optional — useful for event and WhatsApp communication and prize claims.
+                    Used for event and WhatsApp communication and prize claims.
                   </p>
                 </div>
               </div>
 
               <button
                 onClick={saveProfile}
-                disabled={loading || !username || usernameAvailable !== true || !dateOfBirth || !state || !city}
+                disabled={loading || !username || usernameAvailable !== true || !mobileNumber || !state || !city}
                 className="w-full mt-4 py-3 rounded-xl bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 font-extrabold text-sm uppercase tracking-wider transition-all hover:-translate-y-px disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading ? <Loader2 size={16} className="animate-spin" /> : <>Continue <ArrowRight size={16} /></>}

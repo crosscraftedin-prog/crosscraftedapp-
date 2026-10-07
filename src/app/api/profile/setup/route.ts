@@ -53,17 +53,23 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
-      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      if (!/^[a-zA-Z0-9_.]+$/.test(username)) {
         return NextResponse.json(
-          { field: "username", error: "Username can only contain letters, numbers, and underscores" },
+          { field: "username", error: "Username can only contain letters, numbers, underscores, and periods" },
           { status: 400 }
         );
       }
-      if (!dateOfBirth) {
+      // Date of birth is now optional (not required per updated spec)
+      // Mobile number is required
+      if (!body.mobileNumber || !String(body.mobileNumber).trim()) {
         return NextResponse.json(
-          { field: "dateOfBirth", error: "Date of birth is required" },
+          { field: "mobileNumber", error: "Mobile number is required" },
           { status: 400 }
         );
+      }
+      // Date of birth is optional — do not require it
+      if (dateOfBirth) {
+        data.dateOfBirth = new Date(dateOfBirth);
       }
       if (!state) {
         return NextResponse.json(
@@ -123,15 +129,16 @@ export async function POST(req: NextRequest) {
       }
 
       // Verify required profile fields exist in the DB
+      // Required: username, mobileNumber, state, city (NOT dateOfBirth)
       if (!existingUser.username || existingUser.username.trim().length < 3) {
         return NextResponse.json(
           { field: "username", error: "Username is missing or invalid. Please complete your profile.", step: "profile" },
           { status: 400 }
         );
       }
-      if (!existingUser.dateOfBirth) {
+      if (!existingUser.mobileNumber) {
         return NextResponse.json(
-          { field: "dateOfBirth", error: "Date of birth is missing. Please complete your profile.", step: "profile" },
+          { field: "mobileNumber", error: "Mobile number is missing. Please complete your profile.", step: "profile" },
           { status: 400 }
         );
       }

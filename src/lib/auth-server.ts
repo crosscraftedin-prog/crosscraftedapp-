@@ -39,7 +39,9 @@ export async function getAuthUser() {
     dbUser = await db.user.create({
       data: {
         email: user.email,
-        name: user.user_metadata?.full_name || user.user_metadata?.name || user.email.split("@")[0],
+        // name = display name from Google/email signup metadata.
+        // This is NOT the username — username is chosen during onboarding.
+        name: user.user_metadata?.full_name || user.user_metadata?.name || null,
         image: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
         role: shouldBeAdmin ? "admin" : "user",
         totalPoints: 0,
