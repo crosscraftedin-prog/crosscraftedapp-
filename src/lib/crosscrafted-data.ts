@@ -31,20 +31,29 @@ export type EventItem = {
   id: string;
   title: string;
   description: string;
-  date: string; // ISO
+  date: string; // ISO (start date)
   end_date?: string;
-  country: string;        // "India" (kept as a field so the architecture can scale to other countries later)
-  state: string;          // e.g. "Telangana" — empty for purely online events
-  city: string;           // e.g. "Hyderabad" — empty for purely online events
-  address?: string;       // full address for in-person / hybrid
-  location: string;       // short display location (kept for backward compat)
+  startTime?: string;  // "HH:MM"
+  endTime?: string;    // "HH:MM"
+  allDay?: boolean;
+  country: string;
+  state: string;
+  city: string;
+  address?: string;
+  venueName?: string;       // venue name for in-person/hybrid
+  location: string;
   languages: string[];
   category: string;
-  eventType: EventType;   // in-person | online | hybrid (replaces the older is_online boolean as the source of truth)
-  is_online: boolean;     // derived: eventType === "online" || eventType === "hybrid" — kept for backward compat
-  onlineUrl?: string;     // for online / hybrid events
-  ticketUrl?: string;     // external ticket/registration URL — Koino does NOT process payments
-  organizerName?: string; // contact name (separate from hosting church)
+  eventType: EventType;
+  is_online: boolean;
+  onlineUrl?: string;
+  registrationType?: "free" | "paid" | "registration_required" | "no_registration";
+  ticketUrl?: string;
+  whatsappNumber?: string;
+  organizerName?: string;
+  organizerEmail?: string;
+  organizerPhone?: string;
+  organizerWebsite?: string;
   is_free: boolean;
   price: number;
   attendees: number;
@@ -52,8 +61,8 @@ export type EventItem = {
   cover_image?: string;
   images?: string[];
   church: string;
-  whatsapp_number?: string;
-  status?: "upcoming" | "cancelled" | "ended";
+  whatsapp_number?: string; // backward compat
+  status?: "upcoming" | "cancelled" | "ended" | "pending_review" | "approved" | "rejected" | "published";
   featured?: boolean;
 };
 

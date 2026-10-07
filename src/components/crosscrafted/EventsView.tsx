@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Calendar,
@@ -25,6 +25,9 @@ import {
   TrendingUp,
   HandHelping,
   Sparkles,
+  ImageOff,
+  Upload,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -40,7 +43,6 @@ import {
 } from "@/lib/crosscrafted-data";
 import { useTranslation } from "@/lib/i18n/LanguageContext";
 import { MessageCircle, ExternalLink, Info } from "lucide-react";
-
 const CATEGORY_ICONS: Record<string, typeof Music> = {
   worship: Music,
   "bible-study": BookOpen,
@@ -95,6 +97,18 @@ export default function EventsView() {
   const [quickFilter, setQuickFilter] = useState<"near-you" | "all-india" | "online">("all-india");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [openEvent, setOpenEvent] = useState<EventItem | null>(null);
+  const [eventForm, setEventForm] = useState({
+    title: "", description: "", category: "",
+    startDate: "", startTime: "", endDate: "", endTime: "", allDay: false,
+    eventType: "in-person" as "in-person" | "online" | "hybrid",
+    venueName: "", address: "", city: "", state: "", onlineUrl: "",
+    registrationType: "free" as string,
+    ticketUrl: "", whatsappNumber: "",
+    organizerName: "", organizerEmail: "", organizerPhone: "", organizerWebsite: "",
+    coverImage: "",
+  });
+  const [imageUploading, setImageUploading] = useState(false);
+  const [submittingEvent, setSubmittingEvent] = useState(false);
 
   const filtered = useMemo(() => {
     return events.filter((e) => {
@@ -165,6 +179,50 @@ export default function EventsView() {
   );
 
   const activeFilters = [filterState, filterCity, filterLanguage, filterCategory, searchQuery, dateFilter !== "all" ? dateFilter : ""].filter(Boolean).length;
+
+  // ─── IMAGE UPLOAD ───
+  const eventImgInputRef = useRef<HTMLInputElement>(null);
+  const handleEventImageUpload = async (file: File) => {
+    const allowed = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+    if (!allowed.includes(file.type)) { toast.error("Please upload a JPG, PNG or WEBP image."); return; }
+    if (file.size > 5 * 1024 * 1024) { toast.error("Please choose an image smaller than 5 MB."); return; }
+    setImageUploading(true);
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const res = await fetch("/api/events/upload-image", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      setEventForm(f => ({ ...f, coverImage: data.url }));
+    } catch (e: any) { toast.error(e.message || "Upload failed"); }
+    finally { setImageUploading(false); if (eventImgInputRef.current) eventImgInputRef.current.value = ""; }
+  };
+
+  // ─── EVENT SUBMIT ───
+  const submitEvent = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eventForm.title || !eventForm.description || !eventForm.startDate || !eventForm.category) {
+      toast.error("Please fill in all required fields."); return;
+    }
+    if (!eventForm.allDay && !eventForm.startTime) { toast.error("Start time is required (or check 'All Day')."); return; }
+    if (eventForm.eventType === "online" && !eventForm.onlineUrl) { toast.error("Online event link is required for online events."); return; }
+    if ((eventForm.eventType === "in-person" || eventForm.eventType === "hybrid") && (!eventForm.city || !eventForm.state)) { toast.error("City and State are required for in-person/hybrid events."); return; }
+
+    setSubmittingEvent(true);
+    // Simulate submission (mock data — no backend for events yet)
+    setTimeout(() => {
+      setSubmittingEvent(false);
+      setShowCreateModal(false);
+      toast.success("Event submitted!", { description: "Your event will appear once approved by our team." });
+      setEventForm({
+        title: "", description: "", category: "",
+        startDate: "", startTime: "", endDate: "", endTime: "", allDay: false,
+        eventType: "in-person", venueName: "", address: "", city: "", state: "", onlineUrl: "",
+        registrationType: "free", ticketUrl: "", whatsappNumber: "",
+        organizerName: "", organizerEmail: "", organizerPhone: "", organizerWebsite: "",
+        coverImage: "",
+      });
+    }, 800);
+  };
 
   const toggleSave = (id: string) => {
     setSavedEvents((prev) => {
@@ -764,14 +822,14 @@ export default function EventsView() {
         )}
       </AnimatePresence>
 
-      {/* Create Modal (simplified) */}
+      {/* Create Modal (upgraded) */}
       <AnimatePresence>
         {showCreateModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-end md:items-center justify-center z-[60]"
+            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-end md:items-center justify-center z-[60] p-0 md:p-4"
             onClick={(e) => e.target === e.currentTarget && setShowCreateModal(false)}
           >
             <motion.div
@@ -779,9 +837,9 @@ export default function EventsView() {
               animate={{ y: 0 }}
               exit={{ y: 100 }}
               transition={{ type: "spring", damping: 30, stiffness: 350 }}
-              className="bg-[#1C1929] border-t md:border border-white/[0.08] rounded-t-[28px] md:rounded-[24px] w-full max-w-lg p-5"
+              className="bg-[#1C1929] border-t md:border border-white/[0.08] rounded-t-[28px] md:rounded-[24px] w-full max-w-lg max-h-[90vh] overflow-y-auto"
             >
-              <div className="flex justify-between items-center mb-4">
+              <div className="sticky top-0 bg-[#1C1929] z-10 flex justify-between items-center p-5 pb-3 border-b border-white/[0.04]">
                 <h2 className="text-lg font-bold bg-gradient-to-r from-[#EC4899] to-[#F59E0B] bg-clip-text text-transparent">
                   Add an Event
                 </h2>
@@ -789,37 +847,121 @@ export default function EventsView() {
                   <X size={20} />
                 </button>
               </div>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setShowCreateModal(false);
-                  toast.success("Event submitted!", { description: "Your event will appear once approved." });
-                }}
-                className="space-y-3"
-              >
-                <input type="text" placeholder="Event title" className="neo-input text-sm" required />
-                <textarea placeholder="Event description" className="neo-input h-24 resize-none text-sm" required />
-                <div className="grid grid-cols-2 gap-3">
-                  <input type="date" className="neo-input text-sm" required />
-                  <input type="time" className="neo-input text-sm" required />
+
+              <form onSubmit={submitEvent} className="p-5 space-y-4">
+                {/* ─── EVENT FLYER ─── */}
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                    Event Flyer
+                  </label>
+                  <p className="text-[9px] text-[#64748B] mb-2">Portrait/vertical poster. 1080 × 1350 px recommended.</p>
+                  {eventForm.coverImage ? (
+                    <div className="relative">
+                      <div className="w-full max-w-[200px] mx-auto aspect-[4/5] rounded-xl overflow-hidden bg-[#0f0f1a] border border-white/[0.08]">
+                        <img src={eventForm.coverImage} alt="Event flyer" className="w-full h-full object-contain" />
+                      </div>
+                      <div className="flex gap-2 mt-2 justify-center">
+                        <button type="button" onClick={() => eventImgInputRef.current?.click()} disabled={imageUploading} className="px-3 py-1.5 rounded-lg bg-[#EC4899]/15 border border-[#EC4899]/30 text-[#EC4899] text-[10px] font-bold hover:bg-[#EC4899]/25 transition-all disabled:opacity-50">
+                          {imageUploading ? <Loader2 size={11} className="animate-spin" /> : "Replace"}
+                        </button>
+                        <button type="button" onClick={() => setEventForm(f => ({ ...f, coverImage: "" }))} className="px-3 py-1.5 rounded-lg text-[10px] font-bold text-[#EF4444] hover:bg-[#EF4444]/10 transition-all">Remove</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => eventImgInputRef.current?.click()} disabled={imageUploading} className="w-full py-8 rounded-xl border-2 border-dashed border-white/[0.12] bg-white/[0.02] hover:border-[#EC4899]/30 hover:bg-[#EC4899]/5 transition-all flex flex-col items-center gap-2 text-[#64748B] disabled:opacity-50">
+                      {imageUploading ? <Loader2 size={20} className="animate-spin text-[#EC4899]" /> : <Upload size={20} />}
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Upload Event Flyer</span>
+                      <span className="text-[8px] text-[#475569]">JPG, PNG, WEBP · Max 5MB · Portrait preferred</span>
+                    </button>
+                  )}
+                  <input ref={eventImgInputRef} type="file" accept="image/png,image/jpeg,image/jpg,image/webp" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleEventImageUpload(f); }} className="hidden" />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <input type="text" placeholder="City" className="neo-input text-sm" required />
-                  <input type="text" placeholder="State" className="neo-input text-sm" required />
+
+                {/* ─── BASIC INFORMATION ─── */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#F39B9B]">Basic Information</p>
+                  <input type="text" placeholder="Event title *" value={eventForm.title} onChange={(e) => setEventForm(f => ({ ...f, title: e.target.value }))} className="neo-input text-sm" required />
+                  <textarea placeholder="Event description *" value={eventForm.description} onChange={(e) => setEventForm(f => ({ ...f, description: e.target.value }))} className="neo-input h-24 resize-none text-sm" required />
+                  <select value={eventForm.category} onChange={(e) => setEventForm(f => ({ ...f, category: e.target.value }))} className="neo-input text-sm" required>
+                    <option value="">Select category *</option>
+                    {EVENT_CATEGORIES.map((c) => (<option key={c.value} value={c.value}>{c.label}</option>))}
+                  </select>
                 </div>
-                <input type="text" placeholder="Location address" className="neo-input text-sm" required />
-                <select className="neo-input text-sm" required defaultValue="">
-                  <option value="">Select category</option>
-                  {EVENT_CATEGORIES.map((c) => (
-                    <option key={c.value} value={c.value}>{c.label}</option>
-                  ))}
-                </select>
-                <button
-                  type="submit"
-                  className="w-full py-3 rounded-xl text-sm font-bold text-white"
-                  style={{ background: "linear-gradient(135deg, #EC4899, #F59E0B)" }}
-                >
-                  Submit Event
+
+                {/* ─── DATE & TIME ─── */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#F39B9B]">Date & Time</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className="text-[9px] text-[#64748B]">Start Date *</label><input type="date" value={eventForm.startDate} onChange={(e) => setEventForm(f => ({ ...f, startDate: e.target.value }))} className="neo-input text-sm" required /></div>
+                    <div><label className="text-[9px] text-[#64748B]">Start Time {!eventForm.allDay ? "*" : "(all day)"}</label><input type="time" value={eventForm.startTime} onChange={(e) => setEventForm(f => ({ ...f, startTime: e.target.value }))} className="neo-input text-sm" disabled={eventForm.allDay} /></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className="text-[9px] text-[#64748B]">End Date (optional)</label><input type="date" value={eventForm.endDate} onChange={(e) => setEventForm(f => ({ ...f, endDate: e.target.value }))} className="neo-input text-sm" /></div>
+                    <div><label className="text-[9px] text-[#64748B]">End Time (optional)</label><input type="time" value={eventForm.endTime} onChange={(e) => setEventForm(f => ({ ...f, endTime: e.target.value }))} className="neo-input text-sm" disabled={eventForm.allDay} /></div>
+                  </div>
+                  <label className="flex items-center gap-2 text-[11px] text-[#94A3B8] cursor-pointer">
+                    <input type="checkbox" checked={eventForm.allDay} onChange={(e) => setEventForm(f => ({ ...f, allDay: e.target.checked }))} className="accent-[#EC4899]" />
+                    All Day Event
+                  </label>
+                </div>
+
+                {/* ─── LOCATION ─── */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#F39B9B]">Location</p>
+                  <select value={eventForm.eventType} onChange={(e) => setEventForm(f => ({ ...f, eventType: e.target.value as any }))} className="neo-input text-sm" required>
+                    <option value="in-person">In Person</option>
+                    <option value="online">Online</option>
+                    <option value="hybrid">Hybrid</option>
+                  </select>
+
+                  {(eventForm.eventType === "in-person" || eventForm.eventType === "hybrid") && (
+                    <>
+                      <input type="text" placeholder="Venue name" value={eventForm.venueName} onChange={(e) => setEventForm(f => ({ ...f, venueName: e.target.value }))} className="neo-input text-sm" />
+                      <input type="text" placeholder="Location address" value={eventForm.address} onChange={(e) => setEventForm(f => ({ ...f, address: e.target.value }))} className="neo-input text-sm" />
+                      <div className="grid grid-cols-2 gap-3">
+                        <input type="text" placeholder="City *" value={eventForm.city} onChange={(e) => setEventForm(f => ({ ...f, city: e.target.value }))} className="neo-input text-sm" required />
+                        <select value={eventForm.state} onChange={(e) => setEventForm(f => ({ ...f, state: e.target.value }))} className="neo-input text-sm" required>
+                          <option value="">State *</option>
+                          {INDIAN_STATES.map((s) => (<option key={s} value={s}>{s}</option>))}
+                        </select>
+                      </div>
+                    </>
+                  )}
+
+                  {(eventForm.eventType === "online" || eventForm.eventType === "hybrid") && (
+                    <input type="url" placeholder="Online event link (Zoom, YouTube, etc.) *" value={eventForm.onlineUrl} onChange={(e) => setEventForm(f => ({ ...f, onlineUrl: e.target.value }))} className="neo-input text-sm" required={eventForm.eventType === "online"} />
+                  )}
+                </div>
+
+                {/* ─── REGISTRATION ─── */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#F39B9B]">Registration</p>
+                  <select value={eventForm.registrationType} onChange={(e) => setEventForm(f => ({ ...f, registrationType: e.target.value }))} className="neo-input text-sm">
+                    <option value="free">Free Event</option>
+                    <option value="paid">Paid Event</option>
+                    <option value="registration_required">Registration Required</option>
+                    <option value="no_registration">No Registration Required</option>
+                  </select>
+                  <input type="url" placeholder="Ticket / Registration URL (Eventbrite, church website, etc.)" value={eventForm.ticketUrl} onChange={(e) => setEventForm(f => ({ ...f, ticketUrl: e.target.value }))} className="neo-input text-sm" />
+                  <p className="text-[9px] text-[#64748B]">Koino does not process ticket payments. Link to your external registration page.</p>
+                </div>
+
+                {/* ─── CONTACT ─── */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#F39B9B]">Contact</p>
+                  <input type="text" placeholder="Organizer name" value={eventForm.organizerName} onChange={(e) => setEventForm(f => ({ ...f, organizerName: e.target.value }))} className="neo-input text-sm" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <input type="tel" placeholder="WhatsApp number" value={eventForm.whatsappNumber} onChange={(e) => setEventForm(f => ({ ...f, whatsappNumber: e.target.value }))} className="neo-input text-sm" />
+                    <input type="tel" placeholder="Contact phone" value={eventForm.organizerPhone} onChange={(e) => setEventForm(f => ({ ...f, organizerPhone: e.target.value }))} className="neo-input text-sm" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <input type="email" placeholder="Contact email" value={eventForm.organizerEmail} onChange={(e) => setEventForm(f => ({ ...f, organizerEmail: e.target.value }))} className="neo-input text-sm" />
+                    <input type="url" placeholder="Website / social link" value={eventForm.organizerWebsite} onChange={(e) => setEventForm(f => ({ ...f, organizerWebsite: e.target.value }))} className="neo-input text-sm" />
+                  </div>
+                </div>
+
+                <button type="submit" disabled={submittingEvent || imageUploading} className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all hover:-translate-y-px disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2" style={{ background: "linear-gradient(135deg, #EC4899, #F59E0B)" }}>
+                  {submittingEvent ? <Loader2 size={16} className="animate-spin" /> : "Submit Event"}
                 </button>
               </form>
             </motion.div>
