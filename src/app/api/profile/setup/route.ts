@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     // their data is preserved, and they resume from step 2 on next login).
     const data: any = {};
 
-    if (step === "profile" || step === "complete") {
+    if (step === "profile") {
       // Validate required fields
       const username = (body.username || "").trim();
       const dateOfBirth = body.dateOfBirth;
@@ -48,19 +48,34 @@ export async function POST(req: NextRequest) {
       const city = (body.city || "").trim();
 
       if (!username || username.length < 3) {
-        return NextResponse.json({ error: "Username must be at least 3 characters" }, { status: 400 });
+        return NextResponse.json(
+          { field: "username", error: "Username must be at least 3 characters" },
+          { status: 400 }
+        );
       }
       if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-        return NextResponse.json({ error: "Username can only contain letters, numbers, and underscores" }, { status: 400 });
+        return NextResponse.json(
+          { field: "username", error: "Username can only contain letters, numbers, and underscores" },
+          { status: 400 }
+        );
       }
       if (!dateOfBirth) {
-        return NextResponse.json({ error: "Date of birth is required" }, { status: 400 });
+        return NextResponse.json(
+          { field: "dateOfBirth", error: "Date of birth is required" },
+          { status: 400 }
+        );
       }
       if (!state) {
-        return NextResponse.json({ error: "State is required" }, { status: 400 });
+        return NextResponse.json(
+          { field: "state", error: "State is required" },
+          { status: 400 }
+        );
       }
       if (!city) {
-        return NextResponse.json({ error: "City is required" }, { status: 400 });
+        return NextResponse.json(
+          { field: "city", error: "City is required" },
+          { status: 400 }
+        );
       }
 
       // Check username uniqueness (server-side + DB-level)
@@ -68,7 +83,10 @@ export async function POST(req: NextRequest) {
         where: { username: { equals: username, mode: "insensitive" }, NOT: { id: user.id } },
       });
       if (existing) {
-        return NextResponse.json({ error: "That username is already taken." }, { status: 409 });
+        return NextResponse.json(
+          { field: "username", error: "That username is already taken." },
+          { status: 409 }
+        );
       }
 
       data.username = username;
@@ -90,7 +108,69 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (step === "faith" || step === "complete") {
+    if (step === "complete") {
+      // When completing onboarding, DON'T re-validate profile fields from the
+      // request body (they were already validated + saved in the "profile" step).
+      // Instead, READ the existing user record from the DB and verify all
+      // required fields are present. If any are missing, return a clear error
+      // telling the client which step to go back to.
+      const existingUser = await db.user.findUnique({ where: { id: user.id } });
+      if (!existingUser) {
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
+
+      // Verify required profile fields exist in the DB
+      if (!existingUser.username || existingUser.username.trim().length < 3) {
+        return NextResponse.json(
+          { field: "username", error: "Username is missing or invalid. Please complete your profile.", step: "profile" },
+          { status: 400 }
+        );
+      }
+      if (!existingUser.dateOfBirth) {
+        return NextResponse.json(
+          { field: "dateOfBirth", error: "Date of birth is missing. Please complete your profile.", step: "profile" },
+          { status: 400 }
+        );
+      }
+      if (!existingUser.state) {
+        return NextResponse.json(
+          { field: "state", error: "State is missing. Please complete your profile.", step: "profile" },
+          { status: 400 }
+        );
+      }
+      if (!existingUser.city) {
+        return NextResponse.json(
+          { field: "city", error: "City is missing. Please complete your profile.", step: "profile" },
+          { status: 400 }
+        );
+      }
+
+      // Verify faith questions are answered
+      if (!existingUser.faithStatus) {
+        return NextResponse.json(
+          { field: "faithStatus", error: "Please answer the faith questions.", step: "faith" },
+          { status: 400 }
+        );
+      }
+      if (!existingUser.faithJourney) {
+        return NextResponse.json(
+          { field: "faithJourney", error: "Please answer the faith questions.", step: "faith" },
+          { status: 400 }
+        );
+      }
+
+      // Track WhatsApp channel interaction
+      data.whatsappChannelPromptShown = true;
+      if (body.whatsappChannelClicked === true) {
+        data.whatsappChannelClicked = true;
+      }
+
+      // Mark profile as complete — all required fields verified
+      data.profileCompleted = true;
+    }
+
+    // Handle faith step (standalone save)
+    if (step === "faith") {
       if (body.faithStatus) {
         const validStatuses = ["follows_jesus", "exploring", "new_to_christianity", "prefer_not_to_say"];
         if (!validStatuses.includes(body.faithStatus)) {
@@ -105,20 +185,6 @@ export async function POST(req: NextRequest) {
         }
         data.faithJourney = body.faithJourney;
       }
-    }
-
-    if (step === "whatsapp" || step === "complete") {
-      // Track that the prompt was shown (user reached this step)
-      data.whatsappChannelPromptShown = true;
-      // Track click — but do NOT claim the user "joined" the channel
-      if (body.whatsappChannelClicked === true) {
-        data.whatsappChannelClicked = true;
-      }
-    }
-
-    // Mark profile as complete when the final step is saved
-    if (step === "complete") {
-      data.profileCompleted = true;
     }
 
     // Always update name if provided (from Google display name suggestion)

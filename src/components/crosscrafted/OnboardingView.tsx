@@ -116,7 +116,42 @@ export default function OnboardingView({ onComplete }: Props) {
     return () => clearTimeout(timer);
   }, [username]);
 
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+
+  const validateUsername = (val: string): string | null => {
+    if (!val || val.trim().length === 0) return "Please choose a username.";
+    if (val.trim().length < 3) return "Username must be at least 3 characters.";
+    if (!/^[a-zA-Z0-9_]+$/.test(val)) return "Only letters, numbers, and underscores.";
+    if (usernameAvailable === false) return "This username is already taken.";
+    return null;
+  };
+
+  const validateProfile = (): string | null => {
+    const uErr = validateUsername(username);
+    if (uErr) return uErr;
+    if (!dateOfBirth) return "Date of birth is required.";
+    if (!state) return "State is required.";
+    if (!city) return "City is required.";
+    return null;
+  };
+
   const saveProfile = async () => {
+    // Client-side validation BEFORE calling the API
+    const uErr = validateUsername(username);
+    if (uErr) {
+      setUsernameError(uErr);
+      return;
+    }
+    setUsernameError(null);
+    if (!dateOfBirth || !state || !city) {
+      toast.error("Please fill in all required fields.");
+      return;
+    }
+    // Don't proceed if username availability check is still loading
+    if (usernameAvailable !== true) {
+      toast.error("Please wait for username availability check.");
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch("/api/profile/setup", {
@@ -134,7 +169,12 @@ export default function OnboardingView({ onComplete }: Props) {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to save profile");
+      if (!res.ok) {
+        if (data.field === "username") {
+          setUsernameError(data.error);
+        }
+        throw new Error(data.error || "Failed to save profile");
+      }
       setStep(2);
     } catch (e: any) {
       toast.error(e.message || "Failed to save profile");
@@ -177,7 +217,19 @@ export default function OnboardingView({ onComplete }: Props) {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to complete onboarding");
+      if (!res.ok) {
+        // If the server says a step is incomplete, go back to that step
+        if (data.step === "profile") {
+          toast.error("Please complete your profile first.");
+          setStep(1);
+        } else if (data.step === "faith") {
+          toast.error("Please answer the faith questions first.");
+          setStep(2);
+        } else {
+          throw new Error(data.error || "Failed to complete onboarding");
+        }
+        return;
+      }
       toast.success("Welcome to Koino! 🎉");
       onComplete();
     } catch (e: any) {
@@ -255,19 +307,32 @@ export default function OnboardingView({ onComplete }: Props) {
                   <input
                     type="text"
                     value={username}
-                    onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 20))}
-                    className="neo-input text-sm"
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 20);
+                      setUsername(val);
+                      // Clear error when user types
+                      if (usernameError) setUsernameError(null);
+                    }}
+                    className={`neo-input text-sm ${usernameError ? "border-[#EF4444]/40" : ""}`}
                     placeholder="Choose a username"
                   />
-                  {usernameAvailable === false && (
+                  {/* Inline username validation error */}
+                  {usernameError && (
+                    <p className="text-[10px] text-[#EF4444] font-bold mt-1">⚠ {usernameError}</p>
+                  )}
+                  {/* Username availability (only show if no error) */}
+                  {!usernameError && usernameAvailable === false && (
                     <div className="mt-1">
-                      <p className="text-[10px] text-[#EF4444] font-bold">That username is already taken.</p>
+                      <p className="text-[10px] text-[#EF4444] font-bold">⚠ This username is already taken.</p>
                       {usernameSuggestions.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
                           {usernameSuggestions.map((s) => (
                             <button
                               key={s}
-                              onClick={() => setUsername(s)}
+                              onClick={() => {
+                                setUsername(s);
+                                setUsernameError(null);
+                              }}
                               className="px-2 py-0.5 rounded-md bg-[#7C3AED]/15 text-[#A78BFA] text-[10px] font-bold hover:bg-[#7C3AED]/25 transition-all"
                             >
                               {s}
@@ -277,7 +342,7 @@ export default function OnboardingView({ onComplete }: Props) {
                       )}
                     </div>
                   )}
-                  {usernameAvailable === true && (
+                  {!usernameError && usernameAvailable === true && (
                     <p className="text-[10px] text-[#22C55E] font-bold mt-1 flex items-center gap-0.5">
                       <Check size={10} /> Available
                     </p>
