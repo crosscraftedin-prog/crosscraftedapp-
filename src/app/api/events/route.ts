@@ -30,18 +30,35 @@ export async function GET(req: NextRequest) {
     const onlineOnly = searchParams.get("online") === "1";
     const featuredOnly = searchParams.get("featured") === "1";
 
-    const events = await db.event.findMany({
-      where: {
-        // CRITICAL: only PUBLISHED events are publicly visible
-        status: "PUBLISHED",
-        ...(state ? { state } : {}),
-        ...(city ? { city } : {}),
-        ...(category ? { category } : {}),
-        ...(onlineOnly ? { isOnline: true } : {}),
-        ...(featuredOnly ? { featured: true } : {}),
-      },
-      orderBy: [{ featured: "desc" }, { startDate: "asc" }],
-    });
+    let events: any[] = [];
+    try {
+      events = await db.event.findMany({
+        where: {
+          // CRITICAL: only PUBLISHED events are publicly visible
+          status: "PUBLISHED",
+          ...(state ? { state } : {}),
+          ...(city ? { city } : {}),
+          ...(category ? { category } : {}),
+          ...(onlineOnly ? { isOnline: true } : {}),
+          ...(featuredOnly ? { featured: true } : {}),
+        },
+        orderBy: [{ featured: "desc" }, { startDate: "asc" }],
+      });
+    } catch (dbError: any) {
+      // If the Event table doesn't exist yet (migration not applied),
+      // return an empty list — do NOT throw a 500 to the public page.
+      // The public Events page will show "No events published yet"
+      // which is the correct UX for an empty/new database.
+      const prismaCode = dbError?.code;
+      const prismaMessage = dbError?.message || "";
+      if (prismaCode === "P2021" || prismaCode === "P2022" || prismaCode === "P1003" ||
+          /relation .* does not exist/i.test(prismaMessage) ||
+          /table .* does not exist/i.test(prismaMessage)) {
+        console.warn("[api/events GET] Event table not found — migration not applied yet. Returning empty list.");
+        return NextResponse.json({ events: [] });
+      }
+      throw dbError;
+    }
 
     // Serialize dates + parse languages JSON
     return NextResponse.json({
@@ -85,6 +102,8 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error("[api/events GET] Error:", error);
+    // Graceful fallback — return empty list, not a 500 error, so the
+    // public Events page doesn't crash.
     return NextResponse.json({ events: [], error: "Failed to load events" }, { status: 200 });
   }
 }

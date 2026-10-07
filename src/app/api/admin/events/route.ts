@@ -35,13 +35,47 @@ export async function GET(req: NextRequest) {
     const validStatuses = ["PENDING", "PUBLISHED", "REJECTED", "CANCELLED"];
     const where = status && validStatuses.includes(status) ? { status } : {};
 
-    const events = await db.event.findMany({
-      where,
-      orderBy: [{ createdAt: "desc" }],
-    });
+    let events: Array<any> = [];
+    let counts: { all: number; PENDING: number; PUBLISHED: number; REJECTED: number; CANCELLED: number } = {
+      all: 0, PENDING: 0, PUBLISHED: 0, REJECTED: 0, CANCELLED: 0,
+    };
+
+    try {
+      events = await db.event.findMany({
+        where,
+        orderBy: [{ createdAt: "desc" }],
+      });
+      counts = {
+        all: await db.event.count(),
+        PENDING: await db.event.count({ where: { status: "PENDING" } }),
+        PUBLISHED: await db.event.count({ where: { status: "PUBLISHED" } }),
+        REJECTED: await db.event.count({ where: { status: "REJECTED" } }),
+        CANCELLED: await db.event.count({ where: { status: "CANCELLED" } }),
+      };
+    } catch (dbError: any) {
+      // Surface the actual Prisma error so the admin can diagnose.
+      // P2021 = "table does not exist" — migration not applied yet.
+      // P2022 = "column does not exist" — schema drift.
+      // P1003 = "relation does not exist" (Postgres native).
+      const prismaCode = dbError?.code;
+      const prismaMessage = dbError?.message;
+      console.error("[api/admin/events GET] Prisma error:", { code: prismaCode, message: prismaMessage });
+
+      if (prismaCode === "P2021" || prismaCode === "P2022" || prismaCode === "P1003" ||
+          /relation .* does not exist/i.test(prismaMessage || "") ||
+          /table .* does not exist/i.test(prismaMessage || "")) {
+        return NextResponse.json({
+          error: "Event table not found in the database. The Prisma migration has not been applied to production yet. Run `npx prisma migrate deploy` (or `npx prisma db push`) with the production DATABASE_URL to create the Event table.",
+          prismaCode,
+          events: [],
+          counts,
+        }, { status: 500 });
+      }
+      throw dbError; // re-throw for the outer catch
+    }
 
     return NextResponse.json({
-      events: events.map((e) => ({
+      events: events.map((e: any) => ({
         id: e.id,
         title: e.title,
         description: e.description,
@@ -84,17 +118,17 @@ export async function GET(req: NextRequest) {
         createdAt: e.createdAt.toISOString(),
         updatedAt: e.updatedAt.toISOString(),
       })),
-      counts: {
-        all: await db.event.count(),
-        PENDING: await db.event.count({ where: { status: "PENDING" } }),
-        PUBLISHED: await db.event.count({ where: { status: "PUBLISHED" } }),
-        REJECTED: await db.event.count({ where: { status: "REJECTED" } }),
-        CANCELLED: await db.event.count({ where: { status: "CANCELLED" } }),
-      },
+      counts,
     });
   } catch (error: any) {
     console.error("[api/admin/events GET] Error:", error);
-    return NextResponse.json({ error: "Failed to load events" }, { status: 500 });
+    return NextResponse.json({
+      error: "Failed to load events",
+      detail: error?.message || String(error),
+      code: error?.code,
+      events: [],
+      counts: { all: 0, PENDING: 0, PUBLISHED: 0, REJECTED: 0, CANCELLED: 0 },
+    }, { status: 500 });
   }
 }
 

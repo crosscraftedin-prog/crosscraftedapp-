@@ -801,7 +801,18 @@ function EventsTab() {
       const url = status === "all" ? "/api/admin/events" : `/api/admin/events?status=${status}`;
       const res = await fetch(url, { cache: "no-store" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to load events");
+      if (!res.ok) {
+        // Surface the actual API error message — includes Prisma error codes
+        // (P2021/P2022/P1003 = table/relation does not exist) so the admin
+        // can diagnose "migration not applied" vs other errors.
+        const apiError = data?.error || `Failed to load events (HTTP ${res.status})`;
+        const prismaCode = data?.prismaCode || data?.code;
+        const detail = data?.detail;
+        const fullError = prismaCode
+          ? `${apiError} (Prisma code: ${prismaCode}${detail ? ` — ${detail}` : ""})`
+          : apiError;
+        throw new Error(fullError);
+      }
       setEvents(data.events || []);
       if (data.counts) setCounts(data.counts);
     } catch (e: any) {
@@ -931,9 +942,32 @@ function EventsTab() {
 
       {/* Error */}
       {!loading && error && (
-        <div className="bg-[#EF4444]/8 border border-[#EF4444]/20 rounded-xl p-4 text-center">
+        <div className="bg-[#EF4444]/8 border border-[#EF4444]/20 rounded-xl p-4">
           <p className="text-sm font-bold text-[#EF4444] mb-1">Failed to load events</p>
-          <p className="text-xs text-[#A09DB1] mb-3">{error}</p>
+          <p className="text-xs text-[#A09DB1] mb-3 leading-relaxed break-words">{error}</p>
+          {/* If this is a "table not found" / migration error, show actionable guidance */}
+          {/migration|table|relation|P2021|P2022|P1003/i.test(error) && (
+            <div className="bg-[#F59E0B]/8 border border-[#F59E0B]/20 rounded-lg p-3 mt-2 mb-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B] mb-1">
+                Action required — apply Prisma migration
+              </p>
+              <p className="text-[11px] text-[#A09DB1] leading-relaxed mb-2">
+                The <code className="text-[#A78BFA]">Event</code> table does not exist in the production database yet.
+                The migration file exists in the repo (<code className="text-[#A78BFA]">prisma/migrations/20261007120000_add_events_table/</code>)
+                but has not been applied to Supabase. Run this command locally with your production <code className="text-[#A78BFA]">DATABASE_URL</code>:
+              </p>
+              <pre className="text-[10px] text-[#22C55E] bg-black/40 rounded-lg p-2 overflow-x-auto">
+{`# Set production DATABASE_URL in .env first, then:
+npx prisma migrate deploy
+
+# OR (faster, applies schema directly):
+npx prisma db push`}
+              </pre>
+              <p className="text-[10px] text-[#64748B] mt-2">
+                After the migration succeeds, click "Try again" — the table will exist and the API will return an empty list.
+              </p>
+            </div>
+          )}
           <button onClick={() => loadEvents()} className="px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold">
             Try again
           </button>
