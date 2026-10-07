@@ -602,6 +602,85 @@ model TriviaWinner {
   @@index([userId])
 }
 
+// ─── EVENTS ─────────────────────────────────────────────────────────────────
+// User-submitted Christian events. Created by any authenticated user with
+// status=PENDING. Admin reviews → PUBLISHED (visible publicly) or REJECTED.
+// Admin can also CANCEL a published event (e.g. for moderation).
+// The public /api/events endpoint ONLY returns PUBLISHED events.
+// The admin /api/admin/events endpoint returns ALL events with optional
+// status filter so admin can see pending submissions.
+
+model Event {
+  id              String   @id @default(cuid())
+  title           String
+  description     String
+  // Date/time — startDate is required; endDate is optional (single-day events)
+  startDate       DateTime
+  endDate         DateTime?
+  startTime       String?  // "HH:MM"
+  endTime         String?  // "HH:MM"
+  allDay          Boolean  @default(false)
+
+  // Location
+  country         String   @default("India")
+  state           String?
+  city            String?
+  address         String?
+  venueName       String?
+  location        String   // human-readable summary, e.g. "Palace Grounds, Bengaluru"
+
+  // Online / hybrid
+  eventType       String   @default("in-person") // "in-person" | "online" | "hybrid"
+  isOnline        Boolean  @default(false)
+  onlineUrl       String?
+
+  // Registration
+  registrationType String  @default("free") // "free" | "paid" | "registration_required" | "no_registration"
+  ticketUrl       String?
+  isFree          Boolean  @default(true)
+  price           Float    @default(0)
+
+  // Organizer / contact
+  organizerName   String?
+  organizerEmail  String?
+  organizerPhone  String?
+  organizerWebsite String?
+  whatsappNumber  String?
+
+  // Categorization
+  category        String   // "worship" | "bible-study" | "youth" | "retreat" | "conference" | "music" | "prayer" | "other"
+  languages       String   @default("[]") // JSON array
+  church          String?  // associated church name (if any)
+
+  // Media
+  coverImage      String?
+  coverGradient   Int      @default(0) // 0-7, used as CSS gradient fallback when no image
+
+  // ─── MODERATION ───
+  // status workflow: PENDING (default) → PUBLISHED (admin approved) or
+  // REJECTED (admin rejected). PUBLISHED events can be CANCELLED by admin.
+  // Public /api/events ONLY returns status=PUBLISHED.
+  status          String   @default("PENDING") // "PENDING" | "PUBLISHED" | "REJECTED" | "CANCELLED"
+  featured        Boolean  @default(false) // admin can feature an event
+  rejectionReason String?  // optional, set when REJECTED
+  reviewedBy      String?  // admin email
+  reviewedAt      DateTime?
+
+  // Ownership — the user who submitted the event
+  createdById     String?  // references User.id (nullable for legacy/seed data)
+  createdByEmail  String?  // captured at submission time (in case user is later deleted)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status])
+  @@index([startDate])
+  @@index([state, city])
+  @@index([category])
+  @@index([featured])
+  @@index([createdById])
+}
+
 // ─── PUBLIC WEBSITE CONTENT ────────────────────────────────────────────────
 // Admin-editable content for the public Koino website.
 

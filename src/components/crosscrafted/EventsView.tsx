@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Calendar,
@@ -31,7 +31,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  EVENTS,
   EVENT_CATEGORIES,
   EVENT_DATE_FILTERS,
   CHURCH_GRADIENTS,
@@ -82,7 +81,14 @@ const formatRelative = (iso: string) => {
 
 export default function EventsView() {
   const t = useTranslation();
-  const [events] = useState<EventItem[]>(EVENTS);
+  // ─── PUBLISHED EVENTS (loaded from real DB via /api/events) ───
+  // The EVENTS mock array is NO LONGER used at runtime — all events come
+  // from the database. status=PUBLISHED only (server-enforced).
+  // User-submitted events are saved with status=PENDING and only appear
+  // here after admin approval.
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsError, setEventsError] = useState<string | null>(null);
   const [savedEvents, setSavedEvents] = useState<Set<string>>(new Set());
   const [filterState, setFilterState] = useState("");
   const [filterCity, setFilterCity] = useState("");
@@ -110,6 +116,31 @@ export default function EventsView() {
   });
   const [imageUploading, setImageUploading] = useState(false);
   const [submittingEvent, setSubmittingEvent] = useState(false);
+
+  // ─── Fetch published events from the database ───
+  // Public API returns ONLY status=PUBLISHED events (server-enforced).
+  // Re-fetch after a user submits an event (so the list stays fresh if
+  // admin approves quickly) — though the user's own event will still be
+  // PENDING and won't appear here until approved.
+  const loadEvents = async () => {
+    setEventsLoading(true);
+    setEventsError(null);
+    try {
+      const res = await fetch("/api/events", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load events");
+      setEvents(data.events || []);
+    } catch (e: any) {
+      setEventsError(e.message || "Failed to load events");
+      setEvents([]); // graceful fallback — empty state, not a crash
+    } finally {
+      setEventsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadEvents();
+  }, []);
 
   const filtered = useMemo(() => {
     return events.filter((e) => {
@@ -198,8 +229,10 @@ export default function EventsView() {
     finally { setImageUploading(false); if (eventImgInputRef.current) eventImgInputRef.current.value = ""; }
   };
 
-  // ─── EVENT SUBMIT ───
-  const submitEvent = (e: React.FormEvent) => {
+  // ─── EVENT SUBMIT (real DB insert via POST /api/events) ───
+  // The API creates the event with status=PENDING. Admin must approve it
+  // before it appears publicly. Auth required (server-side check).
+  const submitEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!eventForm.title || !eventForm.description || !eventForm.startDate || !eventForm.category) {
       toast.error("Please fill in all required fields."); return;
@@ -209,11 +242,47 @@ export default function EventsView() {
     if ((eventForm.eventType === "in-person" || eventForm.eventType === "hybrid") && (!eventForm.city || !eventForm.state)) { toast.error("City and State are required for in-person/hybrid events."); return; }
 
     setSubmittingEvent(true);
-    // Simulate submission (mock data — no backend for events yet)
-    setTimeout(() => {
-      setSubmittingEvent(false);
+    try {
+      const res = await fetch("/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: eventForm.title,
+          description: eventForm.description,
+          category: eventForm.category,
+          startDate: eventForm.startDate,
+          startTime: eventForm.allDay ? null : eventForm.startTime,
+          endDate: eventForm.endDate || null,
+          endTime: eventForm.allDay ? null : eventForm.endTime,
+          allDay: eventForm.allDay,
+          eventType: eventForm.eventType,
+          venueName: eventForm.venueName,
+          address: eventForm.address,
+          city: eventForm.city,
+          state: eventForm.state,
+          country: "India",
+          onlineUrl: eventForm.onlineUrl,
+          registrationType: eventForm.registrationType,
+          ticketUrl: eventForm.ticketUrl,
+          whatsappNumber: eventForm.whatsappNumber,
+          organizerName: eventForm.organizerName,
+          organizerEmail: eventForm.organizerEmail,
+          organizerPhone: eventForm.organizerPhone,
+          organizerWebsite: eventForm.organizerWebsite,
+          coverImage: eventForm.coverImage,
+          coverGradient: Math.floor(Math.random() * 8),
+          languages: [],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to submit event");
+      }
+      // Success — event created with status=PENDING
       setShowCreateModal(false);
-      toast.success("Event submitted!", { description: "Your event will appear once approved by our team." });
+      toast.success("Event submitted!", {
+        description: "Your event will appear once approved by our team.",
+      });
       setEventForm({
         title: "", description: "", category: "",
         startDate: "", startTime: "", endDate: "", endTime: "", allDay: false,
@@ -222,7 +291,18 @@ export default function EventsView() {
         organizerName: "", organizerEmail: "", organizerPhone: "", organizerWebsite: "",
         coverImage: "",
       });
-    }, 800);
+      // Refresh the published events list (in case admin approves quickly,
+      // or to show the user that their submission was received server-side).
+      // Note: the user's own event will still be PENDING and won't appear
+      // here until admin approval — that's the correct moderation flow.
+      loadEvents();
+    } catch (err: any) {
+      // Real error — do NOT pretend the event was created.
+      console.error("[EventsView submitEvent] Error:", err);
+      toast.error(err.message || "Failed to submit event. Please try again.");
+    } finally {
+      setSubmittingEvent(false);
+    }
   };
 
   const toggleSave = (id: string) => {
@@ -466,6 +546,55 @@ export default function EventsView() {
 
       {/* Events */}
       <div className="space-y-3">
+        {/* Loading state */}
+        {eventsLoading && (
+          <div className="text-center py-12">
+            <div className="w-8 h-8 mx-auto rounded-full border-2 border-transparent border-t-[#7C3AED] animate-spin mb-3" />
+            <p className="text-xs text-[#94A3B8]">Loading events…</p>
+          </div>
+        )}
+
+        {/* Error state — graceful, no crash */}
+        {!eventsLoading && eventsError && (
+          <div className="bg-[#EF4444]/8 border border-[#EF4444]/20 rounded-2xl p-5 text-center">
+            <p className="text-sm font-bold text-[#EF4444] mb-1">Failed to load events</p>
+            <p className="text-xs text-[#A09DB1] mb-3">{eventsError}</p>
+            <button
+              onClick={loadEvents}
+              className="px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold transition-all"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {/* Empty state — no published events yet */}
+        {!eventsLoading && !eventsError && events.length === 0 && (
+          <div className="text-center py-12">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#7C3AED]/15 border border-[#7C3AED]/25 mb-3">
+              <Calendar size={24} className="text-[#A78BFA]" />
+            </div>
+            <p className="text-sm font-bold text-white mb-1">No events published yet</p>
+            <p className="text-xs text-[#A09DB1] mb-4 max-w-sm mx-auto">
+              Be the first to share a Christian event with the Koino community. Submitted events appear here after admin approval.
+            </p>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="px-5 py-2.5 rounded-xl bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 text-xs font-extrabold uppercase tracking-wider transition-all"
+            >
+              Submit an Event
+            </button>
+          </div>
+        )}
+
+        {/* Filtered empty state — events exist but none match the filters */}
+        {!eventsLoading && !eventsError && events.length > 0 && filtered.length === 0 && (
+          <div className="text-center py-10">
+            <p className="text-sm text-[#94A3B8] mb-1">No events match your filters.</p>
+            <p className="text-xs text-[#64748B]">Try clearing filters or widening your search.</p>
+          </div>
+        )}
+
         {filtered.map((event, i) => {
           const cat = getCategoryMeta(event.category);
           const Icon = CATEGORY_ICONS[event.category] || Music;
