@@ -1,0 +1,2002 @@
+     1→KOINO — COMPLETE APOLOGETICS + PARTNER WITH KOINO + VERIFIED CONTRIBUTORS + ARTICLE CMS
+     2→
+     3→You are working on the existing Koino Christian community platform.
+     4→
+     5→BRAND
+     6→
+     7→Koino
+     8→www.koino.in
+     9→Tagline:
+    10→Faith. Fellowship. Belong.
+    11→
+    12→IMPORTANT:
+    13→
+    14→Build this as an integrated Koino content and contributor system.
+    15→
+    16→The system must allow:
+    17→
+    18→1. Koino Admin to manage Apologetics content
+    19→2. Pastors, elders, Bible teachers, apologists and approved Christian writers to apply through "Partner With Koino"
+    20→3. Admin to review contributor applications
+    21→4. Admin to approve/reject contributors
+    22→5. Admin to assign specific content permissions
+    23→6. Approved contributors to receive a separate Contributor Dashboard
+    24→7. Contributors to write Articles, Blogs, Bible Studies, Apologetics, Devotionals, etc., depending on permissions
+    25→8. Contributors to submit content for Admin review
+    26→9. Admin to approve, request changes, reject, publish or archive content
+    27→10. Approved contributors to receive a visible "✓ Koino Verified Contributor" badge
+    28→11. Admin to control the badge
+    29→12. Users to discover and read published content
+    30→13. Content to support categories, series, Bible references, sources, related articles and SEO
+    31→14. The system to be secure and server-authoritative
+    32→
+    33→DO NOT rebuild unrelated Koino features.
+    34→
+    35→DO NOT create a second authentication system.
+    36→
+    37→DO NOT create a second Admin system.
+    38→
+    39→DO NOT duplicate Koino Merch, Marketplace, Members or other existing systems.
+    40→
+    41→
+    42→==================================================
+    43→1. FIRST AUDIT THE EXISTING PROJECT
+    44→==================================================
+    45→
+    46→Before implementation inspect the existing codebase for:
+    47→
+    48→- Apologetics
+    49→- Articles
+    50→- Blog
+    51→- Authors
+    52→- Contributors
+    53→- Partner
+    54→- CMS
+    55→- Content
+    56→- Posts
+    57→- Categories
+    58→- Series
+    59→- Admin
+    60→- Members
+    61→- Users
+    62→- User roles
+    63→- requireAdmin()
+    64→- Supabase Auth
+    65→- Prisma
+    66→- Supabase Storage
+    67→- image uploads
+    68→- rich text editor
+    69→- SEO metadata
+    70→- notifications
+    71→- activity/audit log
+    72→
+    73→Search the entire project for:
+    74→
+    75→apologetics
+    76→article
+    77→blog
+    78→author
+    79→contributor
+    80→partner
+    81→writer
+    82→editor
+    83→verified
+    84→badge
+    85→role
+    86→permission
+    87→admin
+    88→publish
+    89→draft
+    90→review
+    91→
+    92→Reuse existing architecture where appropriate.
+    93→
+    94→Do not create duplicate models if equivalent functionality already exists.
+    95→
+    96→At the end of the audit identify:
+    97→
+    98→- existing content system
+    99→- existing Admin system
+   100→- existing user/profile system
+   101→- existing storage system
+   102→- existing rich text editor
+   103→- existing authorization system
+   104→- what can be reused
+   105→- what needs to be added
+   106→
+   107→
+   108→==================================================
+   109→2. PRODUCT STRUCTURE
+   110→==================================================
+   111→
+   112→Create/organize Koino content into:
+   113→
+   114→APOLOGETICS
+   115→ARTICLES
+   116→BLOG
+   117→BIBLE STUDIES
+   118→DEVOTIONALS
+   119→
+   120→These are content types.
+   121→
+   122→Do NOT create five completely separate CMS implementations.
+   123→
+   124→Use one reusable Content/Article architecture with:
+   125→
+   126→contentType
+   127→
+   128→Examples:
+   129→
+   130→ARTICLE
+   131→BLOG
+   132→APOLOGETICS
+   133→BIBLE_STUDY
+   134→DEVOTIONAL
+   135→
+   136→This allows the same CMS to power multiple content sections.
+   137→
+   138→Apologetics should remain a dedicated user-facing section.
+   139→
+   140→
+   141→==================================================
+   142→3. APOLOGETICS USER EXPERIENCE
+   143→==================================================
+   144→
+   145→Create a public/authenticated Koino Apologetics section.
+   146→
+   147→Hero:
+   148→
+   149→APOLOGETICS
+   150→
+   151→Have questions about Christianity?
+   152→
+   153→Explore thoughtful, Bible-grounded answers to difficult questions about God, Jesus, the Bible, faith, science and life.
+   154→
+   155→Then:
+   156→
+   157→FEATURED
+   158→
+   159→POPULAR QUESTIONS
+   160→
+   161→EXPLORE TOPICS
+   162→
+   163→RECENT ARTICLES
+   164→
+   165→FEATURED CONTRIBUTORS
+   166→
+   167→
+   168→==================================================
+   169→4. APOLOGETICS CATEGORIES
+   170→==================================================
+   171→
+   172→Create the following initial categories.
+   173→
+   174→GOD & EXISTENCE
+   175→
+   176→Examples:
+   177→- Does God really exist?
+   178→- Why is there something rather than nothing?
+   179→- Can we have good reasons to believe in God?
+   180→- What is the cosmological argument?
+   181→- What is the moral argument?
+   182→- What is fine-tuning?
+   183→- What created God?
+   184→
+   185→JESUS CHRIST
+   186→
+   187→Examples:
+   188→- Did Jesus really exist?
+   189→- Did Jesus claim to be God?
+   190→- Who did Jesus say He was?
+   191→- Why was Jesus crucified?
+   192→- What evidence exists for Jesus?
+   193→- Is Jesus the only way to God?
+   194→
+   195→RESURRECTION
+   196→
+   197→Examples:
+   198→- Did Jesus really rise from the dead?
+   199→- Did Jesus really die?
+   200→- Was Jesus' body stolen?
+   201→- Did the disciples hallucinate?
+   202→- Was the resurrection a legend?
+   203→- Why is the resurrection important?
+   204→
+   205→BIBLE
+   206→
+   207→Examples:
+   208→- Can we trust the Bible?
+   209→- Has the Bible been corrupted?
+   210→- Why are there different Bible translations?
+   211→- Are there contradictions in the Bible?
+   212→- How was the Bible canon formed?
+   213→- What evidence supports the Bible?
+   214→
+   215→SCIENCE & FAITH
+   216→
+   217→Examples:
+   218→- Does science disprove God?
+   219→- Can Christians believe in evolution?
+   220→- What caused the universe?
+   221→- Can science explain everything?
+   222→- Can miracles happen?
+   223→- Is Christianity compatible with science?
+   224→- How should Christians interpret Genesis alongside science?
+   225→
+   226→SUFFERING & EVIL
+   227→
+   228→Examples:
+   229→- If God is good, why does suffering exist?
+   230→- Why does God allow evil?
+   231→- Why do good people suffer?
+   232→- Why does God allow natural disasters?
+   233→- Why doesn't God stop evil?
+   234→- Where is God when we suffer?
+   235→
+   236→MORALITY & ETHICS
+   237→
+   238→Examples:
+   239→- Can morality exist without God?
+   240→- Is morality objective?
+   241→- Why does God judge sin?
+   242→- Is Christian morality outdated?
+   243→- What is human dignity?
+   244→- How should Christians think about difficult ethical questions?
+   245→
+   246→OTHER WORLDVIEWS
+   247→
+   248→Examples:
+   249→- Christianity and atheism
+   250→- Christianity and agnosticism
+   251→- Christianity and Islam
+   252→- Christianity and Judaism
+   253→- Christianity and Hinduism
+   254→- Christianity and Buddhism
+   255→- Is every religion basically the same?
+   256→
+   257→DOUBT & FAITH
+   258→
+   259→Examples:
+   260→- Is it wrong to doubt God?
+   261→- Can Christians have doubts?
+   262→- What if I don't feel God's presence?
+   263→- Why doesn't God answer my prayers?
+   264→- What if I lose my faith?
+   265→- How can I rebuild my faith?
+   266→
+   267→CULTURE & CHRISTIANITY
+   268→
+   269→Examples:
+   270→- Is Christianity anti-science?
+   271→- Is Christianity a Western religion?
+   272→- Why have Christians caused harm?
+   273→- Can Christians disagree and still follow Jesus?
+   274→- How should Christians respond to criticism?
+   275→
+   276→SALVATION
+   277→
+   278→Examples:
+   279→- Why do we need salvation?
+   280→- Why is Jesus' death important?
+   281→- What does grace mean?
+   282→- Can a person be saved by being a good person?
+   283→- What does it mean to follow Jesus?
+   284→
+   285→
+   286→==================================================
+   287→5. ARTICLE MODEL
+   288→==================================================
+   289→
+   290→Create/reuse a flexible article/content model.
+   291→
+   292→Suggested fields:
+   293→
+   294→id
+   295→title
+   296→slug
+   297→contentType
+   298→categoryId
+   299→subcategoryId
+   300→seriesId
+   301→excerpt
+   302→shortAnswer
+   303→content
+   304→coverImageUrl
+   305→authorId
+   306→status
+   307→difficulty
+   308→featured
+   309→publishedAt
+   310→scheduledAt
+   311→createdAt
+   312→updatedAt
+   313→reviewedAt
+   314→reviewedBy
+   315→seoTitle
+   316→seoDescription
+   317→canonicalUrl
+   318→viewCount
+   319→
+   320→Use existing project conventions.
+   321→
+   322→DO NOT store sensitive author information unnecessarily.
+   323→
+   324→
+   325→==================================================
+   326→6. ARTICLE CONTENT TYPES
+   327→==================================================
+   328→
+   329→Support:
+   330→
+   331→ARTICLE
+   332→BLOG
+   333→APOLOGETICS
+   334→BIBLE_STUDY
+   335→DEVOTIONAL
+   336→
+   337→Admin can create content and choose the content type.
+   338→
+   339→Contributor can only see content types assigned to them.
+   340→
+   341→
+   342→==================================================
+   343→7. ARTICLE WRITER / CMS
+   344→==================================================
+   345→
+   346→Admin and approved contributors need a proper writing interface.
+   347→
+   348→CREATE CONTENT
+   349→
+   350→Fields:
+   351→
+   352→Title
+   353→
+   354→Slug
+   355→- automatically generate from title
+   356→- allow admin to edit
+   357→
+   358→Content Type
+   359→
+   360→Category
+   361→
+   362→Subcategory
+   363→
+   364→Series
+   365→
+   366→Short Description
+   367→
+   368→Short Answer
+   369→
+   370→Cover Image
+   371→
+   372→Article Body
+   373→
+   374→Author
+   375→
+   376→Difficulty
+   377→
+   378→Tags
+   379→
+   380→Bible References
+   381→
+   382→Sources
+   383→
+   384→Related Articles
+   385→
+   386→Featured
+   387→
+   388→SEO Title
+   389→
+   390→SEO Description
+   391→
+   392→
+   393→==================================================
+   394→8. RICH TEXT EDITOR
+   395→==================================================
+   396→
+   397→The article editor should support:
+   398→
+   399→- Heading 1
+   400→- Heading 2
+   401→- Heading 3
+   402→- Paragraph
+   403→- Bold
+   404→- Italic
+   405→- Underline
+   406→- Bullet list
+   407→- Numbered list
+   408→- Blockquote
+   409→- Links
+   410→- Images
+   411→- Image captions
+   412→- Horizontal divider
+   413→- Callout box
+   414→- Bible verse block
+   415→- Source/reference block
+   416→
+   417→Do not build an unnecessarily complicated editor.
+   418→
+   419→Reuse an existing editor if already installed.
+   420→
+   421→Content must render safely.
+   422→
+   423→Sanitize HTML/HTML-like content server-side.
+   424→
+   425→
+   426→==================================================
+   427→9. APOLOGETICS ARTICLE FORMAT
+   428→==================================================
+   429→
+   430→Apologetics articles should support a structured format.
+   431→
+   432→Optional sections:
+   433→
+   434→THE QUESTION
+   435→
+   436→Example:
+   437→
+   438→"Did Jesus really rise from the dead?"
+   439→
+   440→SHORT ANSWER
+   441→
+   442→A concise answer.
+   443→
+   444→THE CASE
+   445→
+   446→Main explanation.
+   447→
+   448→THE OBJECTION
+   449→
+   450→What critics/skeptics commonly ask.
+   451→
+   452→THE RESPONSE
+   453→
+   454→Christian response.
+   455→
+   456→BIBLICAL PERSPECTIVE
+   457→
+   458→Relevant Scripture.
+   459→
+   460→EVIDENCE & SOURCES
+   461→
+   462→Historical, philosophical, scientific or scholarly sources.
+   463→
+   464→CONCLUSION
+   465→
+   466→A concise final summary.
+   467→
+   468→THINK FURTHER
+   469→
+   470→Optional additional reading.
+   471→
+   472→These can be represented as normal rich content sections rather than forcing every article to use every section.
+   473→
+   474→
+   475→==================================================
+   476→10. BIBLE REFERENCES
+   477→==================================================
+   478→
+   479→Allow authors/admins to attach Bible references.
+   480→
+   481→Example:
+   482→
+   483→John 20:1-29
+   484→1 Corinthians 15:1-8
+   485→Romans 8:18-25
+   486→
+   487→Display:
+   488→
+   489→📖 Bible References
+   490→
+   491→John 20:1–29
+   492→1 Corinthians 15:1–8
+   493→
+   494→Where the existing Koino Bible system supports linking to passages, make references clickable.
+   495→
+   496→Do not create a second Bible system.
+   497→
+   498→
+   499→==================================================
+   500→11. SOURCES & REFERENCES
+   501→==================================================
+   502→
+   503→Apologetics must support credible sources.
+   504→
+   505→Allow:
+   506→
+   507→Source Title
+   508→Author
+   509→Publication
+   510→Publisher
+   511→Year
+   512→URL
+   513→Book
+   514→Notes
+   515→
+   516→Display:
+   517→
+   518→SOURCES & FURTHER READING
+   519→
+   520→1. Author — Book
+   521→2. Author — Article
+   522→3. Historical source
+   523→4. Academic source
+   524→
+   525→Use external links appropriately.
+   526→
+   527→Do not invent sources.
+   528→
+   529→Do not allow authors to claim a source says something it does not say.
+   530→
+   531→Admin can edit/remove sources before publication.
+   532→
+   533→
+   534→==================================================
+   535→12. CONTENT QUALITY PRINCIPLE
+   536→==================================================
+   537→
+   538→Koino Apologetics should be:
+   539→
+   540→- thoughtful
+   541→- respectful
+   542→- Bible-grounded
+   543→- evidence-aware
+   544→- intellectually honest
+   545→- welcoming to sincere questions
+   546→
+   547→Do not design the CMS around attacking atheists, Muslims, Hindus, Jews or other groups.
+   548→
+   549→When comparing Christianity with another worldview:
+   550→
+   551→focus on beliefs and arguments, not insulting people.
+   552→
+   553→Avoid unsupported claims such as:
+   554→
+   555→"Science has proven Christianity."
+   556→
+   557→Instead allow authors to distinguish:
+   558→
+   559→- evidence
+   560→- historical claims
+   561→- philosophical arguments
+   562→- theological claims
+   563→- interpretation
+   564→- areas of uncertainty
+   565→
+   566→This is especially important for Science & Faith content.
+   567→
+   568→The platform should allow contributors with different Christian traditions to write while Admin retains editorial control.
+   569→
+   570→
+   571→==================================================
+   572→13. AUTHOR PROFILE
+   573→==================================================
+   574→
+   575→Create/reuse a contributor profile.
+   576→
+   577→Fields:
+   578→
+   579→Display Name
+   580→Profile Photo
+   581→Bio
+   582→Church
+   583→Church Role
+   584→Location
+   585→Areas of Expertise
+   586→Website
+   587→Social Links
+   588→
+   589→Possible church roles:
+   590→
+   591→Pastor
+   592→Elder
+   593→Bible Teacher
+   594→Apologist
+   595→Evangelist
+   596→Christian Author
+   597→Theologian
+   598→Ministry Leader
+   599→Worship Leader
+   600→Other
+   601→
+   602→Do not require every field.
+   603→
+   604→
+   605→==================================================
+   606→14. PARTNER WITH KOINO
+   607→==================================================
+   608→
+   609→Add a public:
+   610→
+   611→PARTNER WITH KOINO
+   612→
+   613→section.
+   614→
+   615→Purpose:
+   616→
+   617→Invite pastors, elders, Bible teachers, apologists, Christian authors and ministry leaders to contribute content.
+   618→
+   619→Suggested copy:
+   620→
+   621→PARTNER WITH KOINO
+   622→
+   623→Help Christians ask better questions, grow deeper in Scripture and explore the Christian faith.
+   624→
+   625→If you are a pastor, elder, Bible teacher, apologist, Christian writer or ministry leader, you can apply to become a Koino contributor.
+   626→
+   627→[APPLY TO BECOME A CONTRIBUTOR]
+   628→
+   629→
+   630→==================================================
+   631→15. CONTRIBUTOR APPLICATION
+   632→==================================================
+   633→
+   634→Create a contributor application form.
+   635→
+   636→Fields:
+   637→
+   638→Full Name
+   639→Email
+   640→Profile Photo
+   641→Church/Ministry
+   642→Church Role
+   643→City
+   644→State/Country
+   645→Short Bio
+   646→Areas of Expertise
+   647→Website
+   648→Social Links
+   649→Why do you want to contribute to Koino?
+   650→What type of content would you like to create?
+   651→
+   652→Content interests:
+   653→
+   654→☐ Apologetics
+   655→☐ Articles
+   656→☐ Blog
+   657→☐ Bible Studies
+   658→☐ Devotionals
+   659→☐ Bible Teaching
+   660→☐ Christian Culture
+   661→☐ Faith & Science
+   662→☐ Other
+   663→
+   664→Optional:
+   665→
+   666→Sample Article / Writing URL
+   667→
+   668→Do not request unnecessary sensitive information.
+   669→
+   670→
+   671→==================================================
+   672→16. APPLICATION STATUS
+   673→==================================================
+   674→
+   675→Statuses:
+   676→
+   677→PENDING
+   678→UNDER_REVIEW
+   679→APPROVED
+   680→REJECTED
+   681→SUSPENDED
+   682→
+   683→Admin can change status.
+   684→
+   685→User should be able to see:
+   686→
+   687→Application submitted
+   688→Under review
+   689→Approved
+   690→Rejected
+   691→
+   692→If rejected, do not expose private admin notes unless Admin intentionally provides a public reason.
+   693→
+   694→
+   695→==================================================
+   696→17. ADMIN CONTRIBUTOR MANAGEMENT
+   697→==================================================
+   698→
+   699→Create:
+   700→
+   701→ADMIN → CONTRIBUTORS
+   702→
+   703→Dashboard statistics:
+   704→
+   705→Total Contributors
+   706→Pending Applications
+   707→Verified Contributors
+   708→Suspended Contributors
+   709→Articles Submitted
+   710→Articles Published
+   711→
+   712→List columns:
+   713→
+   714→Name
+   715→Church
+   716→Role
+   717→Status
+   718→Verified
+   719→Content Permissions
+   720→Articles
+   721→Joined
+   722→Actions
+   723→
+   724→
+   725→==================================================
+   726→18. CONTRIBUTOR DETAIL PAGE
+   727→==================================================
+   728→
+   729→Admin clicks contributor.
+   730→
+   731→Show:
+   732→
+   733→Profile
+   734→
+   735→Name
+   736→Photo
+   737→Church
+   738→Church Role
+   739→Bio
+   740→Expertise
+   741→Website
+   742→Social Links
+   743→
+   744→Status
+   745→
+   746→Application Status
+   747→Verified Status
+   748→
+   749→Content Permissions
+   750→
+   751→Content statistics:
+   752→
+   753→Drafts
+   754→Submitted
+   755→Published
+   756→Rejected
+   757→Needs Changes
+   758→
+   759→
+   760→==================================================
+   761→19. ADMIN CONTENT PERMISSIONS
+   762→==================================================
+   763→
+   764→Admin must be able to assign exact content permissions.
+   765→
+   766→Example:
+   767→
+   768→PASTOR JOHN
+   769→
+   770→☑ Apologetics
+   771→☑ Articles
+   772→☑ Blog
+   773→☐ Bible Studies
+   774→☐ Devotionals
+   775→☐ Faith & Science
+   776→
+   777→Another contributor:
+   778→
+   779→SARAH
+   780→
+   781→☐ Apologetics
+   782→☑ Bible Studies
+   783→☑ Devotionals
+   784→☐ Blog
+   785→
+   786→Permissions must be stored server-side.
+   787→
+   788→Do not trust the browser.
+   789→
+   790→
+   791→==================================================
+   792→20. PERMISSION TYPES
+   793→==================================================
+   794→
+   795→At minimum support:
+   796→
+   797→CAN_WRITE_ARTICLES
+   798→CAN_WRITE_BLOG
+   799→CAN_WRITE_APOLOGETICS
+   800→CAN_WRITE_BIBLE_STUDIES
+   801→CAN_WRITE_DEVOTIONALS
+   802→CAN_UPLOAD_IMAGES
+   803→CAN_EDIT_OWN_DRAFTS
+   804→CAN_SUBMIT_FOR_REVIEW
+   805→
+   806→Future-ready permissions:
+   807→
+   808→CAN_EDIT_OWN_PUBLISHED
+   809→CAN_SUGGEST_SERIES
+   810→CAN_MANAGE_OWN_PROFILE
+   811→
+   812→DO NOT initially give contributors:
+   813→
+   814→CAN_PUBLISH
+   815→CAN_DELETE_OTHER_CONTENT
+   816→CAN_MANAGE_USERS
+   817→CAN_MANAGE_CONTRIBUTORS
+   818→CAN_MANAGE_SITE
+   819→CAN_MANAGE_REWARDS
+   820→CAN_MANAGE_MERCH
+   821→CAN_MANAGE_CHURCHES
+   822→CAN_MANAGE_EVENTS
+   823→
+   824→
+   825→==================================================
+   826→21. VERIFIED CONTRIBUTOR BADGE
+   827→==================================================
+   828→
+   829→Admin can mark an approved contributor:
+   830→
+   831→✓ Koino Verified Contributor
+   832→
+   833→This badge is controlled by Admin.
+   834→
+   835→It should appear:
+   836→
+   837→- contributor profile
+   838→- article author card
+   839→- blog author card
+   840→- Bible Study author card
+   841→- devotional author card
+   842→
+   843→Suggested display:
+   844→
+   845→Pastor John Smith
+   846→✓ Koino Verified Contributor
+   847→
+   848→Pastor • ABC Church
+   849→
+   850→
+   851→==================================================
+   852→22. BADGE RULES
+   853→==================================================
+   854→
+   855→The badge means:
+   856→
+   857→"Koino has reviewed and approved this contributor as a contributor to the Koino platform."
+   858→
+   859→Do NOT imply:
+   860→
+   861→- Koino endorses every theological statement
+   862→- Koino certifies the contributor's denomination
+   863→- Koino guarantees every opinion
+   864→- Koino verifies every external claim
+   865→
+   866→If contributor is suspended:
+   867→
+   868→remove/hide the badge.
+   869→
+   870→If contributor is rejected:
+   871→
+   872→no badge.
+   873→
+   874→If contributor is approved but not verified:
+   875→
+   876→show approved author status only if needed.
+   877→
+   878→
+   879→==================================================
+   880→23. CONTRIBUTOR DASHBOARD
+   881→==================================================
+   882→
+   883→Approved contributors should NOT receive the Admin Panel.
+   884→
+   885→Create:
+   886→
+   887→/contributor
+   888→
+   889→or equivalent.
+   890→
+   891→Dashboard:
+   892→
+   893→CONTRIBUTOR DASHBOARD
+   894→
+   895→Welcome, Pastor John
+   896→
+   897→✓ Koino Verified Contributor
+   898→
+   899→Your Content
+   900→
+   901→Drafts
+   902→Submitted
+   903→Needs Changes
+   904→Published
+   905→
+   906→Create:
+   907→
+   908→[New Article]
+   909→
+   910→[New Blog]
+   911→
+   912→[New Apologetics]
+   913→
+   914→etc.
+   915→
+   916→Only show content creation buttons that correspond to their permissions.
+   917→
+   918→
+   919→==================================================
+   920→24. CONTRIBUTOR WRITING FLOW
+   921→==================================================
+   922→
+   923→Contributor:
+   924→
+   925→Create Draft
+   926→↓
+   927→Write content
+   928→↓
+   929→Save Draft
+   930→↓
+   931→Continue editing
+   932→↓
+   933→Submit for Review
+   934→
+   935→After submitting:
+   936→
+   937→status = SUBMITTED
+   938→
+   939→Contributor cannot directly publish.
+   940→
+   941→Admin reviews.
+   942→
+   943→
+   944→==================================================
+   945→25. ADMIN REVIEW WORKFLOW
+   946→==================================================
+   947→
+   948→Admin:
+   949→
+   950→ADMIN → CONTENT → SUBMISSIONS
+   951→
+   952→Show:
+   953→
+   954→Title
+   955→Author
+   956→Type
+   957→Category
+   958→Submitted
+   959→Status
+   960→
+   961→Open submission.
+   962→
+   963→Actions:
+   964→
+   965→APPROVE & PUBLISH
+   966→REQUEST CHANGES
+   967→REJECT
+   968→SAVE DRAFT
+   969→
+   970→If requesting changes:
+   971→
+   972→Admin can provide:
+   973→
+   974→"Changes requested"
+   975→
+   976→Contributor sees the feedback.
+   977→
+   978→Status:
+   979→
+   980→CHANGES_REQUESTED
+   981→
+   982→Contributor edits.
+   983→
+   984→Resubmits.
+   985→
+   986→Status:
+   987→
+   988→SUBMITTED
+   989→
+   990→
+   991→==================================================
+   992→26. CONTENT STATUS
+   993→==================================================
+   994→
+   995→Support:
+   996→
+   997→DRAFT
+   998→SUBMITTED
+   999→CHANGES_REQUESTED
+  1000→APPROVED
+  1001→PUBLISHED
+  1002→REJECTED
+  1003→SCHEDULED
+  1004→ARCHIVED
+  1005→
+  1006→Only Admin can move content to:
+  1007→
+  1008→PUBLISHED
+  1009→
+  1010→unless a future permission explicitly enables direct publishing.
+  1011→
+  1012→Initial system:
+  1013→
+  1014→All contributor content requires Admin approval.
+  1015→
+  1016→
+  1017→==================================================
+  1018→27. ADMIN ARTICLE MANAGEMENT
+  1019→==================================================
+  1020→
+  1021→Create:
+  1022→
+  1023→ADMIN → APOLOGETICS
+  1024→
+  1025→Tabs:
+  1026→
+  1027→Articles
+  1028→Drafts
+  1029→Submissions
+  1030→Published
+  1031→Categories
+  1032→Series
+  1033→Featured
+  1034→Questions
+  1035→
+  1036→And:
+  1037→
+  1038→ADMIN → CONTENT
+  1039→
+  1040→can manage all content types.
+  1041→
+  1042→Do not duplicate article management logic.
+  1043→
+  1044→
+  1045→==================================================
+  1046→28. SERIES
+  1047→==================================================
+  1048→
+  1049→Create article series.
+  1050→
+  1051→Example:
+  1052→
+  1053→THE CASE FOR THE RESURRECTION
+  1054→
+  1055→Part 1:
+  1056→Did Jesus Really Exist?
+  1057→
+  1058→Part 2:
+  1059→Did Jesus Really Die?
+  1060→
+  1061→Part 3:
+  1062→Was Jesus Buried?
+  1063→
+  1064→Part 4:
+  1065→Was the Tomb Empty?
+  1066→
+  1067→Part 5:
+  1068→Did the Disciples See Jesus?
+  1069→
+  1070→Part 6:
+  1071→Was the Resurrection a Legend?
+  1072→
+  1073→Part 7:
+  1074→What Did the Earliest Christians Believe?
+  1075→
+  1076→Part 8:
+  1077→What Best Explains the Evidence?
+  1078→
+  1079→Admin can:
+  1080→
+  1081→Create Series
+  1082→Edit Series
+  1083→Add Articles
+  1084→Reorder Articles
+  1085→Publish/Unpublish Series
+  1086→
+  1087→
+  1088→==================================================
+  1089→29. DIFFICULTY
+  1090→==================================================
+  1091→
+  1092→Content can have:
+  1093→
+  1094→BEGINNER
+  1095→INTERMEDIATE
+  1096→ADVANCED
+  1097→
+  1098→Example:
+  1099→
+  1100→Beginner:
+  1101→Does God Exist?
+  1102→
+  1103→Intermediate:
+  1104→The Cosmological Argument
+  1105→
+  1106→Advanced:
+  1107→Historical Arguments for the Resurrection
+  1108→
+  1109→
+  1110→==================================================
+  1111→30. FEATURED CONTENT
+  1112→==================================================
+  1113→
+  1114→Admin can mark content:
+  1115→
+  1116→FEATURED
+  1117→
+  1118→Apologetics homepage can show:
+  1119→
+  1120→FEATURED
+  1121→
+  1122→POPULAR QUESTIONS
+  1123→
+  1124→RECENT ARTICLES
+  1125→
+  1126→LATEST FROM CONTRIBUTORS
+  1127→
+  1128→
+  1129→==================================================
+  1130→31. RELATED ARTICLES
+  1131→==================================================
+  1132→
+  1133→Each article can have manually selected related articles.
+  1134→
+  1135→Example:
+  1136→
+  1137→Did Jesus Really Rise From the Dead?
+  1138→
+  1139→Related:
+  1140→
+  1141→Did Jesus Really Exist?
+  1142→Why Was Jesus Crucified?
+  1143→Can Miracles Happen?
+  1144→Why Is the Resurrection Important?
+  1145→
+  1146→Do not rely only on automatic recommendations.
+  1147→
+  1148→
+  1149→==================================================
+  1150→32. USER QUESTIONS
+  1151→==================================================
+  1152→
+  1153→Add:
+  1154→
+  1155→ASK A QUESTION
+  1156→
+  1157→At the bottom of Apologetics:
+  1158→
+  1159→Still have a question about Christianity?
+  1160→
+  1161→[Ask Koino]
+  1162→
+  1163→User submits:
+  1164→
+  1165→Question
+  1166→Optional name
+  1167→Optional email
+  1168→
+  1169→Do not expose email publicly.
+  1170→
+  1171→Admin sees:
+  1172→
+  1173→ADMIN → APOLOGETICS → QUESTIONS
+  1174→
+  1175→Statuses:
+  1176→
+  1177→NEW
+  1178→IN_REVIEW
+  1179→ANSWERED
+  1180→TURNED_INTO_ARTICLE
+  1181→ARCHIVED
+  1182→
+  1183→Admin can convert a good question into a new article draft.
+  1184→
+  1185→Example:
+  1186→
+  1187→User question:
+  1188→"If God knows who will reject Him, why create them?"
+  1189→
+  1190→Admin:
+  1191→
+  1192→[CREATE ARTICLE FROM QUESTION]
+  1193→
+  1194→This creates a draft with the question as the title/prompt.
+  1195→
+  1196→This feature can become a major content engine for Koino.
+  1197→
+  1198→
+  1199→==================================================
+  1200→33. PUBLIC QUESTION PRIVACY
+  1201→==================================================
+  1202→
+  1203→Never publicly display a user's email.
+  1204→
+  1205→If Admin publishes a question:
+  1206→
+  1207→show:
+  1208→
+  1209→"Question from a Koino member"
+  1210→
+  1211→unless the user explicitly gave permission to display their name.
+  1212→
+  1213→
+  1214→==================================================
+  1215→34. AUTHOR PAGE
+  1216→==================================================
+  1217→
+  1218→Create public contributor profile:
+  1219→
+  1220→/contributors/[slug]
+  1221→
+  1222→Display:
+  1223→
+  1224→Profile photo
+  1225→Name
+  1226→✓ Koino Verified Contributor
+  1227→Church/Role
+  1228→Bio
+  1229→Expertise
+  1230→
+  1231→Published Articles
+  1232→Published Blogs
+  1233→Bible Studies
+  1234→Apologetics
+  1235→
+  1236→Only display published content.
+  1237→
+  1238→Do not expose contributor's private email.
+  1239→
+  1240→
+  1241→==================================================
+  1242→35. ARTICLE PAGE
+  1243→==================================================
+  1244→
+  1245→Article page should show:
+  1246→
+  1247→Category
+  1248→
+  1249→Title
+  1250→
+  1251→Short Description
+  1252→
+  1253→Cover Image
+  1254→
+  1255→Author:
+  1256→
+  1257→Pastor John Smith
+  1258→✓ Koino Verified Contributor
+  1259→
+  1260→Published date
+  1261→Updated date
+  1262→
+  1263→Article body
+  1264→
+  1265→Bible References
+  1266→
+  1267→Sources & Further Reading
+  1268→
+  1269→Related Articles
+  1270→
+  1271→Author profile card
+  1272→
+  1273→Share
+  1274→
+  1275→Do not display private contributor information.
+  1276→
+  1277→
+  1278→==================================================
+  1279→36. ARTICLE SEO
+  1280→==================================================
+  1281→
+  1282→Each article must support:
+  1283→
+  1284→SEO Title
+  1285→SEO Description
+  1286→Slug
+  1287→Canonical URL
+  1288→Open Graph title
+  1289→Open Graph description
+  1290→Open Graph image
+  1291→
+  1292→Generate sensible defaults from:
+  1293→
+  1294→Title
+  1295→Excerpt
+  1296→Cover image
+  1297→
+  1298→Allow Admin to override.
+  1299→
+  1300→Do not create duplicate canonical URLs.
+  1301→
+  1302→
+  1303→==================================================
+  1304→37. IMAGE UPLOADS
+  1305→==================================================
+  1306→
+  1307→Contributors can upload images only if:
+  1308→
+  1309→CAN_UPLOAD_IMAGES
+  1310→
+  1311→Use existing Koino/Supabase Storage.
+  1312→
+  1313→Do not store base64 images in the database.
+  1314→
+  1315→Use persistent storage.
+  1316→
+  1317→Recommended organization:
+  1318→
+  1319→content/
+  1320→  contributors/
+  1321→  articles/
+  1322→  covers/
+  1323→
+  1324→Server must validate:
+  1325→
+  1326→- authenticated user
+  1327→- contributor permission
+  1328→- file type
+  1329→- file size
+  1330→- storage path
+  1331→
+  1332→Do not allow contributors to upload arbitrary files.
+  1333→
+  1334→
+  1335→==================================================
+  1336→38. AUTHOR PHOTO
+  1337→==================================================
+  1338→
+  1339→Contributor profile photo should use the existing Koino profile/avatar storage system if available.
+  1340→
+  1341→Do not create a second avatar system.
+  1342→
+  1343→If an existing avatarUrl exists:
+  1344→
+  1345→reuse it.
+  1346→
+  1347→
+  1348→==================================================
+  1349→39. ADMIN VERIFICATION
+  1350→==================================================
+  1351→
+  1352→Admin should have a verification workflow.
+  1353→
+  1354→Application:
+  1355→
+  1356→PENDING
+  1357→
+  1358→Admin reviews:
+  1359→
+  1360→- name
+  1361→- church
+  1362→- church role
+  1363→- bio
+  1364→- website
+  1365→- sample writing
+  1366→- areas of expertise
+  1367→
+  1368→Admin can:
+  1369→
+  1370→APPROVE
+  1371→REJECT
+  1372→REQUEST MORE INFORMATION
+  1373→SUSPEND
+  1374→
+  1375→When approved:
+  1376→
+  1377→Contributor account created/activated.
+  1378→
+  1379→Admin can then assign permissions.
+  1380→
+  1381→Do not automatically give permissions just because application is approved.
+  1382→
+  1383→
+  1384→==================================================
+  1385→40. CONTRIBUTOR ACCOUNT SECURITY
+  1386→==================================================
+  1387→
+  1388→Contributor must use the existing Koino authentication system.
+  1389→
+  1390→Do not create contributor passwords separately.
+  1391→
+  1392→A contributor is still a normal Koino member with additional server-side contributor permissions.
+  1393→
+  1394→Admin privileges and Contributor privileges must be completely separate.
+  1395→
+  1396→A contributor must NEVER automatically receive Admin access.
+  1397→
+  1398→
+  1399→==================================================
+  1400→41. ADMIN SECURITY
+  1401→==================================================
+  1402→
+  1403→Use the existing centralized:
+  1404→
+  1405→requireAdmin()
+  1406→
+  1407→or equivalent.
+  1408→
+  1409→Only the authorized Koino Admin can:
+  1410→
+  1411→- approve contributors
+  1412→- reject contributors
+  1413→- suspend contributors
+  1414→- assign permissions
+  1415→- grant verification badge
+  1416→- publish content
+  1417→- edit other people's content
+  1418→- delete other people's content
+  1419→- manage categories
+  1420→- manage series
+  1421→- feature content
+  1422→
+  1423→Do not trust frontend role flags.
+  1424→
+  1425→Do not trust localStorage.
+  1426→
+  1427→Do not trust request body roles.
+  1428→
+  1429→Server must authorize every sensitive action.
+  1430→
+  1431→
+  1432→==================================================
+  1433→42. CONTRIBUTOR API SECURITY
+  1434→==================================================
+  1435→
+  1436→Every contributor API must verify:
+  1437→
+  1438→1. authenticated user
+  1439→2. contributor status
+  1440→3. specific permission
+  1441→4. ownership where applicable
+  1442→
+  1443→Example:
+  1444→
+  1445→Contributor John has:
+  1446→
+  1447→CAN_WRITE_APOLOGETICS
+  1448→
+  1449→He can create Apologetics drafts.
+  1450→
+  1451→He cannot create:
+  1452→
+  1453→Bible Studies
+  1454→
+  1455→unless that permission is assigned.
+  1456→
+  1457→Contributor cannot edit another contributor's draft.
+  1458→
+  1459→Contributor cannot change their own:
+  1460→
+  1461→verified status
+  1462→permissions
+  1463→approval status
+  1464→published status
+  1465→
+  1466→
+  1467→==================================================
+  1468→43. ARTICLE OWNERSHIP
+  1469→==================================================
+  1470→
+  1471→Contributor can:
+  1472→
+  1473→Create own draft
+  1474→Edit own draft
+  1475→Submit own draft
+  1476→View own submissions
+  1477→View admin feedback
+  1478→
+  1479→Contributor cannot:
+  1480→
+  1481→Edit another contributor's draft
+  1482→Publish own content
+  1483→Delete another contributor's content
+  1484→Change author
+  1485→Change verification
+  1486→Change permissions
+  1487→
+  1488→Admin can do all.
+  1489→
+  1490→
+  1491→==================================================
+  1492→44. CONTENT REVISION HISTORY
+  1493→==================================================
+  1494→
+  1495→Add revision tracking where practical.
+  1496→
+  1497→For contributor content:
+  1498→
+  1499→Draft
+  1500→↓
+  1501→Submitted
+  1502→↓
+  1503→Admin changes requested
+  1504→↓
+  1505→Contributor edits
+  1506→↓
+  1507→Resubmitted
+  1508→
+  1509→Keep enough history to determine:
+  1510→
+  1511→who changed what
+  1512→when it changed
+  1513→
+  1514→At minimum record:
+  1515→
+  1516→updatedAt
+  1517→updatedBy
+  1518→
+  1519→If the project already has audit/version history, reuse it.
+  1520→
+  1521→
+  1522→==================================================
+  1523→45. ADMIN AUDIT LOG
+  1524→==================================================
+  1525→
+  1526→Record:
+  1527→
+  1528→Contributor approved
+  1529→Contributor rejected
+  1530→Contributor suspended
+  1531→Contributor verified
+  1532→Contributor unverified
+  1533→Permission granted
+  1534→Permission removed
+  1535→Article submitted
+  1536→Article approved
+  1537→Article rejected
+  1538→Changes requested
+  1539→Article published
+  1540→Article archived
+  1541→Article deleted
+  1542→
+  1543→Include:
+  1544→
+  1545→admin
+  1546→action
+  1547→target
+  1548→timestamp
+  1549→
+  1550→
+  1551→==================================================
+  1552→46. INITIAL CONTENT IDEAS
+  1553→==================================================
+  1554→
+  1555→Seed the category structure, not fake published articles.
+  1556→
+  1557→Recommended initial topics:
+  1558→
+  1559→GOD & EXISTENCE
+  1560→
+  1561→1. Does God Really Exist?
+  1562→2. Why Is There Something Rather Than Nothing?
+  1563→3. Can We Have Good Reasons to Believe in God?
+  1564→4. What Is the Cosmological Argument?
+  1565→5. Can Morality Exist Without God?
+  1566→6. What Is Fine-Tuning?
+  1567→
+  1568→
+  1569→JESUS
+  1570→
+  1571→7. Did Jesus Really Exist?
+  1572→8. Did Jesus Claim to Be God?
+  1573→9. Why Was Jesus Crucified?
+  1574→10. Who Did Jesus Say He Was?
+  1575→11. Why Does Jesus Matter?
+  1576→
+  1577→
+  1578→RESURRECTION
+  1579→
+  1580→12. Did Jesus Really Rise From the Dead?
+  1581→13. Did Jesus Really Die?
+  1582→14. Was Jesus' Body Stolen?
+  1583→15. Did the Disciples Hallucinate?
+  1584→16. Was the Resurrection a Legend?
+  1585→17. Why Is the Resurrection Central to Christianity?
+  1586→
+  1587→
+  1588→BIBLE
+  1589→
+  1590→18. Can We Trust the Bible?
+  1591→19. Has the Bible Been Corrupted?
+  1592→20. Why Are There Different Bible Translations?
+  1593→21. Are There Contradictions in the Bible?
+  1594→22. How Was the Bible Canon Formed?
+  1595→
+  1596→
+  1597→SCIENCE & FAITH
+  1598→
+  1599→23. Does Science Disprove God?
+  1600→24. Can Christians Believe in Evolution?
+  1601→25. What Caused the Universe?
+  1602→26. Can Miracles Happen?
+  1603→27. Is Christianity Compatible With Science?
+  1604→28. How Should Christians Think About Genesis and Science?
+  1605→
+  1606→
+  1607→SUFFERING
+  1608→
+  1609→29. If God Is Good, Why Does He Allow Suffering?
+  1610→30. Why Does God Allow Evil?
+  1611→31. Why Do Good People Suffer?
+  1612→32. Where Is God When We Suffer?
+  1613→
+  1614→
+  1615→DOUBT
+  1616→
+  1617→33. Is It Wrong to Doubt God?
+  1618→34. Can Christians Have Questions?
+  1619→35. What If I Don't Feel God's Presence?
+  1620→36. Why Doesn't God Answer My Prayers?
+  1621→
+  1622→
+  1623→OTHER WORLDVIEWS
+  1624→
+  1625→37. Are All Religions Basically the Same?
+  1626→38. Christianity and Atheism
+  1627→39. Christianity and Islam
+  1628→40. Christianity and Hinduism
+  1629→41. Christianity and Buddhism
+  1630→42. Christianity and Judaism
+  1631→
+  1632→Do NOT automatically publish these.
+  1633→
+  1634→Create categories/topic suggestions only unless actual article content is provided by Admin/contributors.
+  1635→
+  1636→
+  1637→==================================================
+  1638→47. CONTENT SOURCING
+  1639→==================================================
+  1640→
+  1641→When contributors write apologetics content, encourage:
+  1642→
+  1643→Bible references
+  1644→historical sources
+  1645→academic sources
+  1646→primary sources where appropriate
+  1647→books
+  1648→scholarly articles
+  1649→
+  1650→Do not fabricate citations.
+  1651→
+  1652→Do not fabricate quotes.
+  1653→
+  1654→Do not allow "source" fields to imply a source supports a claim unless the contributor/admin has actually verified it.
+  1655→
+  1656→Admin remains responsible for editorial approval.
+  1657→
+  1658→
+  1659→==================================================
+  1660→48. THEOLOGICAL DIVERSITY
+  1661→==================================================
+  1662→
+  1663→Koino may receive contributors from different Christian traditions.
+  1664→
+  1665→Do not hardcode one denomination as the only valid contributor type unless Koino explicitly decides otherwise.
+  1666→
+  1667→Allow Admin to review theological content.
+  1668→
+  1669→Where an article represents a particular denominational interpretation, allow the author to identify the tradition/context where useful.
+  1670→
+  1671→Do not present a disputed theological interpretation as universally agreed Christian doctrine without appropriate framing.
+  1672→
+  1673→
+  1674→==================================================
+  1675→49. PUBLIC DISCOVERY
+  1676→==================================================
+  1677→
+  1678→Apologetics should have:
+  1679→
+  1680→Search
+  1681→
+  1682→Filter by:
+  1683→
+  1684→Category
+  1685→Difficulty
+  1686→Series
+  1687→Author
+  1688→Newest
+  1689→Popular
+  1690→
+  1691→Search titles, excerpts and article content where practical.
+  1692→
+  1693→Examples:
+  1694→
+  1695→Search:
+  1696→"resurrection"
+  1697→
+  1698→Results:
+  1699→
+  1700→Did Jesus Really Rise From the Dead?
+  1701→Why Is the Resurrection Important?
+  1702→Was the Resurrection a Legend?
+  1703→
+  1704→
+  1705→==================================================
+  1706→50. POPULAR CONTENT
+  1707→==================================================
+  1708→
+  1709→Track article views using a safe server-side mechanism.
+  1710→
+  1711→Do not allow trivial refreshes to inflate view counts indefinitely.
+  1712→
+  1713→Use a reasonable anti-abuse strategy.
+  1714→
+  1715→Display:
+  1716→
+  1717→Popular Articles
+  1718→
+  1719→only when enough real data exists.
+  1720→
+  1721→Do not show fake numbers.
+  1722→
+  1723→
+  1724→==================================================
+  1725→51. COMMENTS
+  1726→==================================================
+  1727→
+  1728→DO NOT automatically add public comments to Apologetics in this phase unless an existing Koino comments/moderation system is already available.
+  1729→
+  1730→The initial system should focus on:
+  1731→
+  1732→High-quality articles
+  1733→Questions
+  1734→Sources
+  1735→Contributor submissions
+  1736→Admin moderation
+  1737→
+  1738→Comments can be a future feature.
+  1739→
+  1740→
+  1741→==================================================
+  1742→52. SHARE
+  1743→==================================================
+  1744→
+  1745→Article pages should support:
+  1746→
+  1747→Copy Link
+  1748→WhatsApp
+  1749→Facebook
+  1750→X
+  1751→Email
+  1752→
+  1753→Use the article's canonical URL.
+  1754→
+  1755→Do not create fake share counts.
+  1756→
+  1757→
+  1758→==================================================
+  1759→53. RELATED KOINO FEATURES
+  1760→==================================================
+  1761→
+  1762→Where appropriate, link users to:
+  1763→
+  1764→Bible
+  1765→Bible Trivia
+  1766→Churches
+  1767→Events
+  1768→Prayer Wall
+  1769→
+  1770→Example:
+  1771→
+  1772→Article:
+  1773→"Why Does God Allow Suffering?"
+  1774→
+  1775→At bottom:
+  1776→
+  1777→Continue exploring Koino:
+  1778→
+  1779→📖 Read the Bible
+  1780→🙏 Visit Prayer Wall
+  1781→⛪ Find a Church
+  1782→
+  1783→
+  1784→==================================================
+  1785→54. ADMIN SIDEBAR
+  1786→==================================================
+  1787→
+  1788→Admin sidebar should contain:
+  1789→
+  1790→Dashboard
+  1791→Members
+  1792→Churches
+  1793→Events
+  1794→Marketplace
+  1795→Koino Merch
+  1796→Business Directory
+  1797→Prayers
+  1798→Bible Trivia
+  1799→Rewards
+  1800→
+  1801→APOLOGETICS
+  1802→- Articles
+  1803→- Submissions
+  1804→- Contributors
+  1805→- Questions
+  1806→- Categories
+  1807→- Series
+  1808→
+  1809→Announcements
+  1810→Bible Comics
+  1811→Analytics
+  1812→Activity Log
+  1813→
+  1814→Only actual Admin can see these.
+  1815→
+  1816→
+  1817→==================================================
+  1818→55. CONTRIBUTOR SIDEBAR
+  1819→==================================================
+  1820→
+  1821→Contributor sidebar should NOT show Admin.
+  1822→
+  1823→Instead:
+  1824→
+  1825→Contributor Home
+  1826→My Content
+  1827→Drafts
+  1828→Submissions
+  1829→Published
+  1830→Create Content
+  1831→My Profile
+  1832→
+  1833→Only show content creation areas they have permission for.
+  1834→
+  1835→
+  1836→==================================================
+  1837→56. PARTNER WITH KOINO PLACEMENT
+  1838→==================================================
+  1839→
+  1840→Add:
+  1841→
+  1842→Partner With Koino
+  1843→
+  1844→to the public footer and appropriate About/Apologetics areas.
+  1845→
+  1846→Do not put it only inside Admin.
+  1847→
+  1848→Suggested footer:
+  1849→
+  1850→KOINO
+  1851→About Koino
+  1852→About Founder
+  1853→Contact Us
+  1854→Partner With Koino
+  1855→Help Center
+  1856→Blog
+  1857→
+  1858→COMMUNITY
+  1859→Bible
+  1860→Bible Comics
+  1861→Churches
+  1862→Events
+  1863→Bible Trivia
+  1864→Prayer Wall
+  1865→Business Directory
+  1866→Marketplace
+  1867→
+  1868→SUPPORT
+  1869→Support Koino
+  1870→Give to Koino
+  1871→Partner With Koino
+  1872→Koino Merch
+  1873→
+  1874→
+  1875→==================================================
+  1876→57. ADMIN APPROVAL IS THE PUBLISHING GATE
+  1877→==================================================
+  1878→
+  1879→Critical rule:
+  1880→
+  1881→Contributor content can NEVER become publicly visible merely because it was submitted.
+  1882→
+  1883→Required:
+  1884→
+  1885→Contributor
+  1886→→ Submit
+  1887→→ Admin Review
+  1888→→ Approve
+  1889→→ Publish
+  1890→
+  1891→Only content with:
+  1892→
+  1893→status = PUBLISHED
+  1894→
+  1895→is visible publicly.
+  1896→
+  1897→Server-side public queries must filter unpublished content.
+  1898→
+  1899→
+  1900→==================================================
+  1901→58. SCHEDULED PUBLISHING
+  1902→==================================================
+  1903→
+  1904→Support:
+  1905→
+  1906→scheduledAt
+  1907→
+  1908→Admin can choose:
+  1909→
+  1910→Publish Now
+  1911→Schedule
+  1912→
+  1913→A scheduled article becomes public only at/after its scheduled time.
+  1914→
+  1915→Server determines whether it is visible.
+  1916→
+  1917→Do not rely on frontend timers.
+  1918→
+  1919→
+  1920→==================================================
+  1921→59. ARCHIVING
+  1922→==================================================
+  1923→
+  1924→Admin can archive content.
+  1925→
+  1926→Archived content:
+  1927→
+  1928→- removed from normal public discovery
+  1929→- not deleted unless Admin explicitly deletes it
+  1930→- remains in contributor history
+  1931→- remains in Admin CMS
+  1932→
+  1933→
+  1934→==================================================
+  1935→60. DELETE RULES
+  1936→==================================================
+  1937→
+  1938→Contributor cannot permanently delete published content.
+  1939→
+  1940→Admin can delete.
+  1941→
+  1942→Prefer soft-delete/archive where practical.
+  1943→
+  1944→Do not permanently remove content merely because a contributor account is suspended.
+  1945→
+  1946→Preserve published content ownership/history.
+  1947→
+  1948→
+  1949→==================================================
+  1950→61. CONTRIBUTOR SUSPENSION
+  1951→==================================================
+  1952→
+  1953→If a contributor is suspended:
+  1954→
+  1955→- cannot create new content
+  1956→- cannot submit drafts
+  1957→- cannot edit content
+  1958→- verified badge removed
+  1959→- existing published content remains unless Admin decides otherwise
+  1960→
+  1961→Admin can choose to:
+  1962→
+  1963→Keep published content
+  1964→Archive content
+  1965→Reassign content
+  1966→
+  1967→Do not automatically delete their work.
+  1968→
+  1969→
+  1970→==================================================
+  1971→62. PROFILE / BADGE DISPLAY
+  1972→==================================================
+  1973→
+  1974→Article author card:
+  1975→
+  1976→--------------------------------
+  1977→[PHOTO]
+  1978→
+  1979→Pastor John Smith
+  1980→✓ Koino Verified Contributor
+  1981→
+  1982→Pastor • ABC Church
+  1983→
+  1984→Christian Apologetics
+  1985→--------------------------------
+  1986→
+  1987→Click:
+  1988→
+  1989→View Contributor
+  1990→
+  1991→
+  1992→==================================================
+  1993→63. ADMIN DASHBOARD WIDGET
+  1994→==================================================
+  1995→
+  1996→Add:
+  1997→
+  1998→CONTENT REVIEW
+  1999→
+  2000→Pending Contributor Applications: 4
+
+[showing lines 1-2000 of 2639; use offset=2001 with limit to continue reading]
