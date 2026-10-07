@@ -37,6 +37,7 @@ const FOOTER_SECTIONS = [
       { label: "Prayer Wall", href: "/?view=prayer-wall" },
       { label: "Business Directory", href: "/?view=business-directory" },
       { label: "Marketplace", href: "/?view=shop" },
+      { label: "Christian Community", href: "/community" },
     ],
   },
   {

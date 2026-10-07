@@ -38,6 +38,7 @@ import {
 } from "@/lib/bible-data";
 import { useTranslation, useLanguage, LANGUAGES } from "@/lib/i18n/LanguageContext";
 import StreakBadge from "@/components/crosscrafted/StreakBadge";
+import LordsbookCommunityCard from "@/components/crosscrafted/LordsbookCommunityCard";
 import BiblePlansView from "@/components/crosscrafted/BiblePlansView";
 import { BookOpen as BookOpenIcon, ArrowRight, Loader2 as ComicLoader, AlertCircle as ComicAlert } from "lucide-react";
 

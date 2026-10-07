@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useSupabaseUser } from "@/lib/supabase/use-user";
 import { useTranslation } from "@/lib/i18n/LanguageContext";
+import LordsbookCommunityCard from "@/components/crosscrafted/LordsbookCommunityCard";
 
 type View =
   | "bible"
@@ -212,6 +213,17 @@ export default function AppHomeView({ onNavigate }: Props) {
             </div>
           );
         })}
+      </div>
+
+      {/* ─── LORDSBOOK COMMUNITY CARD ─── */}
+      {/* Placed below the main feature groups so Koino features remain primary */}
+      <div className="mt-6">
+        <LordsbookCommunityCard
+          title="Connect with Christians on Lordsbook"
+          description="Your faith journey is better together. Meet Christians, share your faith, join conversations, discover groups and build Christian friendships."
+          buttonText="Join Lordsbook"
+          context="home"
+        />
       </div>
     </div>
   );
