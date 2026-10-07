@@ -155,10 +155,35 @@ export default function Home() {
       navigate(v as View);
     }
   };
-  const goHome = () => navigate("landing");
+  // goHome: if authenticated → App Home; if not → public landing page.
+  // This is the ROOT FIX for the "Home button sends completed users back
+  // to Get Started" bug. Previously goHome always navigated to "landing"
+  // regardless of auth state.
+  const goHome = () => {
+    if (isAuthenticated && profileCompleted) {
+      navigate("home");
+    } else if (isAuthenticated && !profileCompleted) {
+      navigate("onboarding");
+    } else {
+      navigate("landing");
+    }
+  };
   const goView = (v: View) => navigate(v);
 
-  // Landing view — full screen
+  // ─── AUTH LOADING GUARD ───
+  // While auth is loading, show a minimal loading screen instead of flashing
+  // the public landing page for authenticated users. This prevents the race
+  // condition where an authenticated user briefly sees the landing page
+  // before the onboarding redirect effect kicks in.
+  if (authLoading && view === "landing") {
+    return (
+      <div className="min-h-screen bg-[#12101A] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[#F39B9B]/30 border-t-[#F39B9B] rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Landing view — full screen (only for unauthenticated users)
   if (view === "landing") {
     return <LandingHero onEnterApp={enterApp} />;
   }

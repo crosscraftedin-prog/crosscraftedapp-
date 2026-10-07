@@ -95,6 +95,9 @@ export async function POST(req: NextRequest) {
       data.city = city;
 
       // Optional fields
+      if (body.image !== undefined) {
+        data.image = body.image || null;
+      }
       if (body.gender) {
         const validGenders = ["male", "female", "prefer_not_to_say"];
         if (!validGenders.includes(body.gender)) {

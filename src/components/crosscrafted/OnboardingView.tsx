@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import {
@@ -34,6 +34,7 @@ export default function OnboardingView({ onComplete }: Props) {
 
   // Profile fields
   const [name, setName] = useState("");
+  const [profilePhoto, setProfilePhoto] = useState<string>("");
   const [username, setUsername] = useState("");
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [usernameSuggestions, setUsernameSuggestions] = useState<string[]>([]);
@@ -57,6 +58,7 @@ export default function OnboardingView({ onComplete }: Props) {
           const p = data.profile;
           if (p) {
             if (p.name) setName(p.name);
+            if (p.image) setProfilePhoto(p.image);
             if (p.username) setUsername(p.username);
             if (p.dateOfBirth) {
               const d = new Date(p.dateOfBirth);
@@ -84,7 +86,7 @@ export default function OnboardingView({ onComplete }: Props) {
       .catch(() => {});
   }, []);
 
-  // Suggest username from Google display name
+  // Suggest username from Google display name + use Google profile photo as initial suggestion
   useEffect(() => {
     if (!username && user?.user_metadata?.full_name) {
       const suggested = (user.user_metadata.full_name as string)
@@ -95,7 +97,11 @@ export default function OnboardingView({ onComplete }: Props) {
         setUsername(suggested);
       }
     }
-  }, [user, username]);
+    // Use Google profile photo as initial suggestion (only if no photo is set yet)
+    if (!profilePhoto && user?.user_metadata?.avatar_url) {
+      setProfilePhoto(user.user_metadata.avatar_url as string);
+    }
+  }, [user, username, profilePhoto]);
 
   // Debounced username availability check
   useEffect(() => {
@@ -160,6 +166,7 @@ export default function OnboardingView({ onComplete }: Props) {
         body: JSON.stringify({
           step: "profile",
           name,
+          image: profilePhoto || undefined,
           username,
           dateOfBirth,
           gender: gender || undefined,
@@ -299,6 +306,12 @@ export default function OnboardingView({ onComplete }: Props) {
               <p className="text-[11px] text-[#94A3B8] mb-4">Required fields are marked with *</p>
 
               <div className="space-y-3">
+                {/* Profile Photo */}
+                <ProfilePhotoUpload
+                  photoUrl={profilePhoto}
+                  onChange={setProfilePhoto}
+                />
+
                 {/* Username */}
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1">
@@ -593,6 +606,108 @@ export default function OnboardingView({ onComplete }: Props) {
           )}
         </AnimatePresence>
       </div>
+    </div>
+  );
+}
+
+// ─── PROFILE PHOTO UPLOAD ──────────────────────────────────────────────────
+// Circular avatar upload with preview. Uploads to Supabase Storage via
+// /api/profile/upload-avatar (server-side, userId from auth session).
+// Optional — user can continue without a photo.
+
+function ProfilePhotoUpload({
+  photoUrl,
+  onChange,
+}: {
+  photoUrl: string;
+  onChange: (url: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFile = async (file: File) => {
+    setError(null);
+
+    // Client-side validation
+    const allowed = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+    if (!allowed.includes(file.type)) {
+      setError("Please upload a JPG, PNG or WEBP image.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Please choose an image smaller than 5 MB.");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/profile/upload-avatar", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+
+      onChange(data.url);
+    } catch (e: any) {
+      setError(e.message || "Unable to upload your photo. Please try again.");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      {/* Avatar preview */}
+      <div className="w-16 h-16 rounded-full overflow-hidden bg-[#0f0f1a] border border-white/[0.08] flex items-center justify-center shrink-0">
+        {photoUrl ? (
+          <img src={photoUrl} alt="Profile" className="w-full h-full object-cover" />
+        ) : (
+          <User size={20} className="text-[#475569]" />
+        )}
+      </div>
+
+      <div className="flex-1">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1">
+          Profile Photo <span className="text-[#64748B] normal-case font-normal">(optional)</span>
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+            className="px-3 py-1.5 rounded-lg bg-[#7C3AED]/15 border border-[#7C3AED]/30 text-[#A78BFA] text-[10px] font-bold hover:bg-[#7C3AED]/25 transition-all disabled:opacity-50"
+          >
+            {uploading ? <Loader2 size={11} className="animate-spin" /> : photoUrl ? "Change Photo" : "Upload Photo"}
+          </button>
+          {photoUrl && !uploading && (
+            <button
+              type="button"
+              onClick={() => onChange("")}
+              className="px-2 py-1.5 rounded-lg text-[10px] font-bold text-[#EF4444] hover:bg-[#EF4444]/10 transition-all"
+            >
+              Remove
+            </button>
+          )}
+        </div>
+        {error && <p className="text-[9px] text-[#EF4444] font-bold mt-1">⚠ {error}</p>}
+      </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/jpg,image/webp"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFile(file);
+        }}
+        className="hidden"
+      />
     </div>
   );
 }
