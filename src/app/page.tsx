@@ -526,6 +526,22 @@ export default function Home() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ─── COMPACT UTILITY FOOTER ─── */}
+      {/* Only shows in the authenticated app shell (not on landing/onboarding).
+          Focused flows (Onboarding, CompetitionQuiz, TriviaQuestion) are
+          full-screen overlays with no footer. Admin has its own internal footer. */}
+      {view !== "landing" && view !== "onboarding" && view !== "admin" && (
+        <footer className="border-t border-white/[0.04] mt-8 pb-28 md:pb-4">
+          <div className="max-w-[680px] mx-auto px-4 py-4 flex items-center justify-center gap-4">
+            <a href="/privacy" className="text-[10px] text-[#475569] hover:text-white transition-colors">Privacy</a>
+            <span className="text-[#1C1929]">·</span>
+            <a href="/terms" className="text-[10px] text-[#475569] hover:text-white transition-colors">Terms</a>
+            <span className="text-[#1C1929]">·</span>
+            <a href="/help" className="text-[10px] text-[#475569] hover:text-white transition-colors">Help</a>
+          </div>
+        </footer>
+      )}
     </div>
   );
 }
