@@ -1192,8 +1192,8 @@ function RewardsTab({ isAuthenticated, userPoints }: { isAuthenticated: boolean;
               transition={{ delay: i * 0.05 }}
               className="bg-[#1C1929] border border-white/[0.06] rounded-2xl overflow-hidden"
             >
-              <div className="relative h-24">
-                <img src={gift.imageUrl} alt={gift.title} className="w-full h-full object-cover" />
+              <div className="relative aspect-square bg-[#0f0f1a]">
+                <img src={gift.imageUrl} alt={gift.title} className="w-full h-full object-contain" />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#1C1929] via-transparent to-transparent" />
                 <span
                   className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider"

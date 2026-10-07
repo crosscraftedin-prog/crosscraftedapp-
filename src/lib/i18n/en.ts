@@ -163,8 +163,8 @@ export const en: Record<string, string> = {
   "triviaView.tab.stats": "Stats",
 
   // ─── Rewards tab ───
-  "rewards.header": "Real Gifts",
-  "rewards.available": "Available to redeem",
+  "rewards.header": "Koino Rewards",
+  "rewards.available": "Turn your Faith Points into real Koino rewards",
   "rewards.signInPrompt": "Sign in to view your points",
   "rewards.signInRequired": "Sign in to redeem gifts. Your claims persist across devices.",
   "rewards.signInButton": "Sign In",
@@ -272,8 +272,8 @@ export const en: Record<string, string> = {
   "triviaView.setup.cat.apologetics": "Apologetics",
 
   // ─── Rewards tab ───
-  "rewards.header": "Real Gifts",
-  "rewards.available": "Available to redeem",
+  "rewards.header": "Koino Rewards",
+  "rewards.available": "Turn your Faith Points into real Koino rewards",
   "rewards.signInPrompt": "Sign in to view your points",
   "rewards.signInRequired": "Sign in to redeem gifts. Your claims persist across devices.",
   "rewards.signInButton": "Sign In",

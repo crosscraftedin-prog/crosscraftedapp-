@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
 import { PrismaClient } from "@prisma/client";
+import { PRODUCTS } from "@/lib/crosscrafted-data";
 
 const db = new PrismaClient();
 
-// JSON-encoded fields stored as TEXT in SQLite. Always fall back to []
-// if the column is empty / malformed so the client never crashes.
 function safeParseArray(raw: string | null | undefined): any[] {
   if (!raw) return [];
   try {
@@ -20,7 +19,8 @@ function safeParseArray(raw: string | null | undefined): any[] {
  * GET /api/trivia/gifts
  *
  * Returns all active gifts + whether the authenticated user has claimed each.
- * Merges default gifts from DB with the milestone reward system.
+ * When a gift has a productId, the product info (name, image, price, variants)
+ * is merged from the Koino Shop product catalog — no duplicate data.
  */
 export async function GET() {
   try {
@@ -41,19 +41,49 @@ export async function GET() {
       claimedGiftIds = new Set(redemptions.map((r) => r.giftId));
     }
 
-    return NextResponse.json({
-      gifts: gifts.map((g) => ({
+    // Build a product lookup map from the Koino Shop catalog
+    const productMap = new Map(PRODUCTS.map((p) => [p.id, p]));
+
+    const result = gifts.map((g) => {
+      // If this gift references a Koino Shop product, merge product data
+      let productInfo: any = null;
+      if (g.productId) {
+        const product = productMap.get(g.productId);
+        if (product) {
+          productInfo = {
+            productId: product.id,
+            productImage: product.cover_image || product.images?.[0] || null,
+            productName: product.name,
+            productPrice: product.price,
+            productVariants: product.variations || [],
+            productInStock: product.in_stock,
+            sellerType: product.sellerType,
+          };
+        }
+      }
+
+      // Use product image if available, otherwise fall back to the gift's imageUrl
+      const displayImage = productInfo?.productImage || g.imageUrl;
+
+      return {
         id: g.giftId,
         title: g.title,
         description: g.description,
-        imageUrl: g.imageUrl,
+        imageUrl: displayImage,
         pointsRequired: g.pointsRequired,
         tier: g.tier,
         stock: g.stock,
         variations: safeParseArray(g.variations),
         attributes: safeParseArray(g.attributes),
         claimed: claimedGiftIds.has(g.giftId),
-      })),
+        productId: g.productId || null,
+        product: productInfo,
+        rewardType: g.rewardType,
+      };
+    });
+
+    return NextResponse.json({
+      gifts: result,
       userPoints: user?.totalPoints || 0,
       isAuthenticated: !!user,
     });

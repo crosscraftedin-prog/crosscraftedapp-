@@ -226,6 +226,8 @@ model Gift {
   pointsRequired  Int
   tier            String   // "bronze" | "silver" | "gold" | "platinum"
   stock           Int      @default(0)
+  productId       String?  // references Koino Shop Product.id (mock data array) — when set, product info comes from the Shop
+  rewardType      String   @default("fp_reward") // "fp_reward" | "competition_prize" | "streak_milestone"
   // Variations & attributes (JSON-encoded strings).
   // variations: [{"name":"Size","options":["S","M","L","XL"]},{"name":"Color","options":["Black","White"]}]
   // attributes: [{"label":"Material","value":"100% Cotton"}]
