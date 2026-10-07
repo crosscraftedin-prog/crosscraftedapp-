@@ -1,0 +1,958 @@
+     1→// CrossCrafted Prisma Schema
+     2→// Production database: PostgreSQL (Supabase)
+     3→// Local dev also uses PostgreSQL so the schema matches production.
+     4→
+     5→generator client {
+     6→  provider = "prisma-client-js"
+     7→}
+     8→
+     9→datasource db {
+    10→  provider = "postgresql"
+    11→  url      = env("DATABASE_URL")
+    12→}
+    13→
+    14→// ─── USER ──────────────────────────────────────────────────────────────────
+    15→// Extended from the scaffold User model. totalPoints is the SERVER-SIDE
+    16→// source of truth — the browser never writes to it directly.
+    17→
+    18→model User {
+    19→  id           String   @id @default(cuid())
+    20→  email        String   @unique
+    21→  name         String?
+    22→  image        String?
+    23→  emailVerified DateTime?
+    24→  role         String   @default("user") // "user" | "admin"
+    25→  totalPoints  Int      @default(0) // SERVER-AUTHORITATIVE — never trust client
+    26→  // User's preferred UI language. Synced from the LanguageContext cookie
+    27→  // when the user signs in. Null = use cookie/browser detection (existing behavior).
+    28→  preferredLanguage String? // "en" | "hi" | "bn" | "te" | "mr" | "ta" | "gu" | "ur" | "kn" | "or" | "ml" | "pa" | "as"
+    29→  createdAt    DateTime @default(now())
+    30→  updatedAt    DateTime @updatedAt
+    31→
+    32→  // ─── PROFILE / ONBOARDING FIELDS ───
+    33→  // Added for Koino signup/onboarding flow. All optional so existing users
+    34→  // are not forced to migrate. profileCompleted gates the onboarding flow:
+    35→  // if false, the user is redirected to /onboarding after signin.
+    36→  username         String?  @unique // unique constraint at DB level
+    37→  dateOfBirth      DateTime?
+    38→  gender           String?  // "male" | "female" | "prefer_not_to_say"
+    39→  state            String?  // Indian state — used for church/event/business discovery
+    40→  city             String?  // City within the state
+    41→  mobileNumber     String?  // Optional — verified only when claiming a prize
+    42→  mobileVerified   Boolean  @default(false)
+    43→  faithStatus      String?  // "follows_jesus" | "exploring" | "new_to_christianity" | "prefer_not_to_say"
+    44→  faithJourney     String?  // "growing" | "new_to_jesus" | "exploring_christianity" | "looking_for_church" | "learn_and_connect"
+    45→  profileCompleted Boolean  @default(false)
+    46→  // WhatsApp Channel — track prompt shown + clicked (NOT whether user actually
+    47→  // followed, since we can't verify that). Used for analytics only.
+    48→  whatsappChannelPromptShown Boolean @default(false)
+    49→  whatsappChannelClicked    Boolean @default(false)
+    50→  // Signup method — "google" | "email" (set by the auth callback)
+    51→  signupMethod     String?  // "google" | "email"
+    52→
+    53→  // ─── ADMIN MEMBER MANAGEMENT ───
+    54→  accountStatus    String   @default("active") // "active" | "blocked" | "suspended" | "deactivated"
+    55→  moderationReason String?  // internal admin reason for blocking/suspending
+    56→  verified         Boolean  @default(false) // ✓ Koino Verified (admin-controlled)
+    57→  verifiedAt       DateTime?
+    58→  verifiedBy       String?  // admin userId who verified
+    59→  contributorType  String?  // "Pastor" | "Elder" | "Bible Teacher" | etc.
+    60→  permissions      String   @default("[]") // JSON array of permission strings (on User for direct access)
+    61→
+    62→  // Relations
+    63→  accounts          Account[]
+    64→  sessions          Session[]
+    65→  triviaAttempts    TriviaQuestionAttempt[]
+    66→  quizSessions      TriviaQuizSession[]
+    67→  pointTransactions TriviaPointTransaction[]
+    68→  giftRedemptions   GiftRedemption[]
+    69→  dailyChallengeAttempts DailyChallengeAttempt[]
+    70→  dailySpins        DailySpin[]
+    71→  badges            UserBadge[]
+    72→  streakFreezes     StreakFreeze[]
+    73→
+    74→  posts Post[]
+    75→
+    76→  // Trivia competition relations
+    77→  competitionAttempts TriviaCompetitionAttempt[]
+    78→  triviaWins          TriviaWinner[]
+    79→
+    80→  // Streak + rewards
+    81→  userStreak          UserStreak?
+    82→  userRewards         UserReward[]
+    83→
+    84→  // Contributor
+    85→  contributor         Contributor?
+    86→}
+    87→
+    88→// ─── NEXTAUTH TABLES ────────────────────────────────────────────────────────
+    89→// Required by NextAuth v4 with the Prisma adapter
+    90→
+    91→model Account {
+    92→  id                String  @id @default(cuid())
+    93→  userId            String
+    94→  type              String
+    95→  provider          String
+    96→  providerAccountId String
+    97→  refresh_token     String?
+    98→  access_token      String?
+    99→  expires_at        Int?
+   100→  token_type        String?
+   101→  scope             String?
+   102→  id_token          String?
+   103→  session_state     String?
+   104→
+   105→  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+   106→
+   107→  @@unique([provider, providerAccountId])
+   108→}
+   109→
+   110→model Session {
+   111→  id           String   @id @default(cuid())
+   112→  sessionToken String   @unique
+   113→  userId       String
+   114→  expires      DateTime
+   115→
+   116→  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+   117→}
+   118→
+   119→model VerificationToken {
+   120→  identifier String
+   121→  token      String
+   122→  expires    DateTime
+   123→
+   124→  @@unique([identifier, token])
+   125→}
+   126→
+   127→// ─── TRIVIA QUESTIONS ──────────────────────────────────────────────────────
+   128→// Seeded from the 25 existing questions. Admins can add more later.
+   129→// difficulty: "beginners" | "intermediate" | "skilled" | "expert"
+   130→// category: "full_bible" | "new_testament" | "old_testament" | "apologetics" | "life_faith" | "jesus"
+   131→
+   132→model TriviaQuestion {
+   133→  id                 String   @id @default(cuid())
+   134→  questionId         String   @unique // stable ID like "q1", "beg_fb_001" — used in attempts
+   135→  question           String
+   136→  options            String   // JSON array of strings
+   137→  correctAnswer      Int      // index into options
+   138→  explanation        String
+   139→  scriptureReference String?
+   140→  difficulty         String   // "beginners" | "intermediate" | "skilled" | "expert"
+   141→  category           String   // "full_bible" | "new_testament" | etc.
+   142→  bibleBook          String?
+   143→  topic              String?
+   144→  basePoints         Int      // 10 | 20 | 30 | 50
+   145→  // JSON-encoded object mapping language code → translated content:
+   146→  //   { "hi": { "question": "...", "options": ["...","..."], "explanation": "..." },
+   147→  //     "te": { "question": "...", "options": [...], "explanation": "..." }, ... }
+   148→  // Empty object {} means no translations yet — fall back to English fields above.
+   149→  translations       String   @default("{}")
+   150→  isActive           Boolean  @default(true)
+   151→  createdAt          DateTime @default(now())
+   152→  updatedAt          DateTime @updatedAt
+   153→
+   154→  attempts           TriviaQuestionAttempt[]
+   155→  transactions      TriviaPointTransaction[]
+   156→}
+   157→
+   158→// ─── ANTI-FARMING: Question Attempts ───────────────────────────────────────
+   159→// THE KEY TABLE: records that a user has already earned points for a question.
+   160→// @@unique([userId, questionId]) means a user can only have ONE attempt
+   161→// record per question — ever. This is enforced at the DATABASE level,
+   162→// so even race conditions (two simultaneous requests) cannot create duplicates.
+   163→
+   164→model TriviaQuestionAttempt {
+   165→  id              String   @id @default(cuid())
+   166→  userId          String
+   167→  questionId      String   // references TriviaQuestion.questionId (stable ID)
+   168→  quizSessionId   String?
+   169→  pointsAwarded   Int      @default(0) // 0 if practice/already-scored, 10-60 if new
+   170→  answeredCorrectly Boolean
+   171→  answeredAt      DateTime @default(now())
+   172→
+   173→  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+   174→  question        TriviaQuestion @relation(fields: [questionId], references: [questionId], onDelete: Cascade)
+   175→  quizSession     TriviaQuizSession? @relation(fields: [quizSessionId], references: [id])
+   176→
+   177→  @@unique([userId, questionId]) // ← ANTI-FARMING: one score per question per user, EVER
+   178→  @@index([userId])
+   179→  @@index([questionId])
+   180→}
+   181→
+   182→// ─── QUIZ SESSIONS ─────────────────────────────────────────────────────────
+   183→// Records each quiz play (both EARN_POINTS and PRACTICE modes)
+   184→
+   185→model TriviaQuizSession {
+   186→  id             String   @id @default(cuid())
+   187→  userId         String
+   188→  difficulty     String
+   189→  category       String
+   190→  questionIds    String   // JSON array of questionId strings
+   191→  score          Int      @default(0) // total points earned THIS session (0 for practice)
+   192→  correctCount   Int      @default(0)
+   193→  totalQuestions Int
+   194→  mode           String   // "EARN_POINTS" | "PRACTICE"
+   195→  bestStreak     Int      @default(0)
+   196→  createdAt      DateTime @default(now())
+   197→
+   198→  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+   199→  attempts       TriviaQuestionAttempt[]
+   200→  transactions   TriviaPointTransaction[]
+   201→
+   202→  @@index([userId])
+   203→  @@index([mode])
+   204→}
+   205→
+   206→// ─── FAITH POINT TRANSACTION HISTORY ───────────────────────────────────────
+   207→// Auditable log of every point change. totalPoints is derived from these.
+   208→
+   209→model TriviaPointTransaction {
+   210→  id           String   @id @default(cuid())
+   211→  userId       String
+   212→  questionId   String?  // null for non-question transactions (gift redemption, admin adjustment)
+   213→  quizSessionId String?
+   214→  points       Int      // positive = earned, negative = spent
+   215→  reason       String   // "CORRECT_BEGINNER" | "CORRECT_INTERMEDIATE" | "STREAK_BONUS" | "GIFT_REDEMPTION" | etc.
+   216→  createdAt    DateTime @default(now())
+   217→
+   218→  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+   219→  question     TriviaQuestion? @relation(fields: [questionId], references: [questionId])
+   220→  quizSession  TriviaQuizSession? @relation(fields: [quizSessionId], references: [id])
+   221→
+   222→  @@index([userId])
+   223→  @@index([createdAt])
+   224→}
+   225→
+   226→// ─── GIFTS / MERCHANDISE REWARDS ───────────────────────────────────────────
+   227→// Admin-managed gifts. The 6 default gifts + admin-added ones.
+   228→
+   229→model Gift {
+   230→  id              String   @id @default(cuid())
+   231→  giftId          String   @unique // stable ID like "g1", "g_admin_123"
+   232→  title           String
+   233→  description     String
+   234→  imageUrl        String
+   235→  pointsRequired  Int
+   236→  tier            String   // "bronze" | "silver" | "gold" | "platinum"
+   237→  stock           Int      @default(0)
+   238→  productId       String?  // references Koino Shop Product.id (mock data array) — when set, product info comes from the Shop
+   239→  rewardType      String   @default("fp_reward") // "fp_reward" | "competition_prize" | "streak_milestone"
+   240→  // Variations & attributes (JSON-encoded strings).
+   241→  // variations: [{"name":"Size","options":["S","M","L","XL"]},{"name":"Color","options":["Black","White"]}]
+   242→  // attributes: [{"label":"Material","value":"100% Cotton"}]
+   243→  variations      String   @default("[]")
+   244→  attributes      String   @default("[]")
+   245→  isActive        Boolean   @default(true)
+   246→  createdAt       DateTime  @default(now())
+   247→  updatedAt       DateTime  @updatedAt
+   248→
+   249→  redemptions     GiftRedemption[]
+   250→}
+   251→
+   252→// ─── GIFT REDEMPTIONS ──────────────────────────────────────────────────────
+   253→// Records when a user claims a gift. @@unique prevents double-claiming.
+   254→
+   255→model GiftRedemption {
+   256→  id           String   @id @default(cuid())
+   257→  userId       String
+   258→  giftId       String   // references Gift.giftId
+   259→  giftDbId     String   // references Gift.id (for relation)
+   260→  pointsSpent  Int
+   261→  status       String   @default("pending") // "pending" | "contacted" | "shipped" | "delivered"
+   262→  // JSON-encoded string of the user's chosen variations at the time of redemption.
+   263→  // e.g. [{"name":"Size","value":"L"},{"name":"Color","value":"Black"}]
+   264→  selectedVariations String @default("[]")
+   265→  createdAt    DateTime @default(now())
+   266→
+   267→  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+   268→  gift         Gift     @relation(fields: [giftDbId], references: [id])
+   269→
+   270→  @@unique([userId, giftId]) // ← one redemption per gift per user
+   271→  @@index([userId])
+   272→}
+   273→
+   274→// ─── EXISTING SCAFFOLD (preserved) ─────────────────────────────────────────
+   275→
+   276→model Post {
+   277→  id        String   @id @default(cuid())
+   278→  title     String
+   279→  content   String?
+   280→  published Boolean  @default(false)
+   281→  authorId  String
+   282→  createdAt DateTime @default(now())
+   283→  updatedAt DateTime @updatedAt
+   284→
+   285→  author User @relation(fields: [authorId], references: [id])
+   286→}
+   287→
+   288→// ─── DAILY CHALLENGE ──────────────────────────────────────────────────────
+   289→// One curated question per day. All users see the same question.
+   290→// Gives 2x FP if answered correctly. Can only answer once.
+   291→
+   292→model DailyChallenge {
+   293→  id            String   @id @default(cuid())
+   294→  challengeDate String   @unique // YYYY-MM-DD
+   295→  questionId    String   // references TriviaQuestion.questionId
+   296→  multiplier    Int      @default(2) // 2x FP
+   297→  createdAt     DateTime @default(now())
+   298→
+   299→  attempts      DailyChallengeAttempt[]
+   300→
+   301→  @@index([challengeDate])
+   302→}
+   303→
+   304→model DailyChallengeAttempt {
+   305→  id              String   @id @default(cuid())
+   306→  userId          String
+   307→  challengeId     String
+   308→  selectedAnswer  Int
+   309→  isCorrect       Boolean
+   310→  pointsAwarded   Int      @default(0)
+   311→  answeredAt      DateTime @default(now())
+   312→
+   313→  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+   314→  challenge       DailyChallenge  @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+   315→
+   316→  @@unique([userId, challengeId]) // one attempt per user per day
+   317→  @@index([userId])
+   318→}
+   319→
+   320→// ─── DAILY SPIN / TREASURE CHEST ──────────────────────────────────────────
+   321→// Once-per-day random reward. Variable ratio reinforcement (addictive).
+   322→
+   323→model DailySpin {
+   324→  id           String   @id @default(cuid())
+   325→  userId       String
+   326→  rewardType   String   // "fp_5" | "fp_10" | "fp_25" | "fp_50" | "fp_100" | "streak_freeze" | "double_fp"
+   327→  rewardValue  Int      @default(0)
+   328→  spinDate     String   // YYYY-MM-DD
+   329→  createdAt    DateTime @default(now())
+   330→
+   331→  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+   332→
+   333→  @@unique([userId, spinDate]) // one spin per day
+   334→  @@index([userId])
+   335→}
+   336→
+   337→// ─── BADGES / ACHIEVEMENTS ────────────────────────────────────────────────
+   338→
+   339→model UserBadge {
+   340→  id          String   @id @default(cuid())
+   341→  userId      String
+   342→  badgeId     String   // e.g. "first_streak", "bible_scholar", "perfect_score"
+   343→  badgeName   String
+   344→  badgeIcon   String   // emoji
+   345→  badgeDescription String
+   346→  unlockedAt  DateTime @default(now())
+   347→
+   348→  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+   349→
+   350→  @@unique([userId, badgeId])
+   351→  @@index([userId])
+   352→}
+   353→
+   354→// ─── STREAK FREEZE ────────────────────────────────────────────────────────
+   355→
+   356→model StreakFreeze {
+   357→  id          String   @id @default(cuid())
+   358→  userId      String
+   359→  activity    String   // "bible_reading" | "trivia_play" | "prayer_share"
+   360→  freezeDate  String   // YYYY-MM-DD
+   361→  createdAt   DateTime @default(now())
+   362→
+   363→  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+   364→
+   365→  @@unique([userId, activity, freezeDate])
+   366→  @@index([userId])
+   367→}
+   368→
+   369→// ─── COMIC BIBLE ───────────────────────────────────────────────────────────
+   370→// Bible Comic system. References existing Bible book IDs from bible-data.ts
+   371→// (e.g. bookId = "genesis" matches BIBLE_BOOKS[].id).
+   372→// Artwork is language-independent — ONE image per panel.
+   373→// Text (title, narration, captions) is localized via ComicPanelTranslation.
+   374→
+   375→model ComicChapter {
+   376→  id              String   @id @default(cuid())
+   377→  comicId         String   @unique // e.g. "genesis-2" — human-readable stable ID
+   378→  bookId          String             // e.g. "genesis" — matches BIBLE_BOOKS[].id
+   379→  chapter         Int                // e.g. 2
+   380→  title           String             // English default title
+   381→  coverArtUrl     String?            // optional chapter cover image
+   382→  sortOrder       Int      @default(0)
+   383→  // Publishing workflow state.
+   384→  // draft    — admin started but not finished
+   385→  // review   — ready for someone else to QA
+   386→  // ready    — QA passed, awaiting publish
+   387→  // published — visible to end users (isActive = true AND status = "published")
+   388→  status          String   @default("draft") // "draft" | "review" | "ready" | "published"
+   389→  description     String?            // short summary shown in CMS + maybe on chapter cards
+   390→  adminNotes      String?            // private internal notes for the editorial team
+   391→  isActive        Boolean  @default(true)
+   392→  createdAt       DateTime @default(now())
+   393→  updatedAt       DateTime @updatedAt
+   394→
+   395→  panels          ComicPanel[]
+   396→  translations    ComicChapterTranslation[]
+   397→  quizLinks       ComicChapterQuiz[]
+   398→
+   399→  @@unique([bookId, chapter]) // one comic per book+chapter
+   400→  @@index([bookId])
+   401→  @@index([status])
+   402→}
+   403→
+   404→model ComicPanel {
+   405→  id              String   @id @default(cuid())
+   406→  panelId         String   @unique // e.g. "GEN2-P01" — stable, human-readable
+   407→  comicChapterId  String
+   408→  sortOrder       Int      @default(0)
+   409→  artworkUrl      String             // ONE image — language-independent
+   410→  altText         String?            // accessibility text (screen readers + image fallback)
+   411→  verseStart      Int                // e.g. 1
+   412→  verseEnd        Int                // e.g. 3
+   413→  bookId          String             // denormalized from ComicChapter for quick verse lookups
+   414→  chapter         Int                // denormalized
+   415→  // Optional audio — language-specific. Null = no audio, use TTS fallback.
+   416→  // Future: audioUrl could be a JSON map { "en": "...", "hi": "..." } per language.
+   417→  audioUrl        String?            // URL to professional audio narration (future)
+   418→  videoUrl        String?            // URL to video content (future)
+   419→
+   420→  comicChapter    ComicChapter @relation(fields: [comicChapterId], references: [id], onDelete: Cascade)
+   421→  translations    ComicPanelTranslation[]
+   422→
+   423→  @@index([comicChapterId])
+   424→}
+   425→
+   426→model ComicPanelTranslation {
+   427→  id              String   @id @default(cuid())
+   428→  panelId         String             // FK to ComicPanel.panelId
+   429→  lang            String             // "en", "hi", "te", etc.
+   430→  title           String?            // Panel title in this language
+   431→  narration       String?            // Narration / story text
+   432→  captions        String   @default("[]") // JSON array of caption strings (speech bubbles, etc.)
+   433→
+   434→  panel           ComicPanel @relation(fields: [panelId], references: [panelId], onDelete: Cascade)
+   435→
+   436→  @@unique([panelId, lang]) // one translation per panel per language
+   437→  @@index([lang])
+   438→}
+   439→
+   440→model ComicChapterTranslation {
+   441→  id              String   @id @default(cuid())
+   442→  comicChapterId  String
+   443→  lang            String
+   444→  title           String?            // Chapter title in this language
+   445→
+   446→  comicChapter    ComicChapter @relation(fields: [comicChapterId], references: [id], onDelete: Cascade)
+   447→
+   448→  @@unique([comicChapterId, lang])
+   449→  @@index([lang])
+   450→}
+   451→
+   452→// ─── COMIC → TRIVIA CONNECTION ─────────────────────────────────────────────
+   453→// Links a Comic chapter to existing TriviaQuestion records.
+   454→// When a user takes a Comic quiz, the API fetches questions via this join table,
+   455→// then scores them using the EXISTING submitQuiz() function.
+   456→// The same questionId works in both regular Trivia and Comic quiz.
+   457→// Anti-farming: @@unique([userId, questionId]) on TriviaQuestionAttempt
+   458→// prevents earning FP twice for the same question, regardless of where it was asked.
+   459→
+   460→model ComicChapterQuiz {
+   461→  id              String   @id @default(cuid())
+   462→  comicChapterId  String
+   463→  questionId      String             // references TriviaQuestion.questionId
+   464→  sortOrder       Int      @default(0)
+   465→
+   466→  comicChapter    ComicChapter @relation(fields: [comicChapterId], references: [id], onDelete: Cascade)
+   467→
+   468→  @@unique([comicChapterId, questionId]) // one link per chapter+question
+   469→  @@index([comicChapterId])
+   470→}
+   471→
+   472→// ─── TRIVIA COMPETITIONS ───────────────────────────────────────────────────
+   473→// A Competition is a time-boxed Bible Trivia contest with its own
+   474→// server-authoritative score (separate from lifetime Faith Points).
+   475→// Examples: Daily Challenge, Weekly Bible Challenge, Monthly Championship.
+   476→//
+   477→// KEY DESIGN DECISIONS:
+   478→// - Competition Score is SEPARATE from lifetime FP. The weekly leaderboard
+   479→//   ranks by competition score, NOT by lifetime FP.
+   480→// - attemptLimit is enforced SERVER-SIDE (not in localStorage).
+   481→// - Questions are server-selected — the client never sees correct answers
+   482→//   before submitting.
+   483→// - Winners are calculated server-side when endAt passes. Immutable records.
+   484→
+   485→model TriviaCompetition {
+   486→  id              String   @id @default(cuid())
+   487→  title           String
+   488→  description     String?
+   489→  imageUrl        String?
+   490→  type            String   // "daily" | "weekly" | "monthly" | "custom"
+   491→  category        String   // "full_bible" | "new_testament" | "old_testament" | "apologetics" | "mixed"
+   492→  difficulty      String   // "beginners" | "intermediate" | "skilled" | "expert" | "mixed"
+   493→  questionCount   Int      @default(10)
+   494→  attemptLimit    Int      @default(1)
+   495→  winnerCount     Int      @default(3)
+   496→  rules           String?  // free-text rules displayed to users before participating
+   497→  status          String   @default("draft") // "draft" | "scheduled" | "live" | "ended" | "cancelled"
+   498→  startAt         DateTime
+   499→  endAt           DateTime
+   500→  claimDeadlineDays Int    @default(7) // days after competition ends to claim prize
+   501→  prizeId         String?  // references TriviaPrize.id (optional — some competitions may not have prizes)
+   502→  createdById     String?  // admin userId who created it
+   503→  createdAt       DateTime @default(now())
+   504→  updatedAt       DateTime @updatedAt
+   505→
+   506→  prize           TriviaPrize?  @relation(fields: [prizeId], references: [id])
+   507→  attempts        TriviaCompetitionAttempt[]
+   508→  winners         TriviaWinner[]
+   509→
+   510→  @@index([status])
+   511→  @@index([type])
+   512→  @@index([endAt])
+   513→}
+   514→
+   515→// ─── COMPETITION ATTEMPTS ──────────────────────────────────────────────────
+   516→// Records a single user's attempt at a competition. The server enforces
+   517→// attemptLimit via a count query before accepting a new submission.
+   518→// The score here is the COMPETITION score (not lifetime FP).
+   519→
+   520→model TriviaCompetitionAttempt {
+   521→  id              String   @id @default(cuid())
+   522→  competitionId   String
+   523→  userId          String
+   524→  questionIds     String   // JSON array of questionId strings (server-selected)
+   525→  score           Int      @default(0) // competition score for this attempt
+   526→  correctCount    Int      @default(0)
+   527→  totalQuestions  Int
+   528→  accuracy        Float    @default(0) // 0.0 - 1.0
+   529→  durationMs      Int      @default(0) // time taken to complete
+   530→  createdAt       DateTime @default(now())
+   531→
+   532→  competition     TriviaCompetition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+   533→  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+   534→
+   535→  @@unique([competitionId, userId, createdAt]) // one attempt per submission
+   536→  @@index([competitionId, score]) // for leaderboard queries
+   537→  @@index([userId])
+   538→}
+   539→
+   540→// ─── PRIZES ─────────────────────────────────────────────────────────────────
+   541→// A Prize can be a Koino Merch Store product (sourceType="koino_merch") or
+   542→// a custom prize (sourceType="custom"). When linked to a Merch product, the
+   543→// prize references the product — it does NOT duplicate product information.
+   544→
+   545→model TriviaPrize {
+   546→  id                 String   @id @default(cuid())
+   547→  name               String
+   548→  description        String?
+   549→  imageUrl           String?
+   550→  sourceType         String   // "koino_merch" | "custom"
+   551→  productId          String?  // references Product.id when sourceType="koino_merch"
+   552→  quantity           Int      @default(1) // total available
+   553→  assignedQuantity   Int      @default(0) // how many assigned to winners
+   554→  remainingQuantity  Int      @default(1) // quantity - assignedQuantity
+   555→  approximateValue   Float?   // optional, for display
+   556→  requiresShipping   Boolean  @default(true)
+   557→  active             Boolean  @default(true)
+   558→  terms              String?  // terms & conditions
+   559→  createdAt           DateTime @default(now())
+   560→  updatedAt           DateTime @updatedAt
+   561→
+   562→  competitions       TriviaCompetition[]
+   563→  winners            TriviaWinner[]
+   564→}
+   565→
+   566→// ─── WINNERS ───────────────────────────────────────────────────────────────
+   567→// Immutable record of a competition winner. Created server-side when a
+   568→// competition ends. The status tracks the prize claim workflow.
+   569→
+   570→model TriviaWinner {
+   571→  id              String   @id @default(cuid())
+   572→  competitionId   String
+   573→  userId          String
+   574→  rank            Int      // 1st, 2nd, 3rd, etc.
+   575→  score           Int      // competition score at time of winning
+   576→  correctCount    Int
+   577→  accuracy        Float
+   578→  durationMs      Int
+   579→  prizeId         String?
+   580→  status          String   @default("pending_verification")
+   581→  // "pending_verification" | "phone_verified" | "contacted" | "address_pending"
+   582→  // | "address_verified" | "processing" | "shipped" | "delivered" | "claimed"
+   583→  // | "cancelled" | "disqualified" | "expired"
+   584→  phoneVerified   Boolean  @default(false)
+   585→  phoneVerifiedAt DateTime?
+   586→  shippingName    String?
+   587→  shippingAddress String?
+   588→  shippingCity    String?
+   589→  shippingState   String?
+   590→  shippingPincode String?
+   591→  adminNotes      String?
+   592→  disqualifiedReason String?
+   593→  createdAt       DateTime @default(now())
+   594→  updatedAt       DateTime @updatedAt
+   595→
+   596→  competition     TriviaCompetition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+   597→  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+   598→  prize           TriviaPrize?      @relation(fields: [prizeId], references: [id])
+   599→
+   600→  @@unique([competitionId, userId]) // one winner record per competition per user
+   601→  @@index([competitionId, rank])
+   602→  @@index([userId])
+   603→}
+   604→
+   605→// ─── PUBLIC WEBSITE CONTENT ────────────────────────────────────────────────
+   606→// Admin-editable content for the public Koino website.
+   607→
+   608→model BlogPost {
+   609→  id              String   @id @default(cuid())
+   610→  title           String
+   611→  slug            String   @unique
+   612→  excerpt         String?
+   613→  content         String   // markdown or rich text
+   614→  featuredImage   String?
+   615→  author          String?
+   616→  category        String   // "Bible" | "Faith" | "Christian Living" | etc.
+   617→  tags            String   @default("[]") // JSON array
+   618→  published       Boolean  @default(false)
+   619→  featured        Boolean  @default(false)
+   620→  seoTitle        String?
+   621→  seoDescription  String?
+   622→  publishedAt     DateTime?
+   623→  createdAt       DateTime @default(now())
+   624→  updatedAt       DateTime @updatedAt
+   625→
+   626→  @@index([published, publishedAt])
+   627→  @@index([category])
+   628→  @@index([slug])
+   629→}
+   630→
+   631→model HelpArticle {
+   632→  id              String   @id @default(cuid())
+   633→  title           String
+   634→  slug            String   @unique
+   635→  category        String   // "Account" | "Bible" | "Bible Trivia" | etc.
+   636→  content         String   // markdown or rich text
+   637→  featured        Boolean  @default(false)
+   638→  published       Boolean  @default(false)
+   639→  seoTitle        String?
+   640→  seoDescription  String?
+   641→  createdAt       DateTime @default(now())
+   642→  updatedAt       DateTime @updatedAt
+   643→
+   644→  @@index([published, category])
+   645→  @@index([slug])
+   646→}
+   647→
+   648→model FounderProfile {
+   649→  id              String   @id @default(cuid())
+   650→  founderName     String
+   651→  profilePhoto    String?
+   652→  shortIntro      String?
+   653→  biography       String?
+   654→  whyIBuiltKoino  String?
+   655→  vision          String?
+   656→  mission         String?
+   657→  founderMessage  String?
+   658→  email           String?
+   659→  socialLinks     String   @default("[]") // JSON array of {label, url}
+   660→  published       Boolean  @default(false)
+   661→  updatedAt       DateTime @updatedAt
+   662→}
+   663→
+   664→model ContactMessage {
+   665→  id              String   @id @default(cuid())
+   666→  name            String
+   667→  email           String
+   668→  phone           String?
+   669→  subject         String
+   670→  message         String
+   671→  status          String   @default("new") // "new" | "read" | "archived"
+   672→  createdAt       DateTime @default(now())
+   673→
+   674→  @@index([status])
+   675→  @@index([createdAt])
+   676→}
+   677→
+   678→model PartnerInquiry {
+   679→  id              String   @id @default(cuid())
+   680→  name            String
+   681→  organization    String?
+   682→  email           String
+   683→  phone           String?
+   684→  website         String?
+   685→  partnershipType String   // "Church" | "Ministry" | "Christian Business" | etc.
+   686→  message         String
+   687→  status          String   @default("new") // "new" | "contacted" | "archived"
+   688→  createdAt       DateTime @default(now())
+   689→
+   690→  @@index([status])
+   691→  @@index([createdAt])
+   692→}
+   693→
+   694→model SupportCampaign {
+   695→  id              String   @id @default(cuid())
+   696→  name            String
+   697→  description     String?
+   698→  imageUrl        String?
+   699→  goalAmount      Float
+   700→  raisedAmount    Float    @default(0)
+   701→  supporterCount  Int      @default(0)
+   702→  currency        String   @default("INR")
+   703→  startDate       DateTime?
+   704→  endDate         DateTime?
+   705→  active          Boolean  @default(true)
+   706→  featured       Boolean  @default(false)
+   707→  createdAt       DateTime @default(now())
+   708→  updatedAt       DateTime @updatedAt
+   709→
+   710→  donations       Donation[]
+   711→}
+   712→
+   713→model Donation {
+   714→  id              String   @id @default(cuid())
+   715→  campaignId      String
+   716→  donorName       String?
+   717→  donorEmail       String?
+   718→  amount          Float
+   719→  currency        String   @default("INR")
+   720→  anonymous       Boolean  @default(false)
+   721→  status          String   @default("pending") // "pending" | "completed" | "failed" | "refunded"
+   722→  transactionRef  String?
+   723→  paymentProvider String?  // "razorpay" | "stripe" | etc. — NOT connected yet
+   724→  createdAt       DateTime @default(now())
+   725→
+   726→  campaign        SupportCampaign @relation(fields: [campaignId], references: [id])
+   727→
+   728→  @@index([campaignId])
+   729→  @@index([status])
+   730→}
+   731→
+   732→// ─── FAITH STREAK (server-authoritative) ────────────────────────────────────
+   733→// Tracks consecutive days of meaningful Bible/Trivia activity.
+   734→// One calendar day = one streak day (regardless of how many activities).
+   735→// The streak is NEVER spent — it measures consistency only.
+   736→
+   737→model UserStreak {
+   738→  id              String   @id @default(cuid())
+   739→  userId          String   @unique
+   740→  currentStreak   Int      @default(0)
+   741→  longestStreak   Int      @default(0)
+   742→  lastActiveDate  String?  // YYYY-MM-DD (server time)
+   743→  totalActiveDays Int      @default(0)
+   744→  updatedAt       DateTime @updatedAt
+   745→
+   746→  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+   747→
+   748→  @@index([currentStreak])
+   749→}
+   750→
+   751→// ─── KOINO REWARDS ──────────────────────────────────────────────────────────
+   752→// Admin-configured rewards that can be unlocked via streak milestones.
+   753→
+   754→model KoinoReward {
+   755→  id                String   @id @default(cuid())
+   756→  name              String
+   757→  description       String?
+   758→  rewardType       String   // "DISCOUNT_PERCENT" | "FIXED_VOUCHER" | "FREE_PRODUCT" | "SPECIAL_PRODUCT"
+   759→  discountType     String?  // "percent" | "fixed"
+   760→  discountValue     Float    @default(0) // e.g., 10 (percent) or 200 (rupees)
+   761→  maximumDiscount   Float?   // cap for percent discounts
+   762→  minimumOrderValue Float?   // minimum cart total to apply
+   763→  productId         String?  // references Product.id when rewardType=FREE_PRODUCT
+   764→  inventoryLimit    Int?     // max total redemptions
+   765→  expiresAfterDays  Int?     // reward expires N days after issuance
+   766→  active            Boolean  @default(true)
+   767→  createdAt         DateTime @default(now())
+   768→  updatedAt         DateTime @updatedAt
+   769→
+   770→  milestones        StreakMilestone[]
+   771→  userRewards       UserReward[]
+   772→}
+   773→
+   774→// ─── STREAK MILESTONES ─────────────────────────────────────────────────────
+   775→// Configurable milestone → reward mapping. Admin controls which streak
+   776→// threshold unlocks which reward.
+   777→
+   778→model StreakMilestone {
+   779→  id                String   @id @default(cuid())
+   780→  streakDays        Int      // e.g., 7, 14, 30, 60, 100, 365
+   781→  rewardId          String
+   782→  repeatable        Boolean  @default(false) // false = once ever; true = once per streak cycle
+   783→  active            Boolean  @default(true)
+   784→  displayText       String?
+   785→  createdAt         DateTime @default(now())
+   786→  updatedAt         DateTime @updatedAt
+   787→
+   788→  reward            KoinoReward @relation(fields: [rewardId], references: [id])
+   789→  userRewards       UserReward[]
+   790→
+   791→  @@unique([streakDays]) // one milestone per streak threshold
+   792→  @@index([active])
+   793→}
+   794→
+   795→// ─── USER REWARD ENTITLEMENTS ──────────────────────────────────────────────
+   796→// Per-user reward record. Created when a milestone is reached.
+   797→// Status: AVAILABLE → CLAIMED → REDEEMED (or EXPIRED/CANCELLED)
+   798→
+   799→model UserReward {
+   800→  id                String   @id @default(cuid())
+   801→  userId            String
+   802→  rewardId          String
+   803→  milestoneId       String?
+   804→  source            String   @default("streak_milestone") // "streak_milestone" | "admin_issued" | "competition_prize"
+   805→  sourceMilestone   Int?     // the streak day count that triggered this
+   806→  status            String   @default("available") // "available" | "claimed" | "redeemed" | "expired" | "cancelled"
+   807→  redemptionCode    String?  // unique code for voucher redemption
+   808→  issuedAt          DateTime @default(now())
+   809→  claimedAt         DateTime?
+   810→  redeemedAt        DateTime?
+   811→  expiresAt         DateTime?
+   812→  orderId           String?
+   813→  createdAt         DateTime @default(now())
+   814→  updatedAt         DateTime @updatedAt
+   815→
+   816→  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+   817→  reward            KoinoReward    @relation(fields: [rewardId], references: [id])
+   818→  milestone         StreakMilestone? @relation(fields: [milestoneId], references: [id])
+   819→
+   820→  @@unique([userId, milestoneId]) // prevents duplicate milestone rewards (once-ever default)
+   821→  @@index([userId, status])
+   822→  @@index([rewardId])
+   823→}
+   824→
+   825→// ─── APOLOGETICS + CONTRIBUTOR CMS ─────────────────────────────────────────
+   826→// Unified content model for Articles, Blogs, Apologetics, Bible Studies,
+   827→// Devotionals. One CMS architecture, multiple content types.
+   828→
+   829→model KoinoArticle {
+   830→  id              String   @id @default(cuid())
+   831→  title           String
+   832→  slug            String   @unique
+   833→  contentType     String   // "ARTICLE" | "BLOG" | "APOLOGETICS" | "BIBLE_STUDY" | "DEVOTIONAL"
+   834→  category        String?  // e.g., "God & Existence", "Jesus Christ", "Resurrection"
+   835→  subcategory     String?
+   836→  seriesId        String?  // references ArticleSeries.id
+   837→  excerpt         String?
+   838→  shortAnswer     String?  // for Apologetics articles
+   839→  content         String   // rich text / HTML
+   840→  coverImageUrl   String?
+   841→  authorId        String?  // references Contributor.id (or null for admin-created)
+   842→  authorName      String?  // display name (denormalized for public display)
+   843→  status          String   @default("draft") // "draft" | "submitted" | "changes_requested" | "approved" | "published" | "rejected" | "scheduled" | "archived"
+   844→  difficulty       String?  // "BEGINNER" | "INTERMEDIATE" | "ADVANCED"
+   845→  featured        Boolean  @default(false)
+   846→  bibleRefs       String   @default("[]") // JSON array of Bible references (e.g., "John 20:1-29")
+   847→  sources         String   @default("[]") // JSON array of source objects
+   848→  relatedIds      String   @default("[]") // JSON array of related article IDs
+   849→  reviewedBy      String?  // admin userId
+   850→  reviewedAt      DateTime?
+   851→  reviewNotes     String?  // admin feedback for "changes requested"
+   852→  publishedAt     DateTime?
+   853→  scheduledAt     DateTime?
+   854→  seoTitle        String?
+   855→  seoDescription  String?
+   856→  canonicalUrl    String?
+   857→  viewCount       Int      @default(0)
+   858→  createdAt       DateTime @default(now())
+   859→  updatedAt       DateTime @updatedAt
+   860→
+   861→  series          ArticleSeries? @relation(fields: [seriesId], references: [id])
+   862→  author          Contributor?   @relation(fields: [authorId], references: [id])
+   863→
+   864→  @@index([status, contentType, publishedAt])
+   865→  @@index([category])
+   866→  @@index([status])
+   867→  @@index([slug])
+   868→}
+   869→
+   870→model ArticleSeries {
+   871→  id              String   @id @default(cuid())
+   872→  name            String
+   873→  slug            String   @unique
+   874→  description     String?
+   875→  coverImageUrl   String?
+   876→  published       Boolean  @default(false)
+   877→  sortOrder       Int      @default(0)
+   878→  createdAt       DateTime @default(now())
+   879→  updatedAt       DateTime @updatedAt
+   880→
+   881→  articles        KoinoArticle[]
+   882→}
+   883→
+   884→model Contributor {
+   885→  id              String   @id @default(cuid())
+   886→  userId          String   @unique // references User.id
+   887→  displayName     String
+   888→  slug            String   @unique // for /contributors/[slug]
+   889→  profilePhoto    String?
+   890→  bio             String?
+   891→  church          String?
+   892→  churchRole      String?  // "Pastor" | "Elder" | "Bible Teacher" | "Apologist" | etc.
+   893→  location        String?
+   894→  expertise       String   @default("[]") // JSON array
+   895→  website         String?
+   896→  socialLinks     String   @default("[]") // JSON array of {label, url}
+   897→  verified        Boolean  @default(false) // ✓ Koino Verified Contributor badge
+   898→  status          String   @default("pending") // "pending" | "approved" | "rejected" | "suspended"
+   899→  permissions     String   @default("[]") // JSON array of permission strings
+   900→  applicationId   String?  @unique
+   901→  createdAt       DateTime @default(now())
+   902→  updatedAt       DateTime @updatedAt
+   903→
+   904→  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+   905→  application     ContributorApplication? @relation(fields: [applicationId], references: [id])
+   906→  articles        KoinoArticle[]
+   907→
+   908→  @@index([status])
+   909→  @@index([verified])
+   910→}
+   911→
+   912→model ContributorApplication {
+   913→  id              String   @id @default(cuid())
+   914→  fullName        String
+   915→  email           String
+   916→  userId          String?  // references User.id if applicant is a Koino member
+   917→  profilePhoto    String?
+   918→  church          String?
+   919→  churchRole      String?
+   920→  city            String?
+   921→  state           String?
+   922→  country         String?
+   923→  bio             String?
+   924→  expertise       String   @default("[]") // JSON array
+   925→  website         String?
+   926→  socialLinks     String   @default("[]") // JSON array
+   927→  whyContribute   String?
+   928→  contentInterests String  @default("[]") // JSON array: ["Apologetics", "Blog", etc.]
+   929→  sampleUrl       String?
+   930→  status          String   @default("pending") // "pending" | "under_review" | "approved" | "rejected" | "suspended"
+   931→  adminNotes      String?
+   932→  reviewedBy      String?
+   933→  reviewedAt      DateTime?
+   934→  createdAt       DateTime @default(now())
+   935→  updatedAt       DateTime @updatedAt
+   936→
+   937→  contributor     Contributor?
+   938→
+   939→  @@index([status])
+   940→  @@index([createdAt])
+   941→}
+   942→
+   943→model UserQuestion {
+   944→  id              String   @id @default(cuid())
+   945→  question        String
+   946→  askerName       String?
+   947→  askerEmail      String?
+   948→  askerUserId     String?  // references User.id if logged in
+   949→  category        String?  // suggested apologetics category
+   950→  status          String   @default("new") // "new" | "in_review" | "answered" | "turned_into_article" | "archived"
+   951→  adminNotes      String?
+   952→  articleId       String?  // if turned into article
+   953→  createdAt       DateTime @default(now())
+   954→
+   955→  @@index([status])
+   956→  @@index([createdAt])
+   957→}
+   958→

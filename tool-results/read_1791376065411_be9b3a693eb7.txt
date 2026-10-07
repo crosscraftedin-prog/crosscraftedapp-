@@ -1,0 +1,2002 @@
+     1→"use client";
+     2→
+     3→import { useState, useEffect, useCallback } from "react";
+     4→import { motion, AnimatePresence } from "framer-motion";
+     5→import { useSupabaseUser } from "@/lib/supabase/use-user";
+     6→import { useTranslation } from "@/lib/i18n/LanguageContext";
+     7→import {
+     8→  Shield,
+     9→  LayoutDashboard,
+    10→  Building2,
+    11→  Calendar,
+    12→  Store,
+    13→  HeartHandshake,
+    14→  HelpCircle,
+    15→  Trophy,
+    16→  Megaphone,
+    17→  BarChart3,
+    18→  Lock,
+    19→  X,
+    20→  Check,
+    21→  Trash2,
+    22→  Plus,
+    23→  TrendingUp,
+    24→  Users,
+    25→  Eye,
+    26→  Clock,
+    27→  Gift,
+    28→  Send,
+    29→  LogIn,
+    30→  Tag,
+    31→  Palette,
+    32→  Package,
+    33→  Mail,
+    34→  Truck,
+    35→  CheckCircle,
+    36→  BookOpen,
+    37→  AlertCircle,
+    38→  BadgeCheck,
+    39→  Loader2,
+    40→  HandHeart,
+    41→  Handshake,
+    42→  UserCheck,
+    43→} from "lucide-react";
+    44→import { toast } from "sonner";
+    45→import {
+    46→  CHURCHES,
+    47→  EVENTS,
+    48→  PRODUCTS,
+    49→  PRAYERS,
+    50→  APOLOGETICS_QUESTIONS,
+    51→  TRIVIA_COMPETITIONS,
+    52→  INDIAN_STATES,
+    53→  type Church,
+    54→  type EventItem,
+    55→  type Product,
+    56→  type PrayerPost,
+    57→  type ApologeticsQuestion,
+    58→  type TriviaGift,
+    59→} from "@/lib/crosscrafted-data";
+    60→import ImagePicker from "@/components/crosscrafted/ImagePicker";
+    61→import BibleComicsAdmin from "@/components/crosscrafted/BibleComicsAdmin";
+    62→import DonationSettingsTab from "@/components/crosscrafted/admin/DonationSettingsTab";
+    63→import ContactMessagesTab from "@/components/crosscrafted/admin/ContactMessagesTab";
+    64→import PartnerInquiriesTab from "@/components/crosscrafted/admin/PartnerInquiriesTab";
+    65→import ContributorApplicationsTab from "@/components/crosscrafted/admin/ContributorApplicationsTab";
+    66→
+    67→type AdminTab =
+    68→  | "dashboard"
+    69→  | "members"
+    70→  | "churches"
+    71→  | "events"
+    72→  | "marketplace"
+    73→  | "prayers"
+    74→  | "apologetics"
+    75→  | "competitions"
+    76→  | "announcements"
+    77→  | "redemptions"
+    78→  | "donations"
+    79→  | "contact-messages"
+    80→  | "partner-inquiries"
+    81→  | "contributors"
+    82→  | "analytics"
+    83→  | "bible-comics";
+    84→
+    85→const TABS: { id: AdminTab; icon: typeof Shield; labelKey: string }[] = [
+    86→  { id: "dashboard",    icon: LayoutDashboard, labelKey: "admin.tab.dashboard" },
+    87→  { id: "members",      icon: Users,             labelKey: "admin.tab.members" },
+    88→  { id: "churches",     icon: Building2,        labelKey: "admin.tab.churches" },
+    89→  { id: "events",       icon: Calendar,         labelKey: "admin.tab.events" },
+    90→  { id: "marketplace",  icon: Store,             labelKey: "admin.tab.marketplace" },
+    91→  { id: "prayers",      icon: HeartHandshake,   labelKey: "admin.tab.prayers" },
+    92→  { id: "apologetics",  icon: HelpCircle,       labelKey: "admin.tab.apologetics" },
+    93→  { id: "competitions", icon: Trophy,            labelKey: "admin.tab.competitions" },
+    94→  { id: "announcements",icon: Megaphone,         labelKey: "admin.tab.announcements" },
+    95→  { id: "redemptions",  icon: Package,           labelKey: "admin.tab.redemptions" },
+    96→  { id: "donations",    icon: HandHeart,         labelKey: "admin.tab.donations" },
+    97→  { id: "contact-messages", icon: Mail,          labelKey: "admin.tab.contactMessages" },
+    98→  { id: "partner-inquiries", icon: Handshake,    labelKey: "admin.tab.partnerInquiries" },
+    99→  { id: "contributors", icon: UserCheck,         labelKey: "admin.tab.contributors" },
+   100→  { id: "analytics",    icon: BarChart3,         labelKey: "admin.tab.analytics" },
+   101→  { id: "bible-comics", icon: BookOpen,          labelKey: "admin.tab.bibleComics" },
+   102→];
+   103→
+   104→export default function AdminView() {
+   105→  const { user, isAuthenticated, isAdmin, loading } = useSupabaseUser();
+   106→  const t = useTranslation();
+   107→  const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
+   108→
+   109→  // Loading state
+   110→  if (loading) {
+   111→    return (
+   112→      <div className="flex items-center justify-center min-h-[40vh]">
+   113→        <div className="w-8 h-8 rounded-full border-2 border-transparent border-t-[#7C3AED] animate-spin" />
+   114→      </div>
+   115→    );
+   116→  }
+   117→
+   118→  // Not signed in — show login prompt
+   119→  if (!isAuthenticated) {
+   120→    return (
+   121→      <div className="max-w-md mx-auto px-4 py-12">
+   122→        <motion.div
+   123→          initial={{ opacity: 0, y: 20 }}
+   124→          animate={{ opacity: 1, y: 0 }}
+   125→          className="bg-gradient-to-br from-[#1C1929] to-[#2B254E] border border-[#7C3AED]/20 rounded-3xl p-8"
+   126→        >
+   127→          <div className="text-center mb-6">
+   128→            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#7C3AED]/15 border border-[#7C3AED]/30 mb-4">
+   129→              <Shield size={28} className="text-[#A78BFA]" />
+   130→            </div>
+   131→            <h1 className="text-2xl font-extrabold text-white">{t('admin.access.title')}</h1>
+   132→            <p className="text-sm text-[#A09DB1] mt-1">Sign in with an admin account</p>
+   133→          </div>
+   134→
+   135→          <a
+   136→            href="/auth/signin"
+   137→            className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all hover:-translate-y-px flex items-center justify-center gap-2"
+   138→            style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)" }}
+   139→          >
+   140→            <LogIn size={16} /> Sign In
+   141→          </a>
+   142→
+   143→          <div className="mt-6 p-3 rounded-xl bg-[#38BDF8]/8 border border-[#38BDF8]/20">
+   144→            <p className="text-[10px] font-bold uppercase tracking-wider text-[#38BDF8] mb-1">Admin Access</p>
+   145→            <p className="text-[11px] text-[#A09DB1] leading-relaxed">
+   146→              Admin authorization is verified server-side via your authenticated session role.
+   147→              Only users with the <span className="font-bold text-white">admin</span> role in the database
+   148→              can access this panel.
+   149→            </p>
+   150→          </div>
+   151→        </motion.div>
+   152→      </div>
+   153→    );
+   154→  }
+   155→
+   156→  // Signed in but NOT admin
+   157→  if (!isAdmin) {
+   158→    return (
+   159→      <div className="max-w-md mx-auto px-4 py-12">
+   160→        <motion.div
+   161→          initial={{ opacity: 0, y: 20 }}
+   162→          animate={{ opacity: 1, y: 0 }}
+   163→          className="bg-gradient-to-br from-[#1C1929] to-[#2B254E] border border-[#EF4444]/20 rounded-3xl p-8 text-center"
+   164→        >
+   165→          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#EF4444]/15 border border-[#EF4444]/30 mb-4">
+   166→            <Lock size={28} className="text-[#EF4444]" />
+   167→          </div>
+   168→          <h1 className="text-2xl font-extrabold text-white mb-2">{t('admin.accessDenied.title')}</h1>
+   169→          <p className="text-sm text-[#A09DB1] mb-4">
+   170→            You're signed in as <span className="font-bold text-white">{user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email}</span>,
+   171→            but your account doesn't have admin privileges.
+   172→          </p>
+   173→          <p className="text-[11px] text-[#64748B]">
+   174→            Admin access is granted by setting <code className="text-[#A78BFA]">role = "admin"</code> in the
+   175→            database User table. Contact the site administrator if you believe this is an error.
+   176→          </p>
+   177→        </motion.div>
+   178→      </div>
+   179→    );
+   180→  }
+   181→
+   182→  // Admin dashboard — user is authenticated AND has admin role
+   183→  return (
+   184→    <div className="max-w-[1100px] mx-auto px-4 py-5">
+   185→      {/* Header */}
+   186→      <div className="flex items-center justify-between mb-5">
+   187→        <div className="flex items-center gap-2">
+   188→          <div className="w-9 h-9 rounded-xl bg-[#7C3AED]/15 border border-[#7C3AED]/30 flex items-center justify-center">
+   189→            <Shield size={16} className="text-[#A78BFA]" />
+   190→          </div>
+   191→          <div>
+   192→            <h1 className="text-lg font-extrabold text-white">{t('admin.title')}</h1>
+   193→            <p className="text-[10px] text-[#94A3B8]">{t('admin.signedInAs', { name: user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email })}</p>
+   194→          </div>
+   195→        </div>
+   196→      </div>
+   197→
+   198→      {/* Tabs */}
+   199→      <div className="flex gap-1 p-1 bg-white/[0.04] border border-white/[0.06] rounded-2xl mb-5 overflow-x-auto">
+   200→        {TABS.map((tab) => (
+   201→          <button
+   202→            key={tab.id}
+   203→            onClick={() => setActiveTab(tab.id)}
+   204→            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+   205→              activeTab === tab.id
+   206→                ? "bg-[#7C3AED] text-white shadow-lg shadow-[#7C3AED]/25"
+   207→                : "text-[#94A3B8] hover:text-white"
+   208→            }`}
+   209→          >
+   210→            <tab.icon size={12} />
+   211→            {t(tab.labelKey)}
+   212→          </button>
+   213→        ))}
+   214→      </div>
+   215→
+   216→      {/* Tab content */}
+   217→      <AnimatePresence mode="wait">
+   218→        <motion.div
+   219→          key={activeTab}
+   220→          initial={{ opacity: 0, y: 8 }}
+   221→          animate={{ opacity: 1, y: 0 }}
+   222→          exit={{ opacity: 0, y: -8 }}
+   223→          transition={{ duration: 0.15 }}
+   224→        >
+   225→          {activeTab === "dashboard" && <DashboardTab onNavigate={setActiveTab} />}
+   226→          {activeTab === "members" && <MembersTab />}
+   227→          {activeTab === "churches" && <ChurchesTab />}
+   228→          {activeTab === "events" && <EventsTab />}
+   229→          {activeTab === "marketplace" && <MarketplaceTab />}
+   230→          {activeTab === "prayers" && <PrayersTab />}
+   231→          {activeTab === "apologetics" && <ApologeticsTab />}
+   232→          {activeTab === "competitions" && <CompetitionsTab />}
+   233→          {activeTab === "announcements" && <AnnouncementsTab />}
+   234→          {activeTab === "redemptions" && <RedemptionsTab />}
+   235→          {activeTab === "donations" && <DonationSettingsTab />}
+   236→          {activeTab === "contact-messages" && <ContactMessagesTab />}
+   237→          {activeTab === "partner-inquiries" && <PartnerInquiriesTab />}
+   238→          {activeTab === "contributors" && <ContributorApplicationsTab />}
+   239→          {activeTab === "analytics" && <AnalyticsTab />}
+   240→          {activeTab === "bible-comics" && <BibleComicsAdmin />}
+   241→        </motion.div>
+   242→      </AnimatePresence>
+   243→    </div>
+   244→  );
+   245→}
+   246→
+   247→// ─── DASHBOARD ────────────────────────────────────────────────────────────
+   248→
+   249→function DashboardTab({ onNavigate }: { onNavigate: (tab: AdminTab) => void }) {
+   250→  // Overview cards — each navigates to its admin section.
+   251→  // HONEST NOTE: Churches/Events/Products/Prayers/Questions/Competitions are
+   252→  // currently backed by mock data (crosscrafted-data.ts arrays), NOT Prisma
+   253→  // models. The counts below reflect the mock dataset. Approve/reject actions
+   254→  // in those tabs update local React state only — they do NOT persist to a
+   255→  // database. See the "Preview Mode" banner on each tab for details.
+   256→  // The ONLY fully DB-backed admin section is Bible Comics (ComicChapter /
+   257→  // ComicPanel Prisma models + 14 admin API routes).
+   258→  const stats: { label: string; value: number; pending: number; icon: typeof Shield; color: string; tab: AdminTab }[] = [
+   259→    { label: "Churches", value: CHURCHES.length, pending: CHURCHES.filter((c) => c.status === "pending").length, icon: Building2, color: "#A855F7", tab: "churches" },
+   260→    { label: "Events", value: EVENTS.length, pending: 0, icon: Calendar, color: "#EC4899", tab: "events" },
+   261→    { label: "Products", value: PRODUCTS.length, pending: 0, icon: Store, color: "#9786E3", tab: "marketplace" },
+   262→    { label: "Prayers", value: PRAYERS.length, pending: 0, icon: HeartHandshake, color: "#F59E0B", tab: "prayers" },
+   263→    { label: "Questions", value: APOLOGETICS_QUESTIONS.length, pending: APOLOGETICS_QUESTIONS.filter((q) => q.status === "open").length, icon: HelpCircle, color: "#38BDF8", tab: "apologetics" },
+   264→    { label: "Competitions", value: TRIVIA_COMPETITIONS.length, pending: TRIVIA_COMPETITIONS.filter((c) => c.status === "upcoming").length, icon: Trophy, color: "#22C55E", tab: "competitions" },
+   265→  ];
+   266→
+   267→  // Quick Actions — each wired to navigate to the correct admin section.
+   268→  // These are REAL navigation actions (not dead buttons).
+   269→  const quickActions: { label: string; color: string; tab: AdminTab; icon: typeof Shield }[] = [
+   270→    { label: "Review Churches", color: "#A855F7", tab: "churches", icon: Building2 },
+   271→    { label: "Moderate Prayers", color: "#F59E0B", tab: "prayers", icon: HeartHandshake },
+   272→    { label: "Answer Questions", color: "#38BDF8", tab: "apologetics", icon: HelpCircle },
+   273→    { label: "Host Competition", color: "#22C55E", tab: "competitions", icon: Trophy },
+   274→    { label: "Post Announcement", color: "#EC4899", tab: "announcements", icon: Megaphone },
+   275→    { label: "View Analytics", color: "#9786E3", tab: "analytics", icon: BarChart3 },
+   276→  ];
+   277→
+   278→  return (
+   279→    <div className="space-y-4">
+   280→      <div>
+   281→        <h2 className="text-base font-bold text-white mb-3">Overview</h2>
+   282→        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+   283→          {stats.map((s) => (
+   284→            <button
+   285→              key={s.label}
+   286→              onClick={() => onNavigate(s.tab)}
+   287→              className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4 text-left hover:border-white/[0.15] hover:bg-[#22202F] transition-all group"
+   288→            >
+   289→              <div className="flex items-center justify-between mb-2">
+   290→                <div
+   291→                  className="w-9 h-9 rounded-xl flex items-center justify-center"
+   292→                  style={{ backgroundColor: `${s.color}15`, border: `1px solid ${s.color}30` }}
+   293→                >
+   294→                  <s.icon size={16} style={{ color: s.color }} />
+   295→                </div>
+   296→                {s.pending > 0 && (
+   297→                  <span className="px-1.5 py-0.5 rounded-md bg-[#F59E0B]/15 text-[#F59E0B] text-[9px] font-bold uppercase tracking-wider">
+   298→                    {s.pending} pending
+   299→                  </span>
+   300→                )}
+   301→              </div>
+   302→              <p className="text-2xl font-extrabold text-white">{s.value}</p>
+   303→              <p className="text-[10px] text-[#94A3B8] uppercase tracking-wider mt-0.5">{s.label}</p>
+   304→              <p className="text-[9px] text-[#475569] mt-1 group-hover:text-[#64748B] transition-colors">
+   305→                Open {s.label} admin →
+   306→              </p>
+   307→            </button>
+   308→          ))}
+   309→        </div>
+   310→      </div>
+   311→
+   312→      <div>
+   313→        <h2 className="text-base font-bold text-white mb-3">Quick Actions</h2>
+   314→        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+   315→          {quickActions.map((a) => (
+   316→            <button
+   317→              key={a.label}
+   318→              onClick={() => onNavigate(a.tab)}
+   319→              className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:border-white/[0.15] hover:bg-white/[0.06] transition-all text-center group"
+   320→            >
+   321→              <div className="flex items-center justify-center mb-1">
+   322→                <div
+   323→                  className="w-7 h-7 rounded-lg flex items-center justify-center"
+   324→                  style={{ backgroundColor: `${a.color}15`, border: `1px solid ${a.color}30` }}
+   325→                >
+   326→                  <a.icon size={13} style={{ color: a.color }} />
+   327→                </div>
+   328→              </div>
+   329→              <p className="text-xs font-bold text-white">{a.label}</p>
+   330→            </button>
+   331→          ))}
+   332→        </div>
+   333→      </div>
+   334→
+   335→      {/* Honest architecture status — tells the admin which sections are DB-backed vs. preview */}
+   336→      <div className="bg-[#1C1929] border border-[#F59E0B]/20 rounded-2xl p-4">
+   337→        <div className="flex items-center gap-2 mb-2">
+   338→          <AlertCircle size={14} className="text-[#F59E0B]" />
+   339→          <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B]">Architecture Status</p>
+   340→        </div>
+   341→        <div className="space-y-1.5 text-[11px] text-[#A09DB1] leading-relaxed">
+   342→          <p>
+   343→            <span className="text-[#22C55E] font-bold">● DB-backed:</span> Bible Comics (ComicChapter/ComicPanel Prisma models + 14 admin API routes), Trivia Questions (800+ in DB), Gifts & Redemptions.
+   344→          </p>
+   345→          <p>
+   346→            <span className="text-[#F59E0B] font-bold">● Preview mode:</span> Churches, Events, Marketplace, Prayers, Apologetics, Competitions, Announcements, Analytics — these sections use mock data arrays. Approve/reject/edit actions update local state only and do NOT persist to a database yet. A future task needs Prisma models + admin APIs for each.
+   347→          </p>
+   348→        </div>
+   349→      </div>
+   350→
+   351→      <div className="bg-gradient-to-br from-[#1C1929] to-[#2B254E] border border-[#7C3AED]/20 rounded-2xl p-4">
+   352→        <div className="flex items-center gap-2 mb-2">
+   353→          <Megaphone size={14} className="text-[#A78BFA]" />
+   354→          <p className="text-[10px] font-bold uppercase tracking-wider text-[#A78BFA]">Admin Tip</p>
+   355→        </div>
+   356→        <p className="text-xs text-[#A09DB1] leading-relaxed">
+   357→          New church submissions need approval before they appear in the public directory.
+   358→          Check the Churches tab to review pending submissions. Same goes for marketplace products
+   359→          and prayer requests — keep the community safe and authentic.
+   360→        </p>
+   361→      </div>
+   362→    </div>
+   363→  );
+   364→}
+   365→
+   366→// ─── MEMBERS ────────────────────────────────────────────────────────────────
+   367→
+   368→const ALL_PERMISSIONS = [
+   369→  "CAN_WRITE_ARTICLES", "CAN_WRITE_BLOG", "CAN_WRITE_APOLOGETICS",
+   370→  "CAN_ANSWER_QUESTIONS", "CAN_WRITE_BIBLE_STUDIES", "CAN_WRITE_DEVOTIONALS",
+   371→  "CAN_UPLOAD_IMAGES", "CAN_EDIT_OWN_DRAFTS", "CAN_SUBMIT_FOR_REVIEW",
+   372→  "CAN_PUBLISH_CONTENT",
+   373→];
+   374→
+   375→const CONTRIBUTOR_TYPES = [
+   376→  "Pastor", "Elder", "Bible Teacher", "Apologist", "Evangelist",
+   377→  "Christian Author", "Theologian", "Ministry Leader", "Worship Leader",
+   378→  "Christian Counselor", "Other",
+   379→];
+   380→
+   381→const MODERATION_REASONS = [
+   382→  "Fake profile", "Spam", "Harassment", "Fraud/scam",
+   383→  "Inappropriate content", "Multiple accounts", "Other",
+   384→];
+   385→
+   386→function MembersTab() {
+   387→  const [members, setMembers] = useState<any[]>([]);
+   388→  const [stats, setStats] = useState<any>(null);
+   389→  const [loading, setLoading] = useState(true);
+   390→  const [search, setSearch] = useState("");
+   391→  const [filterState, setFilterState] = useState("");
+   392→  const [filterStatus, setFilterStatus] = useState("");
+   393→  const [filterVerified, setFilterVerified] = useState("");
+   394→  const [total, setTotal] = useState(0);
+   395→  const [page, setPage] = useState(0);
+   396→  const limit = 20;
+   397→  const [selectedMember, setSelectedMember] = useState<any>(null);
+   398→  const [memberDetail, setMemberDetail] = useState<any>(null);
+   399→  const [detailLoading, setDetailLoading] = useState(false);
+   400→  const [saving, setSaving] = useState(false);
+   401→
+   402→  const loadMembers = useCallback(async () => {
+   403→    setLoading(true);
+   404→    try {
+   405→      const params = new URLSearchParams({ limit: String(limit), offset: String(page * limit) });
+   406→      if (search) params.set("search", search);
+   407→      if (filterState) params.set("state", filterState);
+   408→      if (filterStatus) params.set("profileCompleted", filterStatus);
+   409→      const res = await fetch(`/api/admin/members?${params}`);
+   410→      const data = await res.json();
+   411→      setMembers(data.members || []);
+   412→      setTotal(data.total || 0);
+   413→    } catch { setMembers([]); }
+   414→    finally { setLoading(false); }
+   415→  }, [search, filterState, filterStatus, page]);
+   416→
+   417→  const loadStats = useCallback(async () => {
+   418→    try {
+   419→      const res = await fetch("/api/admin/members?stats=true");
+   420→      const data = await res.json();
+   421→      setStats(data);
+   422→    } catch {}
+   423→  }, []);
+   424→
+   425→  useEffect(() => { loadMembers(); loadStats(); }, [loadMembers, loadStats]);
+   426→
+   427→  const openMember = async (id: string) => {
+   428→    setSelectedMember(id);
+   429→    setDetailLoading(true);
+   430→    try {
+   431→      const res = await fetch(`/api/admin/members/${id}`);
+   432→      const data = await res.json();
+   433→      setMemberDetail(data.member);
+   434→    } catch {}
+   435→    finally { setDetailLoading(false); }
+   436→  };
+   437→
+   438→  const updateMember = async (updates: any) => {
+   439→    if (!memberDetail) return;
+   440→    setSaving(true);
+   441→    try {
+   442→      const res = await fetch(`/api/admin/members/${memberDetail.id}`, {
+   443→        method: "PATCH",
+   444→        headers: { "Content-Type": "application/json" },
+   445→        body: JSON.stringify(updates),
+   446→      });
+   447→      const data = await res.json();
+   448→      if (!res.ok) throw new Error(data.error);
+   449→      setMemberDetail(data.member);
+   450→      toast.success("Member updated");
+   451→      loadMembers();
+   452→    } catch (e: any) {
+   453→      toast.error(e.message || "Failed to update");
+   454→    } finally { setSaving(false); }
+   455→  };
+   456→
+   457→  const togglePermission = (perm: string) => {
+   458→    if (!memberDetail) return;
+   459→    const current: string[] = JSON.parse(memberDetail.permissions || "[]");
+   460→    const next = current.includes(perm) ? current.filter(p => p !== perm) : [...current, perm];
+   461→    updateMember({ permissions: next });
+   462→  };
+   463→
+   464→  return (
+   465→    <div className="space-y-4">
+   466→      <PreviewModeBanner section="Members" />
+   467→
+   468→      {/* Stats */}
+   469→      {stats && (
+   470→        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   471→          <div className="bg-[#1C1929] border border-white/[0.06] rounded-xl p-3">
+   472→            <p className="text-xl font-extrabold text-white">{stats.totalMembers}</p>
+   473→            <p className="text-[9px] text-[#94A3B8] uppercase">Total Members</p>
+   474→          </div>
+   475→          <div className="bg-[#1C1929] border border-white/[0.06] rounded-xl p-3">
+   476→            <p className="text-xl font-extrabold text-[#22C55E]">{stats.newToday}</p>
+   477→            <p className="text-[9px] text-[#94A3B8] uppercase">New Today</p>
+   478→          </div>
+   479→          <div className="bg-[#1C1929] border border-white/[0.06] rounded-xl p-3">
+   480→            <p className="text-xl font-extrabold text-[#38BDF8]">{stats.newThisWeek}</p>
+   481→            <p className="text-[9px] text-[#94A3B8] uppercase">This Week</p>
+   482→          </div>
+   483→          <div className="bg-[#1C1929] border border-white/[0.06] rounded-xl p-3">
+   484→            <p className="text-xl font-extrabold text-[#A855F7]">{stats.newThisMonth}</p>
+   485→            <p className="text-[9px] text-[#94A3B8] uppercase">This Month</p>
+   486→          </div>
+   487→        </div>
+   488→      )}
+   489→
+   490→      {/* Recent signups */}
+   491→      {stats?.recentSignups?.length > 0 && (
+   492→        <div>
+   493→          <p className="text-[10px] font-bold uppercase tracking-wider text-[#F39B9B] mb-2">Recent Signups</p>
+   494→          <div className="space-y-1.5">
+   495→            {stats.recentSignups.slice(0, 5).map((m: any) => (
+   496→              <button key={m.id} onClick={() => openMember(m.id)} className="w-full flex items-center gap-3 p-2 rounded-xl bg-[#1C1929] border border-white/[0.06] hover:border-white/[0.15] transition-all text-left">
+   497→                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#7C3AED] to-[#F39B9B] flex items-center justify-center text-white text-xs font-bold shrink-0 overflow-hidden">
+   498→                  {m.image ? <img src={m.image} alt="" className="w-full h-full object-cover" /> : (m.username || m.email || "U").charAt(0).toUpperCase()}
+   499→                </div>
+   500→                <div className="flex-1 min-w-0">
+   501→                  <p className="text-xs font-bold text-white truncate">{m.username || m.name || m.email}</p>
+   502→                  <p className="text-[9px] text-[#94A3B8]">{m.city ? `${m.city}, ` : ""}{m.state || ""} · {m.signupMethod || "email"}</p>
+   503→                </div>
+   504→                <span className="text-[8px] text-[#64748B] shrink-0">{new Date(m.createdAt).toLocaleDateString()}</span>
+   505→              </button>
+   506→            ))}
+   507→          </div>
+   508→        </div>
+   509→      )}
+   510→
+   511→      {/* Search + Filters */}
+   512→      <div className="flex flex-wrap gap-2">
+   513→        <input type="text" placeholder="Search username, email, name..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} className="neo-input text-xs flex-1 min-w-[150px]" />
+   514→        <select value={filterState} onChange={(e) => { setFilterState(e.target.value); setPage(0); }} className="neo-input text-xs w-32">
+   515→          <option value="">All States</option>
+   516→          {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+   517→        </select>
+   518→        <select value={filterStatus} onChange={(e) => { setFilterStatus(e.target.value); setPage(0); }} className="neo-input text-xs w-36">
+   519→          <option value="">All Profiles</option>
+   520→          <option value="true">Completed</option>
+   521→          <option value="false">Incomplete</option>
+   522→        </select>
+   523→      </div>
+   524→
+   525→      {/* Members list */}
+   526→      {loading ? (
+   527→        <div className="flex justify-center py-8"><Loader2 size={24} className="text-[#F39B9B] animate-spin" /></div>
+   528→      ) : members.length === 0 ? (
+   529→        <EmptyState text="No members found." />
+   530→      ) : (
+   531→        <div className="space-y-2">
+   532→          {members.map((m) => (
+   533→            <button key={m.id} onClick={() => openMember(m.id)} className="w-full flex items-center gap-3 p-3 rounded-xl bg-[#1C1929] border border-white/[0.06] hover:border-white/[0.15] transition-all text-left">
+   534→              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#7C3AED] to-[#F39B9B] flex items-center justify-center text-white text-sm font-bold shrink-0 overflow-hidden">
+   535→                {m.image ? <img src={m.image} alt="" className="w-full h-full object-cover" /> : (m.username || m.email || "U").charAt(0).toUpperCase()}
+   536→              </div>
+   537→              <div className="flex-1 min-w-0">
+   538→                <div className="flex items-center gap-1.5">
+   539→                  <p className="text-xs font-bold text-white truncate">{m.username || m.name || m.email}</p>
+   540→                  {m.verified && <BadgeCheck size={12} className="text-[#38BDF8] shrink-0" />}
+   541→                </div>
+   542→                <p className="text-[9px] text-[#94A3B8]">{m.email} · {m.city || "—"}, {m.state || "—"}</p>
+   543→              </div>
+   544→              <div className="text-right shrink-0">
+   545→                <span className={`text-[8px] font-bold uppercase ${m.profileCompleted ? "text-[#22C55E]" : "text-[#F59E0B]"}`}>
+   546→                  {m.profileCompleted ? "Complete" : "Incomplete"}
+   547→                </span>
+   548→                <p className="text-[8px] text-[#64748B]">{m.signupMethod || "email"}</p>
+   549→              </div>
+   550→            </button>
+   551→          ))}
+   552→          {/* Pagination */}
+   553→          <div className="flex items-center justify-between pt-2">
+   554→            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] text-xs font-bold disabled:opacity-30">Prev</button>
+   555→            <span className="text-[10px] text-[#64748B]">{page * limit + 1}-{Math.min((page + 1) * limit, total)} of {total}</span>
+   556→            <button onClick={() => setPage(p => p + 1)} disabled={(page + 1) * limit >= total} className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] text-xs font-bold disabled:opacity-30">Next</button>
+   557→          </div>
+   558→        </div>
+   559→      )}
+   560→
+   561→      {/* Member Detail Modal */}
+   562→      <AnimatePresence>
+   563→        {selectedMember && (
+   564→          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-end md:items-center justify-center z-[70] p-0 md:p-4" onClick={(e) => e.target === e.currentTarget && setSelectedMember(null)}>
+   565→            <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="bg-[#1C1929] border border-white/[0.08] rounded-t-[28px] md:rounded-[24px] w-full max-w-lg max-h-[90vh] overflow-y-auto">
+   566→              <div className="sticky top-0 bg-[#1C1929] z-10 flex justify-between items-center p-5 pb-3 border-b border-white/[0.04]">
+   567→                <h2 className="text-base font-bold text-white">Member Details</h2>
+   568→                <button onClick={() => setSelectedMember(null)} className="text-[#64748B] hover:text-white"><X size={18} /></button>
+   569→              </div>
+   570→
+   571→              {detailLoading ? (
+   572→                <div className="flex justify-center py-12"><Loader2 size={24} className="text-[#F39B9B] animate-spin" /></div>
+   573→              ) : memberDetail ? (
+   574→                <div className="p-5 space-y-4">
+   575→                  {/* Profile */}
+   576→                  <div className="flex items-center gap-3">
+   577→                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#7C3AED] to-[#F39B9B] flex items-center justify-center text-white text-xl font-bold shrink-0 overflow-hidden">
+   578→                      {memberDetail.image ? <img src={memberDetail.image} alt="" className="w-full h-full object-cover" /> : (memberDetail.username || memberDetail.email || "U").charAt(0).toUpperCase()}
+   579→                    </div>
+   580→                    <div className="flex-1 min-w-0">
+   581→                      <div className="flex items-center gap-1.5">
+   582→                        <p className="text-sm font-bold text-white">{memberDetail.username || memberDetail.name || "—"}</p>
+   583→                        {memberDetail.verified && <BadgeCheck size={14} className="text-[#38BDF8]" />}
+   584→                      </div>
+   585→                      <p className="text-[10px] text-[#94A3B8]">{memberDetail.email}</p>
+   586→                      <p className="text-[9px] text-[#64748B]">Joined {new Date(memberDetail.createdAt).toLocaleDateString()} · {memberDetail.signupMethod || "email"}</p>
+   587→                    </div>
+   588→                  </div>
+   589→
+   590→                  {/* Info grid */}
+   591→                  <div className="grid grid-cols-2 gap-2 text-[10px]">
+   592→                    <div><p className="text-[#64748B]">Mobile</p><p className="text-white">{memberDetail.mobileNumber || "Not provided"}</p></div>
+   593→                    <div><p className="text-[#64748B]">Gender</p><p className="text-white">{memberDetail.gender || "Not provided"}</p></div>
+   594→                    <div><p className="text-[#64748B]">State</p><p className="text-white">{memberDetail.state || "Not provided"}</p></div>
+   595→                    <div><p className="text-[#64748B]">City</p><p className="text-white">{memberDetail.city || "Not provided"}</p></div>
+   596→                    <div><p className="text-[#64748B]">Faith Status</p><p className="text-white">{memberDetail.faithStatus?.replace(/_/g, " ") || "Not provided"}</p></div>
+   597→                    <div><p className="text-[#64748B]">Faith Journey</p><p className="text-white">{memberDetail.faithJourney?.replace(/_/g, " ") || "Not provided"}</p></div>
+   598→                    <div><p className="text-[#64748B]">Account Status</p><p className="text-white capitalize">{memberDetail.accountStatus}</p></div>
+   599→                    <div><p className="text-[#64748B]">Profile</p><p className="text-white">{memberDetail.profileCompleted ? "Complete" : "Incomplete"}</p></div>
+   600→                  </div>
+   601→
+   602→                  {/* Verification */}
+   603→                  <div className="bg-[#1C1929] border border-white/[0.06] rounded-xl p-3">
+   604→                    <div className="flex items-center justify-between">
+   605→                      <div className="flex items-center gap-2">
+   606→                        <BadgeCheck size={16} className={memberDetail.verified ? "text-[#38BDF8]" : "text-[#475569]"} />
+   607→                        <div>
+   608→                          <p className="text-xs font-bold text-white">Koino Verified</p>
+   609→                          <p className="text-[9px] text-[#64748B]">{memberDetail.verified ? `Verified ${memberDetail.verifiedAt ? new Date(memberDetail.verifiedAt).toLocaleDateString() : ""}` : "Not verified"}</p>
+   610→                        </div>
+   611→                      </div>
+   612→                      <button
+   613→                        onClick={() => updateMember({ verified: !memberDetail.verified })}
+   614→                        disabled={saving}
+   615→                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${memberDetail.verified ? "bg-[#EF4444]/15 text-[#EF4444]" : "bg-[#38BDF8]/15 text-[#38BDF8]"}`}
+   616→                      >
+   617→                        {memberDetail.verified ? "Unverify" : "Verify"}
+   618→                      </button>
+   619→                    </div>
+   620→                  </div>
+   621→
+   622→                  {/* Contributor Type */}
+   623→                  <div>
+   624→                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1.5">Contributor Type</p>
+   625→                    <select
+   626→                      value={memberDetail.contributorType || ""}
+   627→                      onChange={(e) => updateMember({ contributorType: e.target.value || null })}
+   628→                      disabled={saving}
+   629→                      className="neo-input text-sm"
+   630→                    >
+   631→                      <option value="">None</option>
+   632→                      {CONTRIBUTOR_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+   633→                    </select>
+   634→                  </div>
+   635→
+   636→                  {/* Permissions */}
+   637→                  <div>
+   638→                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1.5">Content Permissions</p>
+   639→                    <div className="space-y-1.5">
+   640→                      {ALL_PERMISSIONS.map((perm) => {
+   641→                        const current: string[] = JSON.parse(memberDetail.permissions || "[]");
+   642→                        const enabled = current.includes(perm);
+   643→                        return (
+   644→                          <label key={perm} className="flex items-center gap-2 p-2 rounded-lg bg-white/[0.02] border border-white/[0.04] cursor-pointer hover:bg-white/[0.04] transition-all">
+   645→                            <input type="checkbox" checked={enabled} onChange={() => togglePermission(perm)} className="accent-[#7C3AED]" />
+   646→                            <span className={`text-[11px] font-bold ${enabled ? "text-white" : "text-[#64748B]"}`}>{perm.replace(/_/g, " ").toLowerCase().replace(/\w/g, c => c.toUpperCase())}</span>
+   647→                          </label>
+   648→                        );
+   649→                      })}
+   650→                    </div>
+   651→                  </div>
+   652→
+   653→                  {/* Account Status */}
+   654→                  <div>
+   655→                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1.5">Account Status</p>
+   656→                    <div className="flex gap-2">
+   657→                      {["active", "blocked", "suspended", "deactivated"].map((s) => (
+   658→                        <button
+   659→                          key={s}
+   660→                          onClick={() => updateMember({ accountStatus: s })}
+   661→                          disabled={saving || memberDetail.accountStatus === s}
+   662→                          className={`flex-1 py-2 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${memberDetail.accountStatus === s ? "bg-[#7C3AED] text-white" : "bg-white/[0.04] text-[#94A3B8] hover:text-white"}`}
+   663→                        >
+   664→                          {s}
+   665→                        </button>
+   666→                      ))}
+   667→                    </div>
+   668→                    {memberDetail.moderationReason && <p className="text-[9px] text-[#EF4444] mt-1">Reason: {memberDetail.moderationReason}</p>}
+   669→                  </div>
+   670→
+   671→                  <p className="text-[9px] text-[#475569] text-center">Mobile and DOB are private — visible only to authorized admins.</p>
+   672→                </div>
+   673→              ) : (
+   674→                <EmptyState text="Member not found." />
+   675→              )}
+   676→            </motion.div>
+   677→          </motion.div>
+   678→        )}
+   679→      </AnimatePresence>
+   680→    </div>
+   681→  );
+   682→}
+   683→
+   684→// ─── CHURCHES ─────────────────────────────────────────────────────────────
+   685→
+   686→function ChurchesTab() {
+   687→  const [churches, setChurches] = useState<Church[]>(CHURCHES);
+   688→
+   689→  const approve = (id: string) => {
+   690→    setChurches((cs) => cs.map((c) => (c.id === id ? { ...c, status: "verified" } : c)));
+   691→    toast.success("Church approved!", { description: "It's now visible in the public directory." });
+   692→  };
+   693→
+   694→  const remove = (id: string) => {
+   695→    setChurches((cs) => cs.filter((c) => c.id !== id));
+   696→    toast("Church removed");
+   697→  };
+   698→
+   699→  const pending = churches.filter((c) => c.status === "pending");
+   700→  const verified = churches.filter((c) => c.status === "verified");
+   701→
+   702→  return (
+   703→    <div className="space-y-4">
+   704→      <PreviewModeBanner section="Churches" />
+   705→      <AdminSectionHeader title="Pending Approval" count={pending.length} color="#F59E0B" />
+   706→      {pending.length === 0 ? (
+   707→        <EmptyState text="No pending churches. All caught up!" />
+   708→      ) : (
+   709→        <div className="space-y-2">
+   710→          {pending.map((c) => (
+   711→            <AdminCard
+   712→              key={c.id}
+   713→              title={c.name}
+   714→              subtitle={`${c.city}, ${c.state} · ${c.denomination}`}
+   715→              description={c.description}
+   716→              image={c.cover_image}
+   717→              actions={
+   718→                <>
+   719→                  <button
+   720→                    onClick={() => approve(c.id)}
+   721→                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#22C55E]/15 border border-[#22C55E]/30 text-[#22C55E] text-xs font-bold hover:bg-[#22C55E]/25 transition-all"
+   722→                  >
+   723→                    <Check size={12} /> Approve
+   724→                  </button>
+   725→                  <button
+   726→                    onClick={() => remove(c.id)}
+   727→                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] text-xs font-bold hover:bg-[#EF4444]/25 transition-all"
+   728→                  >
+   729→                    <Trash2 size={12} /> Reject
+   730→                  </button>
+   731→                </>
+   732→              }
+   733→            />
+   734→          ))}
+   735→        </div>
+   736→      )}
+   737→
+   738→      <AdminSectionHeader title="Verified Churches" count={verified.length} color="#22C55E" />
+   739→      <div className="space-y-2">
+   740→        {verified.map((c) => (
+   741→          <AdminCard
+   742→            key={c.id}
+   743→            title={c.name}
+   744→            subtitle={`${c.city}, ${c.state} · ${c.followers_count} followers`}
+   745→            description={c.description}
+   746→            image={c.cover_image}
+   747→            actions={
+   748→              <button
+   749→                onClick={() => remove(c.id)}
+   750→                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-[#EF4444] text-xs font-bold transition-all"
+   751→              >
+   752→                <Trash2 size={12} /> Remove
+   753→              </button>
+   754→            }
+   755→          />
+   756→        ))}
+   757→      </div>
+   758→    </div>
+   759→  );
+   760→}
+   761→
+   762→// ─── EVENTS ──────────────────────────────────────────────────────────────
+   763→
+   764→function EventsTab() {
+   765→  const [events, setEvents] = useState<EventItem[]>(EVENTS);
+   766→
+   767→  const remove = (id: string) => {
+   768→    setEvents((es) => es.filter((e) => e.id !== id));
+   769→    toast("Event removed");
+   770→  };
+   771→
+   772→  return (
+   773→    <div className="space-y-3">
+   774→      <PreviewModeBanner section="Events" />
+   775→      <AdminSectionHeader title="All Events" count={events.length} color="#EC4899" />
+   776→      {events.length === 0 ? (
+   777→        <EmptyState text="No events." />
+   778→      ) : (
+   779→        events.map((e) => (
+   780→          <AdminCard
+   781→            key={e.id}
+   782→            title={e.title}
+   783→            subtitle={`${new Date(e.date).toLocaleDateString()} · ${e.city} · ${e.church}`}
+   784→            description={e.description}
+   785→            image={e.cover_image}
+   786→            badge={e.is_free ? "FREE" : `₹${e.price}`}
+   787→            badgeColor={e.is_free ? "#22C55E" : "#F59E0B"}
+   788→            actions={
+   789→              <button
+   790→                onClick={() => remove(e.id)}
+   791→                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-[#EF4444] text-xs font-bold transition-all"
+   792→              >
+   793→                <Trash2 size={12} /> Remove
+   794→              </button>
+   795→            }
+   796→          />
+   797→        ))
+   798→      )}
+   799→    </div>
+   800→  );
+   801→}
+   802→
+   803→// ─── MARKETPLACE ─────────────────────────────────────────────────────────
+   804→
+   805→function MarketplaceTab() {
+   806→  const [products, setProducts] = useState<Product[]>(PRODUCTS);
+   807→
+   808→  const remove = (id: string) => {
+   809→    setProducts((ps) => ps.filter((p) => p.id !== id));
+   810→    toast("Product removed");
+   811→  };
+   812→
+   813→  const toggleStock = (id: string) => {
+   814→    setProducts((ps) =>
+   815→      ps.map((p) => (p.id === id ? { ...p, in_stock: !p.in_stock } : p))
+   816→    );
+   817→    toast("Stock updated");
+   818→  };
+   819→
+   820→  return (
+   821→    <div className="space-y-3">
+   822→      <PreviewModeBanner section="Marketplace" />
+   823→      <AdminSectionHeader title="All Products" count={products.length} color="#9786E3" />
+   824→      {products.map((p) => (
+   825→        <AdminCard
+   826→          key={p.id}
+   827→          title={p.name}
+   828→          subtitle={`₹${p.price} · ${p.vendor} · ${p.city}`}
+   829→          description={p.description}
+   830→          image={p.cover_image}
+   831→          badge={p.in_stock ? "In Stock" : "Out"}
+   832→          badgeColor={p.in_stock ? "#22C55E" : "#EF4444"}
+   833→          actions={
+   834→            <>
+   835→              <button
+   836→                onClick={() => toggleStock(p.id)}
+   837→                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold transition-all"
+   838→              >
+   839→                {p.in_stock ? "Mark Out" : "Mark In"}
+   840→              </button>
+   841→              <button
+   842→                onClick={() => remove(p.id)}
+   843→                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] text-xs font-bold hover:bg-[#EF4444]/25 transition-all"
+   844→              >
+   845→                <Trash2 size={12} /> Remove
+   846→              </button>
+   847→            </>
+   848→          }
+   849→        />
+   850→      ))}
+   851→    </div>
+   852→  );
+   853→}
+   854→
+   855→// ─── PRAYERS ─────────────────────────────────────────────────────────────
+   856→
+   857→function PrayersTab() {
+   858→  const [prayers, setPrayers] = useState<PrayerPost[]>(PRAYERS);
+   859→
+   860→  const remove = (id: string) => {
+   861→    setPrayers((ps) => ps.filter((p) => p.id !== id));
+   862→    toast("Prayer removed", { description: "Inappropriate content moderated." });
+   863→  };
+   864→
+   865→  return (
+   866→    <div className="space-y-3">
+   867→      <PreviewModeBanner section="Prayers" />
+   868→      <AdminSectionHeader title="Prayer Requests" count={prayers.length} color="#F59E0B" />
+   869→      <div className="bg-[#F59E0B]/8 border border-[#F59E0B]/20 rounded-xl p-3 mb-3">
+   870→        <p className="text-[11px] text-[#A09DB1] leading-relaxed">
+   871→          Review prayer requests for spam, abuse, or inappropriate content. Remove anything that
+   872→          violates community guidelines. Legitimate prayers stay up to encourage the community.
+   873→        </p>
+   874→      </div>
+   875→      {prayers.map((p) => (
+   876→        <AdminCard
+   877→          key={p.id}
+   878→          title={p.title}
+   879→          subtitle={`${p.author} · ${p.category} · ${p.pray_count} praying`}
+   880→          description={p.content}
+   881→          actions={
+   882→            <button
+   883→              onClick={() => remove(p.id)}
+   884→              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] text-xs font-bold hover:bg-[#EF4444]/25 transition-all"
+   885→            >
+   886→              <Trash2 size={12} /> Remove
+   887→            </button>
+   888→          }
+   889→        />
+   890→      ))}
+   891→    </div>
+   892→  );
+   893→}
+   894→
+   895→// ─── APOLOGETICS ─────────────────────────────────────────────────────────
+   896→
+   897→function ApologeticsTab() {
+   898→  const [questions, setQuestions] = useState<ApologeticsQuestion[]>(APOLOGETICS_QUESTIONS);
+   899→  const [answerText, setAnswerText] = useState<Record<string, string>>({});
+   900→
+   901→  const postAnswer = (questionId: string) => {
+   902→    const text = (answerText[questionId] || "").trim();
+   903→    if (!text) {
+   904→      toast.error("Please write your answer first");
+   905→      return;
+   906→    }
+   907→    setQuestions((qs) =>
+   908→      qs.map((q) =>
+   909→        q.id === questionId
+   910→          ? {
+   911→              ...q,
+   912→              status: "answered",
+   913→              answers: [
+   914→                ...q.answers,
+   915→                {
+   916→                  id: `admin_${Date.now()}`,
+   917→                  author: "Admin (Pastor)",
+   918→                  authorRole: "Pastor",
+   919→                  body: text,
+   920→                  date: new Date().toISOString().split("T")[0],
+   921→                  is_accepted: true,
+   922→                  likes: 0,
+   923→                },
+   924→              ],
+   925→            }
+   926→          : q
+   927→      )
+   928→    );
+   929→    setAnswerText((prev) => ({ ...prev, [questionId]: "" }));
+   930→    toast.success("Official answer posted!", { description: "Marked as accepted answer." });
+   931→  };
+   932→
+   933→  const closeQuestion = (id: string) => {
+   934→    setQuestions((qs) => qs.map((q) => (q.id === id ? { ...q, status: "closed" } : q)));
+   935→    toast("Question closed");
+   936→  };
+   937→
+   938→  const remove = (id: string) => {
+   939→    setQuestions((qs) => qs.filter((q) => q.id !== id));
+   940→    toast("Question removed");
+   941→  };
+   942→
+   943→  return (
+   944→    <div className="space-y-3">
+   945→      <PreviewModeBanner section="Apologetics" />
+   946→      <AdminSectionHeader title="Apologetics Q&A" count={questions.length} color="#38BDF8" />
+   947→      {questions.map((q) => (
+   948→        <div key={q.id} className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4">
+   949→          <div className="flex items-center gap-2 mb-2">
+   950→            <span
+   951→              className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+   952→                q.status === "answered"
+   953→                  ? "bg-[#22C55E]/15 text-[#22C55E]"
+   954→                  : q.status === "closed"
+   955→                  ? "bg-white/[0.06] text-[#94A3B8]"
+   956→                  : "bg-[#F59E0B]/15 text-[#F59E0B]"
+   957→              }`}
+   958→            >
+   959→              {q.status}
+   960→            </span>
+   961→            <span className="text-[10px] text-[#94A3B8]">{q.author}</span>
+   962→            <span className="text-[10px] text-[#64748B]">· {q.answers.length} answers</span>
+   963→          </div>
+   964→          <h3 className="text-sm font-bold text-white mb-1">{q.title}</h3>
+   965→          <p className="text-[12px] text-[#A09DB1] line-clamp-2 mb-3">{q.body}</p>
+   966→
+   967→          {/* Answer input */}
+   968→          <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-2 mb-2">
+   969→            <textarea
+   970→              value={answerText[q.id] || ""}
+   971→              onChange={(e) => setAnswerText((prev) => ({ ...prev, [q.id]: e.target.value }))}
+   972→              placeholder="Post an official answer as Pastor/Admin..."
+   973→              className="w-full bg-transparent text-xs text-white outline-none resize-none h-16 placeholder:text-[#64748B]"
+   974→            />
+   975→            <div className="flex gap-2 mt-1">
+   976→              <button
+   977→                onClick={() => postAnswer(q.id)}
+   978→                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#38BDF8]/15 border border-[#38BDF8]/30 text-[#38BDF8] text-xs font-bold hover:bg-[#38BDF8]/25 transition-all"
+   979→              >
+   980→                <Send size={11} /> Post Official Answer
+   981→              </button>
+   982→              {q.status !== "closed" && (
+   983→                <button
+   984→                  onClick={() => closeQuestion(q.id)}
+   985→                  className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold transition-all"
+   986→                >
+   987→                  Close
+   988→                </button>
+   989→              )}
+   990→              <button
+   991→                onClick={() => remove(q.id)}
+   992→                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] text-xs font-bold hover:bg-[#EF4444]/25 transition-all ml-auto"
+   993→              >
+   994→                <Trash2 size={11} /> Remove
+   995→              </button>
+   996→            </div>
+   997→          </div>
+   998→        </div>
+   999→      ))}
+  1000→    </div>
+  1001→  );
+  1002→}
+  1003→
+  1004→// ─── COMPETITIONS ────────────────────────────────────────────────────────
+  1005→
+  1006→function CompetitionsTab() {
+  1007→  const [competitions, setCompetitions] = useState(TRIVIA_COMPETITIONS);
+  1008→  const [showCreate, setShowCreate] = useState(false);
+  1009→  const [form, setForm] = useState({
+  1010→    title: "",
+  1011→    description: "",
+  1012→    prize: "",
+  1013→    duration: "7",
+  1014→    organizer: "Koino",
+  1015→  });
+  1016→
+  1017→  const create = (e: React.FormEvent) => {
+  1018→    e.preventDefault();
+  1019→    if (!form.title.trim() || !form.prize.trim()) {
+  1020→      toast.error("Please fill in title and prize");
+  1021→      return;
+  1022→    }
+  1023→    toast.success("Competition created!", {
+  1024→      description: "It's now visible in the Trivia > Compete tab.",
+  1025→    });
+  1026→    setForm({ title: "", description: "", prize: "", duration: "7", organizer: "Koino" });
+  1027→    setShowCreate(false);
+  1028→  };
+  1029→
+  1030→  return (
+  1031→    <div className="space-y-4">
+  1032→      <PreviewModeBanner section="Competitions" />
+  1033→      <div className="flex items-center justify-between">
+  1034→        <AdminSectionHeader title="Trivia Competitions" count={competitions.length} color="#22C55E" />
+  1035→        <button
+  1036→          onClick={() => setShowCreate(!showCreate)}
+  1037→          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-bold transition-all"
+  1038→        >
+  1039→          <Plus size={12} /> Host New
+  1040→        </button>
+  1041→      </div>
+  1042→
+  1043→      <AnimatePresence>
+  1044→        {showCreate && (
+  1045→          <motion.form
+  1046→            initial={{ opacity: 0, height: 0 }}
+  1047→            animate={{ opacity: 1, height: "auto" }}
+  1048→            exit={{ opacity: 0, height: 0 }}
+  1049→            onSubmit={create}
+  1050→            className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4 space-y-3 overflow-hidden"
+  1051→          >
+  1052→            <div>
+  1053→              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+  1054→                Competition Title *
+  1055→              </label>
+  1056→              <input
+  1057→                type="text"
+  1058→                value={form.title}
+  1059→                onChange={(e) => setForm({ ...form, title: e.target.value })}
+  1060→                className="neo-input text-sm"
+  1061→                placeholder="e.g. Christmas Bible Quiz 2025"
+  1062→                required
+  1063→              />
+  1064→            </div>
+  1065→            <div>
+  1066→              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+  1067→                Description
+  1068→              </label>
+  1069→              <textarea
+  1070→                value={form.description}
+  1071→                onChange={(e) => setForm({ ...form, description: e.target.value })}
+  1072→                className="neo-input text-sm h-20 resize-none"
+  1073→                placeholder="What's the competition about? Rules, who can join, etc."
+  1074→              />
+  1075→            </div>
+  1076→            <div className="grid grid-cols-2 gap-3">
+  1077→              <div>
+  1078→                <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+  1079→                  Prize *
+  1080→                </label>
+  1081→                <input
+  1082→                  type="text"
+  1083→                  value={form.prize}
+  1084→                  onChange={(e) => setForm({ ...form, prize: e.target.value })}
+  1085→                  className="neo-input text-sm"
+  1086→                  placeholder="₹10,000 + Trophy"
+  1087→                  required
+  1088→                />
+  1089→              </div>
+  1090→              <div>
+  1091→                <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+  1092→                  Duration (days)
+  1093→                </label>
+  1094→                <input
+  1095→                  type="number"
+  1096→                  value={form.duration}
+  1097→                  onChange={(e) => setForm({ ...form, duration: e.target.value })}
+  1098→                  className="neo-input text-sm"
+  1099→                  min="1"
+  1100→                />
+  1101→              </div>
+  1102→            </div>
+  1103→            <div className="flex gap-2 pt-1">
+  1104→              <button
+  1105→                type="button"
+  1106→                onClick={() => setShowCreate(false)}
+  1107→                className="flex-1 py-2.5 rounded-xl bg-white/[0.04] text-[#94A3B8] hover:text-white border border-white/[0.06] text-sm font-semibold"
+  1108→              >
+  1109→                Cancel
+  1110→              </button>
+  1111→              <button
+  1112→                type="submit"
+  1113→                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white"
+  1114→                style={{ background: "linear-gradient(135deg, #22C55E, #3B82F6)" }}
+  1115→              >
+  1116→                Create Competition
+  1117→              </button>
+  1118→            </div>
+  1119→          </motion.form>
+  1120→        )}
+  1121→      </AnimatePresence>
+  1122→
+  1123→      {/* Existing competitions */}
+  1124→      <div className="space-y-2">
+  1125→        {competitions.map((c) => (
+  1126→          <div key={c.id} className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4">
+  1127→            <div className="flex items-center gap-2 mb-2">
+  1128→              <span
+  1129→                className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
+  1130→                  c.status === "live"
+  1131→                    ? "bg-[#EF4444]/15 text-[#EF4444]"
+  1132→                    : c.status === "upcoming"
+  1133→                    ? "bg-[#38BDF8]/15 text-[#38BDF8]"
+  1134→                    : "bg-white/[0.06] text-[#94A3B8]"
+  1135→                }`}
+  1136→              >
+  1137→                {c.status}
+  1138→              </span>
+  1139→              <span className="text-[10px] text-[#94A3B8]">{c.participants.length} churches</span>
+  1140→            </div>
+  1141→            <h3 className="text-sm font-bold text-white mb-1">{c.title}</h3>
+  1142→            <p className="text-[11px] text-[#A09DB1] line-clamp-2 mb-2">{c.description}</p>
+  1143→            <div className="flex items-center gap-2">
+  1144→              <span className="flex items-center gap-1 text-[10px] text-[#F59E0B] font-bold">
+  1145→                <Gift size={10} /> {c.prize}
+  1146→              </span>
+  1147→            </div>
+  1148→          </div>
+  1149→        ))}
+  1150→      </div>
+  1151→
+  1152→      {/* Gifts management */}
+  1153→      <GiftsManagement />
+  1154→    </div>
+  1155→  );
+  1156→}
+  1157→
+  1158→// ─── GIFTS MANAGEMENT ────────────────────────────────────────────────────
+  1159→
+  1160→function GiftsManagement() {
+  1161→  const [gifts, setGifts] = useState<any[]>([]);
+  1162→  const [loading, setLoading] = useState(true);
+  1163→  const [showAddForm, setShowAddForm] = useState(false);
+  1164→  const [editingId, setEditingId] = useState<string | null>(null);
+  1165→  const [form, setForm] = useState<{
+  1166→    title: string;
+  1167→    description: string;
+  1168→    images: string[];
+  1169→    points_required: string;
+  1170→    tier: "bronze" | "silver" | "gold" | "platinum";
+  1171→    stock: string;
+  1172→    variations: { name: string; options: string[] }[];
+  1173→    attributes: { label: string; value: string }[];
+  1174→  }>({
+  1175→    title: "",
+  1176→    description: "",
+  1177→    images: [],
+  1178→    points_required: "",
+  1179→    tier: "bronze",
+  1180→    stock: "10",
+  1181→    variations: [],
+  1182→    attributes: [],
+  1183→  });
+  1184→
+  1185→  const fetchGifts = useCallback(async () => {
+  1186→    try {
+  1187→      const res = await fetch("/api/admin/gifts");
+  1188→      const data = await res.json();
+  1189→      const mapped = (data.gifts || []).map((g: any) => ({
+  1190→        id: g.id,
+  1191→        title: g.title,
+  1192→        description: g.description,
+  1193→        image_url: g.imageUrl,
+  1194→        points_required: g.pointsRequired,
+  1195→        tier: g.tier,
+  1196→        stock: g.stock,
+  1197→        isAdmin: g.isAdmin,
+  1198→        variations: Array.isArray(g.variations) ? g.variations : [],
+  1199→        attributes: Array.isArray(g.attributes) ? g.attributes : [],
+  1200→      }));
+  1201→      setGifts(mapped);
+  1202→    } catch {
+  1203→      toast.error("Failed to load gifts");
+  1204→    } finally {
+  1205→      setLoading(false);
+  1206→    }
+  1207→  }, []);
+  1208→
+  1209→  useEffect(() => {
+  1210→    fetchGifts();
+  1211→  }, [fetchGifts]);
+  1212→
+  1213→  const resetForm = () => {
+  1214→    setForm({
+  1215→      title: "",
+  1216→      description: "",
+  1217→      images: [],
+  1218→      points_required: "",
+  1219→      tier: "bronze",
+  1220→      stock: "10",
+  1221→      variations: [],
+  1222→      attributes: [],
+  1223→    });
+  1224→    setEditingId(null);
+  1225→    setShowAddForm(false);
+  1226→  };
+  1227→
+  1228→  const handleSubmit = async (e: React.FormEvent) => {
+  1229→    e.preventDefault();
+  1230→    if (!form.title.trim() || !form.points_required || form.images.length === 0) {
+  1231→      toast.error("Please fill in title, points, and add at least 1 image");
+  1232→      return;
+  1233→    }
+  1234→    if (form.variations.some((v) => v.name.trim() && v.options.length === 0)) {
+  1235→      toast.error("Add at least 1 option for each variation name");
+  1236→      return;
+  1237→    }
+  1238→
+  1239→    const giftData = {
+  1240→      title: form.title.trim(),
+  1241→      description: form.description.trim(),
+  1242→      imageUrl: form.images[0],
+  1243→      pointsRequired: Number(form.points_required),
+  1244→      tier: form.tier,
+  1245→      stock: Number(form.stock) || 0,
+  1246→      variations: form.variations.filter((v) => v.name.trim() && v.options.length > 0),
+  1247→      attributes: form.attributes.filter((a) => a.label.trim() && a.value.trim()),
+  1248→    };
+  1249→
+  1250→    try {
+  1251→      if (editingId) {
+  1252→        const res = await fetch("/api/admin/gifts", {
+  1253→          method: "PUT",
+  1254→          headers: { "Content-Type": "application/json" },
+  1255→          body: JSON.stringify({ giftId: editingId, ...giftData }),
+  1256→        });
+  1257→        if (!res.ok) throw new Error("Failed to update");
+  1258→        toast.success("Gift updated!", { description: "Changes are live in Trivia > Rewards." });
+  1259→      } else {
+  1260→        const res = await fetch("/api/admin/gifts", {
+  1261→          method: "POST",
+  1262→          headers: { "Content-Type": "application/json" },
+  1263→          body: JSON.stringify(giftData),
+  1264→        });
+  1265→        if (!res.ok) throw new Error("Failed to add");
+  1266→        toast.success("Gift added!", {
+  1267→          description: "It's now visible in Trivia > Rewards for players to redeem.",
+  1268→        });
+  1269→      }
+  1270→      fetchGifts();
+  1271→      resetForm();
+  1272→    } catch {
+  1273→      toast.error("Failed to save gift");
+  1274→    }
+  1275→  };
+  1276→
+  1277→  const handleEdit = (gift: any) => {
+  1278→    if (!gift.isAdmin) {
+  1279→      toast("Default gifts can't be edited", {
+  1280→        description: "Only gifts you've added from the admin panel can be modified.",
+  1281→      });
+  1282→      return;
+  1283→    }
+  1284→    setEditingId(gift.id);
+  1285→    setForm({
+  1286→      title: gift.title,
+  1287→      description: gift.description,
+  1288→      images: [gift.image_url],
+  1289→      points_required: String(gift.points_required),
+  1290→      tier: gift.tier,
+  1291→      stock: String(gift.stock),
+  1292→      variations: Array.isArray(gift.variations) && gift.variations.length > 0
+  1293→        ? gift.variations.map((v: any) => ({
+  1294→            name: v.name || "",
+  1295→            options: Array.isArray(v.options) ? v.options : [],
+  1296→          }))
+  1297→        : [],
+  1298→      attributes: Array.isArray(gift.attributes) && gift.attributes.length > 0
+  1299→        ? gift.attributes.map((a: any) => ({
+  1300→            label: a.label || "",
+  1301→            value: a.value || "",
+  1302→          }))
+  1303→        : [],
+  1304→    });
+  1305→    setShowAddForm(true);
+  1306→    setTimeout(() => {
+  1307→      document.getElementById("gift-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  1308→    }, 100);
+  1309→  };
+  1310→
+  1311→  const handleRemove = async (id: string) => {
+  1312→    const gift = gifts.find((g) => g.id === id);
+  1313→    if (!gift?.isAdmin) {
+  1314→      toast("Default gifts can't be removed", {
+  1315→        description: "Only gifts you've added from the admin panel can be deleted.",
+  1316→      });
+  1317→      return;
+  1318→    }
+  1319→    try {
+  1320→      const res = await fetch("/api/admin/gifts", {
+  1321→        method: "DELETE",
+  1322→        headers: { "Content-Type": "application/json" },
+  1323→        body: JSON.stringify({ giftId: id }),
+  1324→      });
+  1325→      if (!res.ok) throw new Error("Failed to delete");
+  1326→      toast("Gift removed", { description: "Players can no longer redeem this gift." });
+  1327→      fetchGifts();
+  1328→    } catch {
+  1329→      toast.error("Failed to remove gift");
+  1330→    }
+  1331→  };
+  1332→
+  1333→  const handleStockChange = async (id: string, delta: number) => {
+  1334→    const gift = gifts.find((g) => g.id === id);
+  1335→    if (!gift?.isAdmin) return;
+  1336→    const newStock = Math.max(0, gift.stock + delta);
+  1337→    try {
+  1338→      await fetch("/api/admin/gifts", {
+  1339→        method: "PUT",
+  1340→        headers: { "Content-Type": "application/json" },
+  1341→        body: JSON.stringify({ giftId: id, stock: newStock }),
+  1342→      });
+  1343→      fetchGifts();
+  1344→    } catch {
+  1345→      toast.error("Failed to update stock");
+  1346→    }
+  1347→  };
+  1348→
+  1349→  const tierColors: Record<string, string> = {
+  1350→    bronze: "#CD7F32",
+  1351→    silver: "#C0C0C0",
+  1352→    gold: "#FFD700",
+  1353→    platinum: "#E5E4E2",
+  1354→  };
+  1355→
+  1356→  const adminCount = gifts.filter((g) => g.isAdmin).length;
+  1357→
+  1358→  if (loading) {
+  1359→    return (
+  1360→      <div className="flex items-center justify-center py-8">
+  1361→        <div className="w-8 h-8 rounded-full border-2 border-transparent border-t-[#F59E0B] animate-spin" />
+  1362→      </div>
+  1363→    );
+  1364→  }
+  1365→
+  1366→  return (
+  1367→    <div className="space-y-3">
+  1368→      <div className="flex items-center justify-between">
+  1369→        <AdminSectionHeader title="Reward Gifts" count={gifts.length} color="#F59E0B" />
+  1370→        <button
+  1371→          onClick={() => {
+  1372→            if (showAddForm) {
+  1373→              resetForm();
+  1374→            } else {
+  1375→              setShowAddForm(true);
+  1376→            }
+  1377→          }}
+  1378→          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#F59E0B] hover:bg-[#E59E0B] text-slate-950 text-xs font-bold transition-all"
+  1379→        >
+  1380→          {showAddForm ? <X size={12} /> : <Plus size={12} />}
+  1381→          {showAddForm ? "Cancel" : "Add Gift"}
+  1382→        </button>
+  1383→      </div>
+  1384→
+  1385→      {adminCount > 0 && (
+  1386→        <p className="text-[10px] text-[#64748B] px-1">
+  1387→          {adminCount} admin-added · {gifts.length - adminCount} default gifts
+  1388→        </p>
+  1389→      )}
+  1390→
+  1391→      <AnimatePresence>
+  1392→        {showAddForm && (
+  1393→          <motion.form
+  1394→            id="gift-form"
+  1395→            initial={{ opacity: 0, height: 0 }}
+  1396→            animate={{ opacity: 1, height: "auto" }}
+  1397→            exit={{ opacity: 0, height: 0 }}
+  1398→            onSubmit={handleSubmit}
+  1399→            className="bg-[#1C1929] border border-[#F59E0B]/20 rounded-2xl p-4 space-y-3 overflow-hidden"
+  1400→          >
+  1401→            <div className="flex items-center gap-2 mb-2">
+  1402→              <Gift size={14} className="text-[#F59E0B]" />
+  1403→              <p className="text-[11px] font-bold uppercase tracking-wider text-[#F59E0B]">
+  1404→                {editingId ? "Edit Gift" : "Add New Reward Gift"}
+  1405→              </p>
+  1406→            </div>
+  1407→
+  1408→            <div>
+  1409→              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+  1410→                Gift Title *
+  1411→              </label>
+  1412→              <input
+  1413→                type="text"
+  1414→                value={form.title}
+  1415→                onChange={(e) => setForm({ ...form, title: e.target.value })}
+  1416→                className="neo-input text-sm"
+  1417→                placeholder="e.g. Koino Hoodie"
+  1418→                required
+  1419→              />
+  1420→            </div>
+  1421→
+  1422→            <div>
+  1423→              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+  1424→                Description
+  1425→              </label>
+  1426→              <textarea
+  1427→                value={form.description}
+  1428→                onChange={(e) => setForm({ ...form, description: e.target.value })}
+  1429→                className="neo-input text-sm h-16 resize-none"
+  1430→                placeholder="What's the gift? Sizes, colors, what's included..."
+  1431→              />
+  1432→            </div>
+  1433→
+  1434→            <ImagePicker
+  1435→              images={form.images}
+  1436→              onChange={(images) => setForm({ ...form, images })}
+  1437→              max={3}
+  1438→              label="Gift Photos *"
+  1439→            />
+  1440→
+  1441→            {/* Variations (sizes, colors, etc.) */}
+  1442→            <div className="space-y-2">
+  1443→              <div className="flex items-center justify-between">
+  1444→                <label className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8]">
+  1445→                  <Tag size={11} /> Variations
+  1446→                  <span className="text-[9px] text-[#475569] normal-case tracking-normal">(sizes, colors...)</span>
+  1447→                </label>
+  1448→                <button
+  1449→                  type="button"
+  1450→                  onClick={() =>
+  1451→                    setForm({
+  1452→                      ...form,
+  1453→                      variations: [...form.variations, { name: "", options: [] }],
+  1454→                    })
+  1455→                  }
+  1456→                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#F59E0B]/15 text-[#F59E0B] text-[10px] font-bold hover:bg-[#F59E0B]/25 transition-all"
+  1457→                >
+  1458→                  <Plus size={10} /> Add
+  1459→                </button>
+  1460→              </div>
+  1461→
+  1462→              {form.variations.length === 0 && (
+  1463→                <p className="text-[10px] text-[#475569] px-1 py-1.5 italic">
+  1464→                  No variations. Add a "Size" or "Color" so users can pick when claiming.
+  1465→                </p>
+  1466→              )}
+  1467→
+  1468→              {form.variations.map((v, vIdx) => (
+  1469→                <div
+  1470→                  key={vIdx}
+  1471→                  className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-2.5 space-y-2"
+  1472→                >
+  1473→                  <div className="flex items-center gap-2">
+  1474→                    <input
+  1475→                      type="text"
+  1476→                      value={v.name}
+  1477→                      onChange={(e) => {
+  1478→                        const next = [...form.variations];
+  1479→                        next[vIdx] = { ...next[vIdx], name: e.target.value };
+  1480→                        setForm({ ...form, variations: next });
+  1481→                      }}
+  1482→                      className="neo-input text-xs flex-1"
+  1483→                      placeholder="Variation name (e.g. Size, Color)"
+  1484→                    />
+  1485→                    <button
+  1486→                      type="button"
+  1487→                      onClick={() =>
+  1488→                        setForm({
+  1489→                          ...form,
+  1490→                          variations: form.variations.filter((_, i) => i !== vIdx),
+  1491→                        })
+  1492→                      }
+  1493→                      className="w-7 h-7 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] flex items-center justify-center hover:bg-[#EF4444]/25"
+  1494→                    >
+  1495→                      <Trash2 size={11} />
+  1496→                    </button>
+  1497→                  </div>
+  1498→                  <div className="flex flex-wrap gap-1.5 items-center">
+  1499→                    {v.options.map((opt, oIdx) => (
+  1500→                      <span
+  1501→                        key={oIdx}
+  1502→                        className="flex items-center gap-1 pl-2 pr-1 py-1 rounded-md bg-[#F59E0B]/10 border border-[#F59E0B]/20 text-[10px] font-semibold text-[#F59E0B]"
+  1503→                      >
+  1504→                        {opt}
+  1505→                        <button
+  1506→                          type="button"
+  1507→                          onClick={() => {
+  1508→                            const next = [...form.variations];
+  1509→                            next[vIdx].options = next[vIdx].options.filter((_, i) => i !== oIdx);
+  1510→                            setForm({ ...form, variations: next });
+  1511→                          }}
+  1512→                          className="w-4 h-4 rounded-full bg-[#F59E0B]/20 hover:bg-[#F59E0B]/40 flex items-center justify-center"
+  1513→                        >
+  1514→                          <X size={9} />
+  1515→                        </button>
+  1516→                      </span>
+  1517→                    ))}
+  1518→                    <input
+  1519→                      type="text"
+  1520→                      placeholder="Add option + Enter"
+  1521→                      onKeyDown={(e) => {
+  1522→                        if (e.key === "Enter") {
+  1523→                          e.preventDefault();
+  1524→                          const target = e.target as HTMLInputElement;
+  1525→                          const val = target.value.trim();
+  1526→                          if (!val) return;
+  1527→                          const next = [...form.variations];
+  1528→                          next[vIdx] = {
+  1529→                            ...next[vIdx],
+  1530→                            options: [...next[vIdx].options, val],
+  1531→                          };
+  1532→                          setForm({ ...form, variations: next });
+  1533→                          target.value = "";
+  1534→                        }
+  1535→                      }}
+  1536→                      className="bg-transparent border border-dashed border-white/[0.12] rounded-md px-2 py-1 text-[10px] text-white outline-none focus:border-[#F59E0B]/50 flex-1 min-w-[100px]"
+  1537→                    />
+  1538→                  </div>
+  1539→                </div>
+  1540→              ))}
+  1541→            </div>
+  1542→
+  1543→            {/* Attributes (material, fit, weight, etc.) */}
+  1544→            <div className="space-y-2">
+  1545→              <div className="flex items-center justify-between">
+  1546→                <label className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8]">
+  1547→                  <Palette size={11} /> Attributes
+  1548→                  <span className="text-[9px] text-[#475569] normal-case tracking-normal">(material, weight...)</span>
+  1549→                </label>
+  1550→                <button
+  1551→                  type="button"
+  1552→                  onClick={() =>
+  1553→                    setForm({
+  1554→                      ...form,
+  1555→                      attributes: [...form.attributes, { label: "", value: "" }],
+  1556→                    })
+  1557→                  }
+  1558→                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#9786E3]/15 text-[#9786E3] text-[10px] font-bold hover:bg-[#9786E3]/25 transition-all"
+  1559→                >
+  1560→                  <Plus size={10} /> Add
+  1561→                </button>
+  1562→              </div>
+  1563→
+  1564→              {form.attributes.length === 0 && (
+  1565→                <p className="text-[10px] text-[#475569] px-1 py-1.5 italic">
+  1566→                  No attributes. Add specs like "Material: 100% Cotton".
+  1567→                </p>
+  1568→              )}
+  1569→
+  1570→              {form.attributes.map((a, aIdx) => (
+  1571→                <div key={aIdx} className="flex items-center gap-2">
+  1572→                  <input
+  1573→                    type="text"
+  1574→                    value={a.label}
+  1575→                    onChange={(e) => {
+  1576→                      const next = [...form.attributes];
+  1577→                      next[aIdx] = { ...next[aIdx], label: e.target.value };
+  1578→                      setForm({ ...form, attributes: next });
+  1579→                    }}
+  1580→                    className="neo-input text-xs w-[40%]"
+  1581→                    placeholder="Label (e.g. Material)"
+  1582→                  />
+  1583→                  <input
+  1584→                    type="text"
+  1585→                    value={a.value}
+  1586→                    onChange={(e) => {
+  1587→                      const next = [...form.attributes];
+  1588→                      next[aIdx] = { ...next[aIdx], value: e.target.value };
+  1589→                      setForm({ ...form, attributes: next });
+  1590→                    }}
+  1591→                    className="neo-input text-xs flex-1"
+  1592→                    placeholder="Value (e.g. 100% Cotton)"
+  1593→                  />
+  1594→                  <button
+  1595→                    type="button"
+  1596→                    onClick={() =>
+  1597→                      setForm({
+  1598→                        ...form,
+  1599→                        attributes: form.attributes.filter((_, i) => i !== aIdx),
+  1600→                      })
+  1601→                    }
+  1602→                    className="w-7 h-7 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] flex items-center justify-center hover:bg-[#EF4444]/25 shrink-0"
+  1603→                  >
+  1604→                    <Trash2 size={11} />
+  1605→                  </button>
+  1606→                </div>
+  1607→              ))}
+  1608→            </div>
+  1609→
+  1610→            <div className="grid grid-cols-3 gap-3">
+  1611→              <div>
+  1612→                <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+  1613→                  Points Required *
+  1614→                </label>
+  1615→                <input
+  1616→                  type="number"
+  1617→                  value={form.points_required}
+  1618→                  onChange={(e) => setForm({ ...form, points_required: e.target.value })}
+  1619→                  className="neo-input text-sm"
+  1620→                  placeholder="500"
+  1621→                  min="1"
+  1622→                  required
+  1623→                />
+  1624→              </div>
+  1625→              <div>
+  1626→                <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+  1627→                  Tier
+  1628→                </label>
+  1629→                <select
+  1630→                  value={form.tier}
+  1631→                  onChange={(e) => setForm({ ...form, tier: e.target.value as any })}
+  1632→                  className="neo-input text-sm"
+  1633→                >
+  1634→                  <option value="bronze">Bronze</option>
+  1635→                  <option value="silver">Silver</option>
+  1636→                  <option value="gold">Gold</option>
+  1637→                  <option value="platinum">Platinum</option>
+  1638→                </select>
+  1639→              </div>
+  1640→              <div>
+  1641→                <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+  1642→                  Stock
+  1643→                </label>
+  1644→                <input
+  1645→                  type="number"
+  1646→                  value={form.stock}
+  1647→                  onChange={(e) => setForm({ ...form, stock: e.target.value })}
+  1648→                  className="neo-input text-sm"
+  1649→                  placeholder="10"
+  1650→                  min="0"
+  1651→                />
+  1652→              </div>
+  1653→            </div>
+  1654→
+  1655→            <div className="flex items-center gap-2 p-2 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+  1656→              <span
+  1657→                className="px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider"
+  1658→                style={{ backgroundColor: `${tierColors[form.tier]}25`, color: tierColors[form.tier] }}
+  1659→              >
+  1660→                {form.tier}
+  1661→              </span>
+  1662→              <span className="text-[10px] text-[#94A3B8]">
+  1663→                {form.points_required || "0"} pts to unlock · {form.stock || "0"} in stock
+  1664→              </span>
+  1665→            </div>
+  1666→
+  1667→            <div className="flex gap-2 pt-1">
+  1668→              <button
+  1669→                type="button"
+  1670→                onClick={resetForm}
+  1671→                className="flex-1 py-2.5 rounded-xl bg-white/[0.04] text-[#94A3B8] hover:text-white border border-white/[0.06] text-sm font-semibold"
+  1672→              >
+  1673→                Cancel
+  1674→              </button>
+  1675→              <button
+  1676→                type="submit"
+  1677→                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-slate-950 bg-[#F59E0B] hover:bg-[#E59E0B] transition-all"
+  1678→              >
+  1679→                {editingId ? "Update Gift" : "Add Gift"}
+  1680→              </button>
+  1681→            </div>
+  1682→          </motion.form>
+  1683→        )}
+  1684→      </AnimatePresence>
+  1685→
+  1686→      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+  1687→        {gifts.map((g) => {
+  1688→          const admin = g.isAdmin;
+  1689→          return (
+  1690→            <div
+  1691→              key={g.id}
+  1692→              className={`bg-[#1C1929] border rounded-xl p-3 ${
+  1693→                admin ? "border-[#F59E0B]/30" : "border-white/[0.06]"
+  1694→              }`}
+  1695→            >
+  1696→              <div className="relative w-full h-24 rounded-lg overflow-hidden mb-2">
+  1697→                <img src={g.image_url} alt={g.title} className="w-full h-full object-cover" />
+  1698→                <span
+  1699→                  className="absolute top-1 left-1 px-1.5 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider"
+  1700→                  style={{ backgroundColor: `${tierColors[g.tier]}E6`, color: "#0A0A0A" }}
+  1701→                >
+  1702→                  {g.tier}
+  1703→                </span>
+  1704→                {admin && (
+  1705→                  <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded-md bg-[#F59E0B] text-slate-950 text-[8px] font-bold uppercase tracking-wider">
+  1706→                    Admin
+  1707→                  </span>
+  1708→                )}
+  1709→              </div>
+  1710→              <p className="text-xs font-bold text-white line-clamp-1">{g.title}</p>
+  1711→              <p className="text-[9px] text-[#A09DB1] line-clamp-2 mt-0.5 mb-1">{g.description}</p>
+  1712→
+  1713→              {((g.variations?.length || 0) > 0 || (g.attributes?.length || 0) > 0) && (
+  1714→                <div className="flex flex-wrap gap-0.5 mb-1.5">
+  1715→                  {g.variations?.map((v: any, vIdx: number) => (
+  1716→                    <span
+  1717→                      key={`v-${vIdx}`}
+  1718→                      className="px-1 py-0.5 rounded-md bg-[#F59E0B]/10 text-[#F59E0B] text-[8px] font-bold uppercase tracking-wide"
+  1719→                      title={`${v.name}: ${v.options?.length || 0} options`}
+  1720→                    >
+  1721→                      {v.name}: {(v.options || []).length}
+  1722→                    </span>
+  1723→                  ))}
+  1724→                  {g.attributes?.map((a: any, aIdx: number) => (
+  1725→                    <span
+  1726→                      key={`a-${aIdx}`}
+  1727→                      className="px-1 py-0.5 rounded-md bg-[#9786E3]/10 text-[#9786E3] text-[8px] font-bold uppercase tracking-wide"
+  1728→                      title={`${a.label}: ${a.value}`}
+  1729→                    >
+  1730→                      {a.label}
+  1731→                    </span>
+  1732→                  ))}
+  1733→                </div>
+  1734→              )}
+  1735→
+  1736→              <div className="flex items-center justify-between mb-2">
+  1737→                <span className="text-[11px] font-bold text-[#F59E0B]">{g.points_required.toLocaleString()} pts</span>
+  1738→                <div className="flex items-center gap-1">
+  1739→                  <button
+  1740→                    onClick={() => handleStockChange(g.id, -1)}
+  1741→                    disabled={!admin}
+  1742→                    className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold transition-all ${
+  1743→                      admin ? "bg-white/[0.06] text-white hover:bg-white/[0.12]" : "bg-white/[0.02] text-[#475569] cursor-not-allowed"
+  1744→                    }`}
+  1745→                  >
+  1746→                    −
+  1747→                  </button>
+  1748→                  <span className="text-[10px] font-bold text-white tabular-nums w-6 text-center">{g.stock}</span>
+  1749→                  <button
+  1750→                    onClick={() => handleStockChange(g.id, 1)}
+  1751→                    disabled={!admin}
+  1752→                    className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold transition-all ${
+  1753→                      admin ? "bg-white/[0.06] text-white hover:bg-white/[0.12]" : "bg-white/[0.02] text-[#475569] cursor-not-allowed"
+  1754→                    }`}
+  1755→                  >
+  1756→                    +
+  1757→                  </button>
+  1758→                </div>
+  1759→              </div>
+  1760→              <div className="flex gap-1">
+  1761→                <button
+  1762→                  onClick={() => handleEdit(g)}
+  1763→                  disabled={!admin}
+  1764→                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+  1765→                    admin
+  1766→                      ? "bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white"
+  1767→                      : "bg-white/[0.02] text-[#475569] cursor-not-allowed"
+  1768→                  }`}
+  1769→                >
+  1770→                  Edit
+  1771→                </button>
+  1772→                <button
+  1773→                  onClick={() => handleRemove(g.id)}
+  1774→                  disabled={!admin}
+  1775→                  className={`flex items-center justify-center px-2 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+  1776→                    admin
+  1777→                      ? "bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] hover:bg-[#EF4444]/25"
+  1778→                      : "bg-white/[0.02] text-[#475569] cursor-not-allowed"
+  1779→                  }`}
+  1780→                >
+  1781→                  <Trash2 size={11} />
+  1782→                </button>
+  1783→              </div>
+  1784→            </div>
+  1785→          );
+  1786→        })}
+  1787→      </div>
+  1788→
+  1789→      <div className="bg-[#F59E0B]/8 border border-[#F59E0B]/20 rounded-xl p-3">
+  1790→        <p className="text-[10px] text-[#A09DB1] leading-relaxed">
+  1791→          <span className="font-bold text-[#F59E0B]">Tip:</span> Gifts you add appear instantly in the
+  1792→          Trivia → Rewards tab for players to redeem. Default gifts (without the "Admin" badge) are
+  1793→          seeded examples and can't be edited or removed — only gifts you add here can be modified.
+  1794→          When a player redeems a gift, contact them on WhatsApp to arrange delivery.
+  1795→        </p>
+  1796→      </div>
+  1797→    </div>
+  1798→  );
+  1799→}
+  1800→
+  1801→// ─── ANNOUNCEMENTS ───────────────────────────────────────────────────────
+  1802→
+  1803→function AnnouncementsTab() {
+  1804→  const [announcements, setAnnouncements] = useState<{ id: string; text: string; type: string; date: string }[]>([
+  1805→    { id: "a1", text: "Welcome to Koino! Explore churches, play trivia, and grow in faith.", type: "info", date: "2025-01-20" },
+  1806→  ]);
+  1807→  const [text, setText] = useState("");
+  1808→  const [type, setType] = useState("info");
+  1809→
+  1810→  const post = (e: React.FormEvent) => {
+  1811→    e.preventDefault();
+  1812→    if (!text.trim()) {
+  1813→      toast.error("Please enter announcement text");
+  1814→      return;
+  1815→    }
+  1816→    setAnnouncements((prev) => [
+  1817→      { id: `a${Date.now()}`, text: text.trim(), type, date: new Date().toISOString().split("T")[0] },
+  1818→      ...prev,
+  1819→    ]);
+  1820→    setText("");
+  1821→    toast.success("Announcement posted!", { description: "It will show as a banner across the app." });
+  1822→  };
+  1823→
+  1824→  const remove = (id: string) => {
+  1825→    setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+  1826→    toast("Announcement removed");
+  1827→  };
+  1828→
+  1829→  const typeColors: Record<string, string> = {
+  1830→    info: "#38BDF8",
+  1831→    success: "#22C55E",
+  1832→    warning: "#F59E0B",
+  1833→    urgent: "#EF4444",
+  1834→  };
+  1835→
+  1836→  return (
+  1837→    <div className="space-y-4">
+  1838→      <PreviewModeBanner section="Announcements" />
+  1839→      <AdminSectionHeader title="Site Announcements" count={announcements.length} color="#EC4899" />
+  1840→      <form onSubmit={post} className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4 space-y-3">
+  1841→        <div>
+  1842→          <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+  1843→            <Megaphone size={10} className="inline mr-0.5" /> Announcement Text
+  1844→          </label>
+  1845→          <textarea
+  1846→            value={text}
+  1847→            onChange={(e) => setText(e.target.value)}
+  1848→            className="neo-input text-sm h-20 resize-none"
+  1849→            placeholder="e.g. New Bible Reading Challenge starts Dec 1! Join the 30-day plan."
+  1850→          />
+  1851→        </div>
+  1852→        <div>
+  1853→          <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+  1854→            Type
+  1855→          </label>
+  1856→          <div className="flex gap-2">
+  1857→            {["info", "success", "warning", "urgent"].map((t) => (
+  1858→              <button
+  1859→                key={t}
+  1860→                type="button"
+  1861→                onClick={() => setType(t)}
+  1862→                className={`flex-1 py-2 rounded-xl text-xs font-bold capitalize transition-all border ${
+  1863→                  type === t ? "text-white" : "bg-white/[0.04] text-[#94A3B8] border-white/[0.06]"
+  1864→                }`}
+  1865→                style={type === t ? { backgroundColor: `${typeColors[t]}25`, borderColor: `${typeColors[t]}80` } : {}}
+  1866→              >
+  1867→                {t}
+  1868→              </button>
+  1869→            ))}
+  1870→          </div>
+  1871→        </div>
+  1872→        <button
+  1873→          type="submit"
+  1874→          className="w-full py-3 rounded-xl text-sm font-bold text-white"
+  1875→          style={{ background: "linear-gradient(135deg, #EC4899, #F59E0B)" }}
+  1876→        >
+  1877→          Post Announcement
+  1878→        </button>
+  1879→      </form>
+  1880→
+  1881→      <div className="space-y-2">
+  1882→        {announcements.map((a) => (
+  1883→          <div key={a.id} className="bg-[#1C1929] border border-white/[0.06] rounded-xl p-3 flex items-start gap-3">
+  1884→            <div
+  1885→              className="w-2 h-12 rounded-full shrink-0"
+  1886→              style={{ background: typeColors[a.type] }}
+  1887→            />
+  1888→            <div className="flex-1 min-w-0">
+  1889→              <p className="text-xs text-white">{a.text}</p>
+  1890→              <div className="flex items-center gap-2 mt-1">
+  1891→                <span className="text-[9px] font-bold uppercase tracking-wider" style={{ color: typeColors[a.type] }}>
+  1892→                  {a.type}
+  1893→                </span>
+  1894→                <span className="text-[9px] text-[#64748B]">· {a.date}</span>
+  1895→              </div>
+  1896→            </div>
+  1897→            <button
+  1898→              onClick={() => remove(a.id)}
+  1899→              className="p-1.5 text-[#94A3B8] hover:text-[#EF4444] transition-colors"
+  1900→            >
+  1901→              <Trash2 size={14} />
+  1902→            </button>
+  1903→          </div>
+  1904→        ))}
+  1905→      </div>
+  1906→    </div>
+  1907→  );
+  1908→}
+  1909→
+  1910→// ─── ANALYTICS ────────────────────────────────────────────────────────────
+  1911→
+  1912→function AnalyticsTab() {
+  1913→  const stats = [
+  1914→    { label: "Total Churches", value: CHURCHES.length, change: "+2 this week", icon: Building2, color: "#A855F7" },
+  1915→    { label: "Total Events", value: EVENTS.length, change: "+1 this week", icon: Calendar, color: "#EC4899" },
+  1916→    { label: "Total Products", value: PRODUCTS.length, change: "+3 this week", icon: Store, color: "#9786E3" },
+  1917→    { label: "Prayer Requests", value: PRAYERS.length, change: "+5 this week", icon: HeartHandshake, color: "#F59E0B" },
+  1918→    { label: "Apologetics Qs", value: APOLOGETICS_QUESTIONS.length, change: "+2 open", icon: HelpCircle, color: "#38BDF8" },
+  1919→    { label: "Active Competitions", value: TRIVIA_COMPETITIONS.filter((c) => c.status === "live").length, change: "1 live now", icon: Trophy, color: "#22C55E" },
+  1920→  ];
+  1921→
+  1922→  // Mock engagement chart data
+  1923→  const engagement = [12, 19, 15, 25, 30, 28, 35, 42, 38, 45, 50, 48];
+  1924→  const maxEng = Math.max(...engagement);
+  1925→
+  1926→  return (
+  1927→    <div className="space-y-4">
+  1928→      <PreviewModeBanner section="Analytics" />
+  1929→      <div>
+  1930→        <h2 className="text-base font-bold text-white mb-3">Platform Stats</h2>
+  1931→        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+  1932→          {stats.map((s) => (
+  1933→            <div key={s.label} className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4">
+  1934→              <div className="flex items-center justify-between mb-2">
+  1935→                <s.icon size={16} style={{ color: s.color }} />
+  1936→                <span className="text-[9px] font-bold text-[#22C55E]">{s.change}</span>
+  1937→              </div>
+  1938→              <p className="text-2xl font-extrabold text-white">{s.value}</p>
+  1939→              <p className="text-[10px] text-[#94A3B8] uppercase tracking-wider mt-0.5">{s.label}</p>
+  1940→            </div>
+  1941→          ))}
+  1942→        </div>
+  1943→      </div>
+  1944→
+  1945→      {/* Engagement chart */}
+  1946→      <div className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4">
+  1947→        <div className="flex items-center gap-2 mb-3">
+  1948→          <TrendingUp size={14} className="text-[#A78BFA]" />
+  1949→          <p className="text-[10px] font-bold uppercase tracking-wider text-[#A78BFA]">Weekly Engagement</p>
+  1950→        </div>
+  1951→        <div className="flex items-end justify-between h-32 gap-1">
+  1952→          {engagement.map((v, i) => (
+  1953→            <div key={i} className="flex-1 flex flex-col items-center gap-1">
+  1954→              <motion.div
+  1955→                initial={{ height: 0 }}
+  1956→                animate={{ height: `${(v / maxEng) * 100}%` }}
+  1957→                transition={{ duration: 0.5, delay: i * 0.05 }}
+  1958→                className="w-full rounded-t-md bg-gradient-to-t from-[#7C3AED] to-[#EC4899] min-h-[4px]"
+  1959→                style={{ height: `${(v / maxEng) * 100}%` }}
+  1960→              />
+  1961→              <span className="text-[8px] text-[#64748B]">W{i + 1}</span>
+  1962→            </div>
+  1963→          ))}
+  1964→        </div>
+  1965→        <p className="text-[10px] text-[#94A3B8] mt-2 text-center">Daily active users over 12 weeks</p>
+  1966→      </div>
+  1967→
+  1968→      {/* Top churches by followers */}
+  1969→      <div className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4">
+  1970→        <div className="flex items-center gap-2 mb-3">
+  1971→          <Users size={14} className="text-[#A78BFA]" />
+  1972→          <p className="text-[10px] font-bold uppercase tracking-wider text-[#A78BFA]">Top Churches by Followers</p>
+  1973→        </div>
+  1974→        <div className="space-y-2">
+  1975→          {[...CHURCHES].sort((a, b) => b.followers_count - a.followers_count).slice(0, 5).map((c, i) => (
+  1976→            <div key={c.id} className="flex items-center gap-3">
+  1977→              <span className="text-xs font-bold text-[#64748B] w-4">{i + 1}</span>
+  1978→              <div className="flex-1 min-w-0">
+  1979→                <p className="text-xs font-bold text-white truncate">{c.name}</p>
+  1980→                <p className="text-[9px] text-[#94A3B8]">{c.city}, {c.state}</p>
+  1981→              </div>
+  1982→              <span className="text-xs font-bold text-[#A78BFA]">{c.followers_count.toLocaleString()}</span>
+  1983→            </div>
+  1984→          ))}
+  1985→        </div>
+  1986→      </div>
+  1987→
+  1988→      {/* Top trivia players */}
+  1989→      <div className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4">
+  1990→        <div className="flex items-center gap-2 mb-3">
+  1991→          <Trophy size={14} className="text-[#F59E0B]" />
+  1992→          <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B]">Top Trivia Players</p>
+  1993→        </div>
+  1994→        <div className="space-y-2">
+  1995→          {[
+  1996→            { name: "Rebecca Thomas", points: 8420 },
+  1997→            { name: "Philip Cherian", points: 6150 },
+  1998→            { name: "Grace Sharma", points: 4320 },
+  1999→          ].map((p, i) => (
+  2000→            <div key={p.name} className="flex items-center gap-3">
+
+[showing lines 1-2000 of 2346; use offset=2001 with limit to continue reading]
