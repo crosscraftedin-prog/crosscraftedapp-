@@ -839,11 +839,11 @@ export default function TriviaView() {
                 {/* Lordsbook CTA */}
                 <div className="max-w-sm mx-auto w-full pt-3">
                   <LordsbookCommunityCard
-                    title="Challenge Your Friends"
-                    description="Share your score and challenge other Christians on Lordsbook."
+                    title="Meet Christians Around the World"
+                    description="Got a great score? Challenge other Christians and share your faith journey on Lordsbook."
                     buttonText="Challenge on Lordsbook"
                     context="trivia"
-                    variant="compact"
+                    variant="result"
                   />
                 </div>
 

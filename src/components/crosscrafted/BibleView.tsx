@@ -508,6 +508,18 @@ export default function BibleView({ onOpenComic }: { onOpenComic?: (bookId: stri
           }}
         />
       )}
+      {/* Lordsbook CTA — visible after Bible reader content */}
+      {mode === "read" && (
+        <div className="mt-4">
+          <LordsbookCommunityCard
+            title="Want to Share Your Thoughts About Scripture?"
+            description="Connect with Christians around the world on Lordsbook and discuss God's Word together."
+            buttonText="Discuss Scripture on Lordsbook"
+            context="bible"
+            variant="compact"
+          />
+        </div>
+      )}
     </div>
   );
 }

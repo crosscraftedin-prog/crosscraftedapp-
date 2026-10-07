@@ -219,9 +219,9 @@ export default function AppHomeView({ onNavigate }: Props) {
       {/* Placed below the main feature groups so Koino features remain primary */}
       <div className="mt-6">
         <LordsbookCommunityCard
-          title="Connect with Christians on Lordsbook"
-          description="Your faith journey is better together. Meet Christians, share your faith, join conversations, discover groups and build Christian friendships."
-          buttonText="Join Lordsbook"
+          title="Meet Christians Around the World"
+          description="Your faith journey is better together. Connect with Christians around the world, share your faith, join conversations and build meaningful Christian friendships on Lordsbook."
+          buttonText="Meet Christians on Lordsbook"
           context="home"
         />
       </div>

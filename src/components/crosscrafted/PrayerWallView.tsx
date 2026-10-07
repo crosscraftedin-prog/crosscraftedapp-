@@ -462,9 +462,9 @@ export default function PrayerWallView() {
       {/* Lordsbook CTA */}
       <div className="mt-4">
         <LordsbookCommunityCard
-          title="Take Your Prayer Journey Further"
-          description="Connect with Christians who believe in the power of prayer on Lordsbook."
-          buttonText="Join the Community"
+          title="Connect with Global Christians"
+          description="Connect with Global Christians who believe in the power of prayer on Lordsbook."
+          buttonText="Join the Global Christian Community"
           context="prayer"
           variant="compact"
         />

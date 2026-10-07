@@ -973,9 +973,9 @@ export default function EventsView() {
       {/* Lordsbook CTA */}
       <div className="mt-4">
         <LordsbookCommunityCard
-          title="Connect with Other Christians"
+          title="Connect with Other Global Christians"
           description="Discover Christian conversations and community on Lordsbook."
-          buttonText="Join Lordsbook"
+          buttonText="Join the Global Christian Community"
           context="events"
           variant="compact"
         />

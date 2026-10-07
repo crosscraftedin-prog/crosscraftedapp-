@@ -965,10 +965,10 @@ export default function ChurchesView({ initialOpenChurchId, onListChurch }: Prop
       {/* Lordsbook CTA */}
       <div className="mt-4">
         <LordsbookCommunityCard
-          title="Connect Beyond the Church Listing"
-          description="Find Christian community, conversations and friendships on Lordsbook."
-          buttonText="Connect on Lordsbook"
-          context="church"
+          title="Meet Christians Around the World"
+          description="Find Global Christian community, conversations and friendships on Lordsbook."
+          buttonText="Connect with Global Christians"
+          context="churches"
           variant="compact"
         />
       </div>
