@@ -16,6 +16,7 @@ import {
   Users,
 } from "lucide-react";
 import LanguageSwitcher from "@/components/crosscrafted/LanguageSwitcher";
+import KoinoFooter from "@/components/crosscrafted/KoinoFooter";
 import { useTranslation } from "@/lib/i18n/LanguageContext";
 
 type Props = {
@@ -380,21 +381,7 @@ export default function LandingHero({ onEnterApp }: Props) {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-white/[0.04] mt-12">
-        <div className="max-w-7xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Image
-              src="/koino-logo.png"
-              alt="Koino"
-              width={24}
-              height={24}
-              className="rounded-md"
-            />
-            <span className="text-sm font-bold text-[#94A3B8]">Koino</span>
-          </div>
-          <p className="text-xs text-[#726E88]">Built with faith, for the body of Christ. Soli Deo Gloria.</p>
-        </div>
-      </footer>
+      <KoinoFooter />
     </div>
   );
 }

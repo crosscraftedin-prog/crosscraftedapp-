@@ -583,3 +583,130 @@ model TriviaWinner {
   @@index([competitionId, rank])
   @@index([userId])
 }
+
+// ─── PUBLIC WEBSITE CONTENT ────────────────────────────────────────────────
+// Admin-editable content for the public Koino website.
+
+model BlogPost {
+  id              String   @id @default(cuid())
+  title           String
+  slug            String   @unique
+  excerpt         String?
+  content         String   // markdown or rich text
+  featuredImage   String?
+  author          String?
+  category        String   // "Bible" | "Faith" | "Christian Living" | etc.
+  tags            String   @default("[]") // JSON array
+  published       Boolean  @default(false)
+  featured        Boolean  @default(false)
+  seoTitle        String?
+  seoDescription  String?
+  publishedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([published, publishedAt])
+  @@index([category])
+  @@index([slug])
+}
+
+model HelpArticle {
+  id              String   @id @default(cuid())
+  title           String
+  slug            String   @unique
+  category        String   // "Account" | "Bible" | "Bible Trivia" | etc.
+  content         String   // markdown or rich text
+  featured        Boolean  @default(false)
+  published       Boolean  @default(false)
+  seoTitle        String?
+  seoDescription  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([published, category])
+  @@index([slug])
+}
+
+model FounderProfile {
+  id              String   @id @default(cuid())
+  founderName     String
+  profilePhoto    String?
+  shortIntro      String?
+  biography       String?
+  whyIBuiltKoino  String?
+  vision          String?
+  mission         String?
+  founderMessage  String?
+  email           String?
+  socialLinks     String   @default("[]") // JSON array of {label, url}
+  published       Boolean  @default(false)
+  updatedAt       DateTime @updatedAt
+}
+
+model ContactMessage {
+  id              String   @id @default(cuid())
+  name            String
+  email           String
+  phone           String?
+  subject         String
+  message         String
+  status          String   @default("new") // "new" | "read" | "archived"
+  createdAt       DateTime @default(now())
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model PartnerInquiry {
+  id              String   @id @default(cuid())
+  name            String
+  organization    String?
+  email           String
+  phone           String?
+  website         String?
+  partnershipType String   // "Church" | "Ministry" | "Christian Business" | etc.
+  message         String
+  status          String   @default("new") // "new" | "contacted" | "archived"
+  createdAt       DateTime @default(now())
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model SupportCampaign {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  imageUrl        String?
+  goalAmount      Float
+  raisedAmount    Float    @default(0)
+  supporterCount  Int      @default(0)
+  currency        String   @default("INR")
+  startDate       DateTime?
+  endDate         DateTime?
+  active          Boolean  @default(true)
+  featured       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  donations       Donation[]
+}
+
+model Donation {
+  id              String   @id @default(cuid())
+  campaignId      String
+  donorName       String?
+  donorEmail       String?
+  amount          Float
+  currency        String   @default("INR")
+  anonymous       Boolean  @default(false)
+  status          String   @default("pending") // "pending" | "completed" | "failed" | "refunded"
+  transactionRef  String?
+  paymentProvider String?  // "razorpay" | "stripe" | etc. — NOT connected yet
+  createdAt       DateTime @default(now())
+
+  campaign        SupportCampaign @relation(fields: [campaignId], references: [id])
+
+  @@index([campaignId])
+  @@index([status])
+}
