@@ -67,6 +67,10 @@ model User {
   // Trivia competition relations
   competitionAttempts TriviaCompetitionAttempt[]
   triviaWins          TriviaWinner[]
+
+  // Streak + rewards
+  userStreak          UserStreak?
+  userRewards         UserReward[]
 }
 
 // ─── NEXTAUTH TABLES ────────────────────────────────────────────────────────
@@ -709,4 +713,97 @@ model Donation {
 
   @@index([campaignId])
   @@index([status])
+}
+
+// ─── FAITH STREAK (server-authoritative) ────────────────────────────────────
+// Tracks consecutive days of meaningful Bible/Trivia activity.
+// One calendar day = one streak day (regardless of how many activities).
+// The streak is NEVER spent — it measures consistency only.
+
+model UserStreak {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  currentStreak   Int      @default(0)
+  longestStreak   Int      @default(0)
+  lastActiveDate  String?  // YYYY-MM-DD (server time)
+  totalActiveDays Int      @default(0)
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([currentStreak])
+}
+
+// ─── KOINO REWARDS ──────────────────────────────────────────────────────────
+// Admin-configured rewards that can be unlocked via streak milestones.
+
+model KoinoReward {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  rewardType       String   // "DISCOUNT_PERCENT" | "FIXED_VOUCHER" | "FREE_PRODUCT" | "SPECIAL_PRODUCT"
+  discountType     String?  // "percent" | "fixed"
+  discountValue     Float    @default(0) // e.g., 10 (percent) or 200 (rupees)
+  maximumDiscount   Float?   // cap for percent discounts
+  minimumOrderValue Float?   // minimum cart total to apply
+  productId         String?  // references Product.id when rewardType=FREE_PRODUCT
+  inventoryLimit    Int?     // max total redemptions
+  expiresAfterDays  Int?     // reward expires N days after issuance
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  milestones        StreakMilestone[]
+  userRewards       UserReward[]
+}
+
+// ─── STREAK MILESTONES ─────────────────────────────────────────────────────
+// Configurable milestone → reward mapping. Admin controls which streak
+// threshold unlocks which reward.
+
+model StreakMilestone {
+  id                String   @id @default(cuid())
+  streakDays        Int      // e.g., 7, 14, 30, 60, 100, 365
+  rewardId          String
+  repeatable        Boolean  @default(false) // false = once ever; true = once per streak cycle
+  active            Boolean  @default(true)
+  displayText       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  reward            KoinoReward @relation(fields: [rewardId], references: [id])
+  userRewards       UserReward[]
+
+  @@unique([streakDays]) // one milestone per streak threshold
+  @@index([active])
+}
+
+// ─── USER REWARD ENTITLEMENTS ──────────────────────────────────────────────
+// Per-user reward record. Created when a milestone is reached.
+// Status: AVAILABLE → CLAIMED → REDEEMED (or EXPIRED/CANCELLED)
+
+model UserReward {
+  id                String   @id @default(cuid())
+  userId            String
+  rewardId          String
+  milestoneId       String?
+  source            String   @default("streak_milestone") // "streak_milestone" | "admin_issued" | "competition_prize"
+  sourceMilestone   Int?     // the streak day count that triggered this
+  status            String   @default("available") // "available" | "claimed" | "redeemed" | "expired" | "cancelled"
+  redemptionCode    String?  // unique code for voucher redemption
+  issuedAt          DateTime @default(now())
+  claimedAt         DateTime?
+  redeemedAt        DateTime?
+  expiresAt         DateTime?
+  orderId           String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reward            KoinoReward    @relation(fields: [rewardId], references: [id])
+  milestone         StreakMilestone? @relation(fields: [milestoneId], references: [id])
+
+  @@unique([userId, milestoneId]) // prevents duplicate milestone rewards (once-ever default)
+  @@index([userId, status])
+  @@index([rewardId])
 }

@@ -117,6 +117,8 @@ export default function BibleView({ onOpenComic }: { onOpenComic?: (bookId: stri
       scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
 
       // Record Bible reading streak — once per day
+      // Call BOTH the localStorage-based streak (for existing UI badges) AND
+      // the server-authoritative streak (for Faith Streak milestones + rewards).
       const { recordStreak } = await import("@/lib/streaks");
       const before = JSON.parse(localStorage.getItem("crosscrafted_streaks") || "{}");
       const prevDate = before?.bible_reading?.lastActiveDate;
@@ -129,6 +131,27 @@ export default function BibleView({ onOpenComic }: { onOpenComic?: (bookId: stri
           toast.success(`🔥 ${info.currentStreak}-day streak!`, {
             description: `You've been reading the Bible for ${info.currentStreak} consecutive days. Keep going!`,
           });
+        }
+
+        // Also record server-authoritative streak (for milestone rewards)
+        try {
+          const res = await fetch("/api/streak/record", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ activity: "bible_reading" }),
+          });
+          if (res.ok) {
+            const streakData = await res.json();
+            if (streakData.newRewards && streakData.newRewards.length > 0) {
+              for (const reward of streakData.newRewards) {
+                toast.success("🎁 New Koino Reward Unlocked!", {
+                  description: `Your ${streakData.currentStreak}-day Faith Streak unlocked: ${reward.reward?.name || "a reward"}`,
+                });
+              }
+            }
+          }
+        } catch {
+          // Server streak recording failure is non-fatal
         }
       }
     } catch (e: any) {

@@ -163,6 +163,85 @@ export async function POST(
     });
     const rank = higherScorers.length + 1;
 
+    // ─── 8. Record Faith Streak (server-authoritative) ───
+    // Competition quiz counts as a qualifying activity for the streak.
+    // One calendar day = one streak day (idempotent).
+    let streakResult: any = null;
+    try {
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+
+      let userStreak = await db.userStreak.findUnique({ where: { userId: user.id } });
+      if (!userStreak) {
+        userStreak = await db.userStreak.create({
+          data: { userId: user.id, currentStreak: 0, longestStreak: 0, lastActiveDate: null, totalActiveDays: 0 },
+        });
+      }
+
+      if (userStreak.lastActiveDate !== today) {
+        let newStreak: number;
+        if (userStreak.lastActiveDate === yesterdayStr) {
+          newStreak = userStreak.currentStreak + 1;
+        } else if (!userStreak.lastActiveDate) {
+          newStreak = 1;
+        } else {
+          newStreak = 1;
+        }
+
+        userStreak = await db.userStreak.update({
+          where: { userId: user.id },
+          data: {
+            currentStreak: newStreak,
+            longestStreak: Math.max(userStreak.longestStreak, newStreak),
+            lastActiveDate: today,
+            totalActiveDays: userStreak.totalActiveDays + 1,
+          },
+        });
+
+        // Check milestones + create rewards (idempotent via @@unique)
+        const milestones = await db.streakMilestone.findMany({
+          where: { active: true, streakDays: newStreak },
+          include: { reward: true },
+        });
+
+        for (const milestone of milestones) {
+          if (!milestone.reward || !milestone.reward.active) continue;
+          const existing = await db.userReward.findUnique({
+            where: { userId_milestoneId: { userId: user.id, milestoneId: milestone.id } },
+          });
+          if (!existing) {
+            let expiresAt: Date | null = null;
+            if (milestone.reward.expiresAfterDays) {
+              expiresAt = new Date(now.getTime() + milestone.reward.expiresAfterDays * 24 * 60 * 60 * 1000);
+            }
+            const redemptionCode = `KOINO-${milestone.streakDays}D-${user.id.slice(-6).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
+            await db.userReward.create({
+              data: {
+                userId: user.id,
+                rewardId: milestone.rewardId,
+                milestoneId: milestone.id,
+                source: "streak_milestone",
+                sourceMilestone: newStreak,
+                status: "available",
+                redemptionCode,
+                expiresAt,
+              },
+            });
+          }
+        }
+
+        streakResult = { currentStreak: userStreak.currentStreak, newStreakDay: true };
+      } else {
+        streakResult = { currentStreak: userStreak.currentStreak, newStreakDay: false };
+      }
+    } catch (e) {
+      // Streak recording failure should not fail the quiz submission
+      console.error("[trivia submit] Streak recording error:", e);
+    }
+
     return NextResponse.json({
       attemptId,
       score: totalPoints,
@@ -173,6 +252,7 @@ export async function POST(
       rank,
       fpAwarded,
       competitionScore: totalPoints,
+      streak: streakResult,
     });
   } catch (error: any) {
     console.error("[trivia/competitions/submit] Error:", error);
