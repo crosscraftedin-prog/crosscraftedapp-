@@ -37,6 +37,10 @@ import {
   AlertCircle,
   BadgeCheck,
   Loader2,
+  HandHeart,
+  Handshake,
+  UserCheck,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -56,6 +60,11 @@ import {
 } from "@/lib/crosscrafted-data";
 import ImagePicker from "@/components/crosscrafted/ImagePicker";
 import BibleComicsAdmin from "@/components/crosscrafted/BibleComicsAdmin";
+import DonationSettingsTab from "@/components/crosscrafted/admin/DonationSettingsTab";
+import ContactMessagesTab from "@/components/crosscrafted/admin/ContactMessagesTab";
+import PartnerInquiriesTab from "@/components/crosscrafted/admin/PartnerInquiriesTab";
+import ContributorApplicationsTab from "@/components/crosscrafted/admin/ContributorApplicationsTab";
+import BlogTab from "@/components/crosscrafted/admin/BlogTab";
 
 type AdminTab =
   | "dashboard"
@@ -68,6 +77,11 @@ type AdminTab =
   | "competitions"
   | "announcements"
   | "redemptions"
+  | "donations"
+  | "contact-messages"
+  | "partner-inquiries"
+  | "contributors"
+  | "blog"
   | "analytics"
   | "bible-comics";
 
@@ -82,6 +96,11 @@ const TABS: { id: AdminTab; icon: typeof Shield; labelKey: string }[] = [
   { id: "competitions", icon: Trophy,            labelKey: "admin.tab.competitions" },
   { id: "announcements",icon: Megaphone,         labelKey: "admin.tab.announcements" },
   { id: "redemptions",  icon: Package,           labelKey: "admin.tab.redemptions" },
+  { id: "donations",    icon: HandHeart,         labelKey: "admin.tab.donations" },
+  { id: "contact-messages", icon: Mail,          labelKey: "admin.tab.contactMessages" },
+  { id: "partner-inquiries", icon: Handshake,    labelKey: "admin.tab.partnerInquiries" },
+  { id: "contributors", icon: UserCheck,         labelKey: "admin.tab.contributors" },
+  { id: "blog",         icon: FileText,          labelKey: "admin.tab.blog" },
   { id: "analytics",    icon: BarChart3,         labelKey: "admin.tab.analytics" },
   { id: "bible-comics", icon: BookOpen,          labelKey: "admin.tab.bibleComics" },
 ];
@@ -217,6 +236,11 @@ export default function AdminView() {
           {activeTab === "competitions" && <CompetitionsTab />}
           {activeTab === "announcements" && <AnnouncementsTab />}
           {activeTab === "redemptions" && <RedemptionsTab />}
+          {activeTab === "donations" && <DonationSettingsTab />}
+          {activeTab === "contact-messages" && <ContactMessagesTab />}
+          {activeTab === "partner-inquiries" && <PartnerInquiriesTab />}
+          {activeTab === "contributors" && <ContributorApplicationsTab />}
+          {activeTab === "blog" && <BlogTab />}
           {activeTab === "analytics" && <AnalyticsTab />}
           {activeTab === "bible-comics" && <BibleComicsAdmin />}
         </motion.div>

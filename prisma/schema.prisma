@@ -619,6 +619,13 @@ model BlogPost {
   featured        Boolean  @default(false)
   seoTitle        String?
   seoDescription  String?
+  // Optional scheduled publish date — post is only public after this date
+  // (if set). If null, published=true means immediately visible.
+  scheduledAt     DateTime?
+  // Optional canonical URL override (for cross-posted articles)
+  canonicalUrl    String?
+  // JSON array of related BlogPost IDs — shown at the bottom of the article
+  relatedArticleIds String @default("[]")
   publishedAt     DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -668,8 +675,14 @@ model ContactMessage {
   phone           String?
   subject         String
   message         String
-  status          String   @default("new") // "new" | "read" | "archived"
+  // Status workflow: new → read → replied → closed
+  status          String   @default("new") // "new" | "read" | "replied" | "closed"
+  // Internal admin notes — NEVER exposed to the user
+  adminNotes      String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
   createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([status])
   @@index([createdAt])
@@ -684,8 +697,14 @@ model PartnerInquiry {
   website         String?
   partnershipType String   // "Church" | "Ministry" | "Christian Business" | etc.
   message         String
+  // Status workflow: new → contacted → archived
   status          String   @default("new") // "new" | "contacted" | "archived"
+  // Internal admin notes — NEVER exposed to the user
+  adminNotes      String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
   createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([status])
   @@index([createdAt])
@@ -727,6 +746,35 @@ model Donation {
 
   @@index([campaignId])
   @@index([status])
+}
+
+// ─── DONATION SETTINGS (singleton) ───────────────────────────────────────────
+// Admin-configured donation/payment display settings for the /support page.
+// Koino does NOT process payments directly — this is informational only.
+// Admin configures UPI ID, QR code image, and bank details; the public
+// /support page reads these values and displays them. If bank details are
+// not configured, the bank transfer section is hidden (no fake data).
+//
+// Singleton pattern: there is only ever one row (id = "default"). The
+// admin API upserts this row. Public API reads it.
+
+model DonationSettings {
+  id              String   @id @default("default")
+  // UPI
+  upiId           String?
+  // QR code image URL (stored in Supabase Storage)
+  qrCodeUrl       String?
+  // Bank transfer
+  accountName     String?
+  accountNumber   String?
+  ifsc            String?
+  bankName        String?
+  branch          String?
+  // Donation message shown on /support
+  donationMessage String?
+  // Whether donations are currently being accepted (display toggle)
+  acceptingDonations Boolean @default(true)
+  updatedAt       DateTime @updatedAt
 }
 
 // ─── FAITH STREAK (server-authoritative) ────────────────────────────────────

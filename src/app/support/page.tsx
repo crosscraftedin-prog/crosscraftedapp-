@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PrismaClient } from "@prisma/client";
 import PublicPageLayout from "@/components/crosscrafted/PublicPageLayout";
+import DonationMethods from "@/components/crosscrafted/DonationMethods";
 import { Heart, Server, BookOpen, Trophy, Users, ShieldCheck, Code } from "lucide-react";
 import Link from "next/link";
 
@@ -8,7 +9,7 @@ const db = new PrismaClient();
 
 export const metadata: Metadata = {
   title: "Support Koino — Help Keep Koino Free",
-  description: "Koino is free to use. Your support helps keep it that way. Support technology, Bible content, trivia prizes, and community development.",
+  description: "Koino is free to use. Your support helps keep it that way. Give via UPI, QR code, or direct bank transfer.",
   openGraph: {
     title: "Support Koino — Help Keep Koino Free",
     description: "Koino is free to use. Your support helps keep it that way.",
@@ -28,11 +29,24 @@ const SUPPORT_AREAS = [
 ];
 
 export default async function SupportPage() {
-  // Fetch active campaigns from DB
-  const campaigns = await db.supportCampaign.findMany({
-    where: { active: true },
-    orderBy: { featured: "desc" },
+  // Server-side fetch of the donation settings singleton.
+  // Falls back to a fully-null payload (acceptingDonations=true) if the row
+  // is missing — the DonationMethods client component handles the empty state.
+  const row = await db.donationSettings.findUnique({
+    where: { id: "default" },
   });
+
+  const settings = {
+    upiId: row?.upiId ?? null,
+    qrCodeUrl: row?.qrCodeUrl ?? null,
+    accountName: row?.accountName ?? null,
+    accountNumber: row?.accountNumber ?? null,
+    ifsc: row?.ifsc ?? null,
+    bankName: row?.bankName ?? null,
+    branch: row?.branch ?? null,
+    donationMessage: row?.donationMessage ?? null,
+    acceptingDonations: row?.acceptingDonations ?? true,
+  };
 
   return (
     <PublicPageLayout>
@@ -52,10 +66,16 @@ export default async function SupportPage() {
         </p>
 
         <div className="flex flex-wrap justify-center gap-4">
-          <Link href="#campaigns" className="px-8 py-3.5 bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 font-extrabold rounded-2xl text-sm uppercase tracking-wider transition-all hover:-translate-y-px flex items-center gap-2">
-            <Heart size={16} /> Support Koino
+          <Link
+            href="#give"
+            className="px-8 py-3.5 bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 font-extrabold rounded-2xl text-sm uppercase tracking-wider transition-all hover:-translate-y-px flex items-center gap-2"
+          >
+            <Heart size={16} /> Give to Koino
           </Link>
-          <Link href="/partner" className="px-8 py-3.5 border border-white/[0.08] hover:border-white/[0.15] text-[#A09DB1] hover:text-white font-extrabold rounded-2xl text-sm uppercase tracking-wider transition-all bg-white/[0.02]">
+          <Link
+            href="/partner"
+            className="px-8 py-3.5 border border-white/[0.08] hover:border-white/[0.15] text-[#A09DB1] hover:text-white font-extrabold rounded-2xl text-sm uppercase tracking-wider transition-all bg-white/[0.02]"
+          >
             Become a Partner
           </Link>
         </div>
@@ -76,46 +96,49 @@ export default async function SupportPage() {
         </div>
       </section>
 
-      {/* Campaigns */}
-      <section id="campaigns" className="py-8 px-6 max-w-2xl mx-auto">
-        {campaigns.length > 0 ? (
-          campaigns.map((c) => {
-            const pct = c.goalAmount > 0 ? Math.min(100, (c.raisedAmount / c.goalAmount) * 100) : 0;
-            return (
-              <div key={c.id} className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-6 mb-4">
-                <h3 className="text-lg font-bold text-white mb-1">{c.name}</h3>
-                {c.description && <p className="text-xs text-[#A09DB1] mb-4">{c.description}</p>}
-                <div className="h-3 bg-white/[0.06] rounded-full overflow-hidden mb-2">
-                  <div className="h-full bg-gradient-to-r from-[#F39B9B] to-[#7C3AED]" style={{ width: `${pct}%` }} />
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-white font-bold">₹{c.raisedAmount.toLocaleString()} raised</span>
-                  <span className="text-[#94A3B8]">Goal: ₹{c.goalAmount.toLocaleString()}</span>
-                  <span className="text-[#94A3B8]">{c.supporterCount} supporters</span>
-                </div>
-                <div className="mt-4 p-3 bg-[#F59E0B]/8 border border-[#F59E0B]/20 rounded-xl">
-                  <p className="text-[10px] text-[#F59E0B] font-bold text-center">
-                    ⚠ Payment processing is not yet connected. This campaign display is ready — contact us to support Koino.
-                  </p>
-                </div>
-              </div>
-            );
-          })
-        ) : (
-          <div className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-6 text-center">
-            <p className="text-sm text-[#A09DB1] mb-4">
-              No active support campaigns yet. Koino is free to use, and your support helps keep it that way.
+      {/* Give to Koino — donation methods */}
+      <section id="give" className="py-8 px-6 max-w-4xl mx-auto">
+        <div className="text-center mb-6">
+          <h2 className="text-base font-bold text-white mb-2">GIVE TO KOINO</h2>
+          <p className="text-xs text-[#A09DB1]">
+            Choose a method below to give directly. Every gift helps keep Koino free.
+          </p>
+        </div>
+
+        {/* Optional admin-set callout / thank-you message */}
+        {settings.acceptingDonations && settings.donationMessage && (
+          <div className="mb-5 rounded-2xl border border-[#F39B9B]/20 bg-[#F39B9B]/8 px-4 py-3 text-center">
+            <p className="text-xs text-white leading-relaxed whitespace-pre-line">
+              {settings.donationMessage}
             </p>
           </div>
         )}
 
-        {/* Honest payment status */}
-        <div className="mt-6 bg-[#F59E0B]/8 border border-[#F59E0B]/20 rounded-2xl p-4">
+        {settings.acceptingDonations ? (
+          <DonationMethods settings={settings} />
+        ) : (
+          <div className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-6 text-center">
+            <p className="text-sm text-[#A09DB1]">
+              Donations are temporarily paused. Please check back later.
+            </p>
+          </div>
+        )}
+
+        {/* Thank-you footer */}
+        {settings.acceptingDonations && (
+          <p className="text-center text-sm font-semibold text-white mt-6">
+            Thank you for considering a gift to Koino.
+          </p>
+        )}
+      </section>
+
+      {/* Payment honesty note — Koino does NOT process online payments */}
+      <section className="pb-16 pt-4 px-6 max-w-2xl mx-auto">
+        <div className="rounded-2xl border border-[#F59E0B]/20 bg-[#F59E0B]/8 p-4">
           <p className="text-[11px] text-[#A09DB1] leading-relaxed text-center">
-            <span className="text-[#F59E0B] font-bold">Payment Integration Status:</span> Online payment processing
-            (donations/giving) is not yet connected. The campaign display, donation tracking, and admin configuration
-            are built and ready. To enable real giving, a payment provider (e.g., Razorpay, Stripe) needs to be
-            configured. Until then, please <Link href="/contact" className="text-[#A78BFA] underline">contact us</Link> to support Koino.
+            <span className="text-[#F59E0B] font-bold">Note:</span> Koino does
+            not process online payments. The methods above are for direct
+            transfers. We do not collect card details or bank credentials.
           </p>
         </div>
       </section>

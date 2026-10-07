@@ -20,6 +20,8 @@ import {
   X,
   Shield,
   Globe,
+  FileText,
+  HandHeart,
 } from "lucide-react";
 import LandingHero from "@/components/crosscrafted/LandingHero";
 import ChurchesView from "@/components/crosscrafted/ChurchesView";
@@ -59,7 +61,9 @@ type View =
   | "list-business" // kept for backward-compat route (the ListYourEntity form)
   | "business-directory" // public browse page
   | "small-groups"
-  | "community" // Global Christian Community → navigates to /community (Lordsbook CTA page)
+  | "community" // Global Christian Community → /community (Lordsbook CTA page)
+  | "blog" // Blog → /blog (public App Router page, opens in new tab/route)
+  | "support" // Support Koino → /support (public App Router page, accessible while authenticated)
   | "admin";
 
 // Bible is the main feature — placed at the top of the sidebar.
@@ -85,6 +89,9 @@ const SIDEBAR_LINKS: { id: View; icon: typeof Search; label: string }[] = [
   { id: "shop", icon: Store, label: "Marketplace" },
   { id: "business-directory", icon: Building2, label: "Business Directory" },
   { id: "prayer-wall", icon: HeartHandshake, label: "Prayer Wall" },
+  // ─── CONTENT & SUPPORT ─── reachable while authenticated (no logout)
+  { id: "blog", icon: FileText, label: "Blog" },
+  { id: "support", icon: HandHeart, label: "Support Koino" },
   { id: "admin", icon: Shield, label: "Admin" },
 ];
 
@@ -107,6 +114,8 @@ const MOBILE_MORE_VIEWS: { id: View; icon: typeof Search; label: string }[] = [
   { id: "community", icon: Globe, label: "Global Christian Community" },
   { id: "prayer-wall", icon: HeartHandshake, label: "Prayer Wall" },
   { id: "business-directory", icon: Building2, label: "Business Directory" },
+  { id: "blog", icon: FileText, label: "Blog" },
+  { id: "support", icon: HandHeart, label: "Support Koino" },
   { id: "admin", icon: Shield, label: "Admin" },
 ];
 
@@ -158,6 +167,45 @@ export default function Home() {
     }
   }, [isAuthenticated, profileCompleted, authLoading]);
 
+  // ─── DEEP-LINK ROUTING FROM ?view=<view> QUERY PARAM ───
+  // Footer links and shared URLs use /?view=bible, /?view=comic, etc.
+  // On mount (and when auth state changes), if the URL has a ?view= param,
+  // route the SPA to that view directly — but ONLY if the user is
+  // authenticated AND has completed onboarding. For unauthenticated
+  // visitors, they land on the public landing page (they can sign in
+  // and then click the footer link again, or use Enter App).
+  // Supported deep-link views: bible, comic, churches, events, trivia,
+  // prayer-wall, apologetics, shop, business-directory, community.
+  // "community" is special-cased: it redirects to /community (full route).
+  // This effect runs ONCE on initial mount — it does not re-run on every
+  // navigation (otherwise clicking sidebar items would fight with the URL).
+  useEffect(() => {
+    if (authLoading) return;
+    if (!isAuthenticated || !profileCompleted) return;
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const deepView = params.get("view");
+    if (!deepView) return;
+
+    // Validate that the deep-link view is a known SPA view.
+    const validViews: View[] = [
+      "bible", "comic", "churches", "events", "trivia",
+      "prayer-wall", "apologetics", "shop", "business-directory",
+    ];
+    if (!validViews.includes(deepView as View)) return;
+
+    // Route to the deep-linked view.
+    // Use a small timeout to ensure the SPA shell has mounted.
+    navigate(deepView as View);
+
+    // Clean the URL so subsequent in-SPA navigations don't fight with it.
+    // (replaceState so we don't add a history entry)
+    const cleanUrl = window.location.pathname + window.location.hash;
+    window.history.replaceState({}, "", cleanUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, isAuthenticated, profileCompleted]);
+
   const enterApp = (v: string) => {
     if (isAuthenticated && !profileCompleted) {
       navigate("onboarding");
@@ -179,23 +227,33 @@ export default function Home() {
     }
   };
   const goView = (v: View) => {
-    // "community" is a special pseudo-view: it doesn't render inside the SPA.
-    // Instead, navigate to the /community route (Lordsbook community CTA page).
-    // Fire-and-forget analytics if available, then perform a full route navigation.
-    if (v === "community") {
-      // Mirror the cleanup that navigate() does so the More sheet closes
-      // immediately on mobile and doesn't linger over the redirect.
+    // Several sidebar entries are "pseudo-views" — they don't render inside
+    // the SPA. Instead, navigate to a public App Router route. This lets
+    // authenticated users reach /community, /blog, /support WITHOUT logging
+    // out (the public pages use PublicPageLayout, which works for both
+    // authenticated and unauthenticated visitors).
+    //
+    // Fire-and-forget analytics if available, then perform a full route
+    // navigation. Mirrors navigate() cleanup so the More sheet closes
+    // immediately on mobile.
+    if (v === "community" || v === "blog" || v === "support") {
       setShowMoreSheet(false);
       setHeaderVisible(true);
       try {
         fetch("/api/track", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ event: "global_christian_community_nav_click", source: "sidebar" }),
+          body: JSON.stringify({
+            event:
+              v === "community" ? "global_christian_community_nav_click" :
+              v === "blog" ? "blog_nav_click" :
+              "support_koino_nav_click",
+            source: "sidebar",
+          }),
         }).catch(() => {});
       } catch {}
       if (typeof window !== "undefined") {
-        window.location.href = "/community";
+        window.location.href = `/${v}`;
       }
       return;
     }

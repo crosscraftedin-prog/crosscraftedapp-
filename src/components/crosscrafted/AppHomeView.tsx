@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   BookOpen,
@@ -38,6 +39,19 @@ type FeatureCard = {
   desc: string;
   view: View;
   group: "FAITH" | "CONNECT" | "GROW" | "PLAY" | "DISCOVER";
+};
+
+// Public shape returned by GET /api/blog/latest. Only the fields the App Home
+// cards need — never exposes draft content or admin fields.
+type BlogCardData = {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string | null;
+  featuredImage: string | null;
+  category: string;
+  author: string | null;
+  publishedAt: string | null; // ISO string (serialized by the API)
 };
 
 // Single source of truth for the App Home feature grid.
@@ -120,6 +134,37 @@ const GROUPS: { label: string; color: string }[] = [
 export default function AppHomeView({ onNavigate }: Props) {
   const t = useTranslation();
   const { user, isAuthenticated } = useSupabaseUser();
+
+  // ─── Latest blog posts ("Latest from Koino") ───
+  // Loaded client-side on mount. The section is only rendered when posts
+  // exist — on error or empty list it stays hidden (no skeleton, no empty
+  // state) to keep the App Home clean.
+  const [blogPosts, setBlogPosts] = useState<BlogCardData[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/blog/latest?limit=3", {
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          if (!cancelled) setBlogPosts([]);
+          return;
+        }
+        const data = (await res.json()) as { posts?: BlogCardData[] };
+        if (!cancelled) {
+          setBlogPosts(Array.isArray(data.posts) ? data.posts : []);
+        }
+      } catch {
+        // Silently hide the section on network/parse error.
+        if (!cancelled) setBlogPosts([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Supabase auth user — name comes from user_metadata (full_name / name),
   // falling back to the email local-part. Mirrors HeaderUserSection pattern.
@@ -225,6 +270,71 @@ export default function AppHomeView({ onNavigate }: Props) {
           context="home"
         />
       </div>
+
+      {/* ─── LATEST FROM KOINO (BLOG) ───
+          Surface recent published blog posts at the bottom of the App Home.
+          Renders ONLY when posts exist — hidden entirely on empty/error.
+          Uses <a href> (not next/link) because /blog/* is a public App
+          Router page outside the SPA — full route navigation is intended. */}
+      {blogPosts.length > 0 && (
+        <section className="mt-6">
+          <div className="flex items-center gap-2 mb-2.5 px-1">
+            <span className="text-[10px] font-black uppercase tracking-[0.25em] text-[#F39B9B]">
+              LATEST FROM KOINO
+            </span>
+            <div className="flex-1 h-px bg-gradient-to-r from-[#F39B9B]/20 to-transparent" />
+          </div>
+          <p className="text-[11px] text-[#A09DB1] mb-3 px-1">
+            Christian articles, teachings, and stories to help you grow in faith.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {blogPosts.map((post) => (
+              <a
+                key={post.id}
+                href={`/blog/${post.slug}`}
+                className="group bg-[#1C1929] border border-white/[0.06] rounded-2xl overflow-hidden hover:border-[#F39B9B]/25 transition-all flex flex-col"
+              >
+                {post.featuredImage ? (
+                  <div className="h-28 bg-[#0f0f1a] overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={post.featuredImage}
+                      alt={post.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
+                ) : (
+                  // Gradient placeholder — keeps card height stable when no image.
+                  <div className="h-28 bg-gradient-to-br from-[#2B254E] via-[#1C1929] to-[#0f0f1a]" />
+                )}
+                <div className="p-3 space-y-1.5 flex-1 flex flex-col">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-[#F39B9B]">
+                    {post.category}
+                  </span>
+                  <h3 className="text-[13px] font-bold text-white line-clamp-1 group-hover:text-[#F39B9B] transition-colors">
+                    {post.title}
+                  </h3>
+                  {post.excerpt && (
+                    <p className="text-[10px] text-[#A09DB1] line-clamp-2 leading-relaxed">
+                      {post.excerpt}
+                    </p>
+                  )}
+                  {post.publishedAt && (
+                    <div className="mt-auto pt-1.5 flex items-center gap-1 text-[9px] text-[#64748B]">
+                      <Calendar size={9} />
+                      {new Date(post.publishedAt).toLocaleDateString(undefined, {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </div>
+                  )}
+                </div>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

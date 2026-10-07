@@ -6,47 +6,49 @@ import Link from "next/link";
 import {
   Heart,
   MessageCircle,
-  Globe,
-  ExternalLink,
-  ChevronDown,
 } from "lucide-react";
 
 // Public footer for the Koino website.
-// Used on the LandingHero + all public pages (about, contact, etc.)
+// Used on the LandingHero + all public pages (about, contact, blog, etc.)
+//
+// NAVIGATION CONTRACT:
+// - Public App Router pages use real routes: /about, /blog, /contact, etc.
+// - Authenticated SPA views use /?view=<view> — page.tsx reads the `view`
+//   query param on mount and routes the SPA to that view directly.
+//   If the visitor is not authenticated, they land on the public landing
+//   page and can sign in; after auth, they will NOT auto-route to the
+//   originally requested view (acceptable trade-off — they can click
+//   the footer link again, or use the sidebar).
+// - The "Global Christian Community" item uses /community (public page).
 
 const FOOTER_SECTIONS = [
   {
     title: "Koino",
     links: [
       { label: "About Koino", href: "/about" },
-      { label: "About the Founder", href: "/about/founder" },
-      { label: "Contact Us", href: "/contact" },
-      { label: "Partner With Koino", href: "/partner" },
-      { label: "Help Center", href: "/help" },
-      { label: "Blog", href: "/blog" },
-    ],
-  },
-  {
-    title: "Community",
-    links: [
       { label: "Bible", href: "/?view=bible" },
       { label: "Bible Comics", href: "/?view=comic" },
       { label: "Churches", href: "/?view=churches" },
       { label: "Events", href: "/?view=events" },
       { label: "Bible Trivia", href: "/?view=trivia" },
       { label: "Prayer Wall", href: "/?view=prayer-wall" },
+      { label: "Blog", href: "/blog" },
+    ],
+  },
+  {
+    title: "Community",
+    links: [
+      { label: "Global Christian Community", href: "/community" },
       { label: "Business Directory", href: "/?view=business-directory" },
       { label: "Marketplace", href: "/?view=shop" },
-      { label: "Meet Christians Around the World", href: "/community" },
+      { label: "Partner With Koino", href: "/partner" },
     ],
   },
   {
     title: "Support",
     links: [
+      { label: "Contact Us", href: "/contact" },
       { label: "Support Koino", href: "/support" },
-      { label: "Give to Koino", href: "/support" },
-      { label: "Partner With Koino", href: "/partner" },
-      { label: "Koino Merch", href: "/?view=shop" },
     ],
   },
   {
@@ -74,7 +76,7 @@ export default function KoinoFooter() {
     <footer className="bg-[#0A0913] border-t border-white/[0.04] mt-12">
       <div className="max-w-7xl mx-auto px-6 py-10">
         {/* Brand + description */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-8 mb-8">
           <div className="md:col-span-1">
             <div className="flex items-center gap-2 mb-3">
               <Image

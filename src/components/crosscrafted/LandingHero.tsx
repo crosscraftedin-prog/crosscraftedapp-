@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -24,6 +25,19 @@ import { useTranslation } from "@/lib/i18n/LanguageContext";
 
 type Props = {
   onEnterApp: (view: string) => void;
+};
+
+// Public shape returned by GET /api/blog/latest. Only the fields the landing
+// page cards need — no content/draft/admin fields ever exposed.
+type BlogCardData = {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string | null;
+  featuredImage: string | null;
+  category: string;
+  author: string | null;
+  publishedAt: string | null; // ISO string (serialized by the API)
 };
 
 const FEATURES = [
@@ -135,6 +149,42 @@ const LORDSBOOK_BENEFITS = [
 
 export default function LandingHero({ onEnterApp }: Props) {
   const t = useTranslation();
+
+  // ─── Latest blog posts ("From the Koino Community") ───
+  // Loaded client-side on mount. If the fetch fails or returns 0 posts we
+  // either hide the section (error) or show an empty state (0 posts).
+  const [blogPosts, setBlogPosts] = useState<BlogCardData[]>([]);
+  const [blogLoading, setBlogLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/blog/latest?limit=3", {
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          // Fail soft — API returns 200 with empty list on internal error,
+          // but guard against non-2xx just in case.
+          if (!cancelled) setBlogPosts([]);
+          return;
+        }
+        const data = (await res.json()) as { posts?: BlogCardData[] };
+        if (!cancelled) {
+          setBlogPosts(Array.isArray(data.posts) ? data.posts : []);
+        }
+      } catch {
+        // Network/parse error — silently hide the section.
+        if (!cancelled) setBlogPosts([]);
+      } finally {
+        if (!cancelled) setBlogLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#12101A] text-white flex flex-col">
       {/* Top nav */}
@@ -482,6 +532,119 @@ export default function LandingHero({ onEnterApp }: Props) {
             </p>
           </div>
         </motion.div>
+      </section>
+
+      {/* ─── FROM THE KOINO COMMUNITY (BLOG) ───
+          Latest published articles from the Koino blog.
+          Loaded client-side via /api/blog/latest. If the API fails or returns
+          zero posts we either show a tiny "Articles are being prepared" empty
+          state (no View All CTA) or hide the section entirely on error.
+          Placed AFTER the "Meet Christians Around the World" section and
+          BEFORE the final CTA, per spec. */}
+      <section id="from-community" className="py-16 px-6 max-w-6xl mx-auto w-full">
+        <div className="text-center mb-8 space-y-3">
+          <span className="inline-block text-[10px] font-bold uppercase tracking-[0.25em] text-[#F39B9B]">
+            FROM THE KOINO COMMUNITY
+          </span>
+          <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+            From the Koino Community
+          </h2>
+          <p className="text-sm text-[#A09DB1] max-w-xl mx-auto">
+            Christian articles, teachings, insights and stories to help you grow in faith.
+          </p>
+        </div>
+
+        {blogLoading ? (
+          // Skeleton — 3 low-opacity pulse placeholders matching card height.
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="bg-[#1C1929] border border-white/[0.06] rounded-2xl overflow-hidden animate-pulse"
+              >
+                <div className="h-40 bg-[#0f0f1a]" />
+                <div className="p-5 space-y-3">
+                  <div className="h-2 w-16 bg-white/[0.06] rounded" />
+                  <div className="h-3 w-3/4 bg-white/[0.06] rounded" />
+                  <div className="h-2 w-full bg-white/[0.04] rounded" />
+                  <div className="h-2 w-1/2 bg-white/[0.04] rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : blogPosts.length === 0 ? (
+          // Empty state — no posts yet. NO "View All" CTA shown.
+          <div className="bg-[#1C1929]/50 border border-dashed border-white/[0.08] rounded-2xl py-10 px-6 text-center">
+            <p className="text-sm text-[#94A3B8]">
+              Articles are being prepared. Check back soon.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {blogPosts.map((post) => (
+                <Link
+                  key={post.id}
+                  href={`/blog/${post.slug}`}
+                  className="group bg-[#1C1929] border border-white/[0.06] rounded-2xl overflow-hidden hover:border-white/[0.15] transition-all flex flex-col"
+                >
+                  {post.featuredImage ? (
+                    <div className="h-40 bg-[#0f0f1a] overflow-hidden">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={post.featuredImage}
+                        alt={post.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </div>
+                  ) : (
+                    // Gradient placeholder — keeps the card height stable when no image.
+                    <div className="h-40 bg-gradient-to-br from-[#2B254E] via-[#1C1929] to-[#0f0f1a]" />
+                  )}
+                  <div className="p-4 space-y-2 flex-1 flex flex-col">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-[#F39B9B]">
+                      {post.category}
+                    </span>
+                    <h3 className="text-sm font-bold text-white group-hover:text-[#A78BFA] transition-colors line-clamp-2">
+                      {post.title}
+                    </h3>
+                    {post.excerpt && (
+                      <p className="text-[11px] text-[#A09DB1] line-clamp-2 leading-relaxed">
+                        {post.excerpt}
+                      </p>
+                    )}
+                    <div className="mt-auto pt-2 flex items-center gap-2 text-[10px] text-[#64748B]">
+                      {post.publishedAt && (
+                        <span>
+                          {new Date(post.publishedAt).toLocaleDateString(undefined, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </span>
+                      )}
+                      {post.author && (
+                        <span>
+                          · by <span className="text-[#94A3B8] font-semibold">{post.author}</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+
+            {/* VIEW ALL ARTICLES — only shown when at least one post is present */}
+            <div className="flex justify-center mt-8">
+              <Link
+                href="/blog"
+                className="bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 font-extrabold text-xs uppercase tracking-wider rounded-2xl px-7 py-3.5 transition-all hover:-translate-y-px inline-flex items-center gap-2"
+              >
+                View All Articles <ArrowRight size={14} strokeWidth={2.5} />
+              </Link>
+            </div>
+          </>
+        )}
       </section>
 
       {/* Final CTA */}

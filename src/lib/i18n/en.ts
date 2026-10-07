@@ -149,9 +149,14 @@ export const en: Record<string, string> = {
   "admin.tab.competitions": "Competitions",
   "admin.tab.announcements": "Announcements",
   "admin.tab.redemptions": "Redemptions",
+  "admin.tab.donations": "Donations",
   "admin.tab.analytics": "Analytics",
   "admin.tab.bibleComics": "Bible Comics",
   "admin.tab.members": "Members",
+  "admin.tab.contactMessages": "Contact Messages",
+  "admin.tab.partnerInquiries": "Partner Inquiries",
+  "admin.tab.contributors": "Contributors",
+  "admin.tab.blog": "Blog",
 
   // ─── Trivia view ───
   "triviaView.title": "Bible Trivia",

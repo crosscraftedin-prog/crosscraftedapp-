@@ -846,3 +846,457 @@ Stage Summary:
   * Notification system integration for winner notification
   * Anti-cheat detection (impossible submissions, rapid answers)
   * Audit log model + API
+
+---
+Task ID: support-donations
+Agent: general-purpose (Support Koino + Donation Settings)
+Task: Rebuild /support page with UPI/QR/Bank + admin Donation Settings
+
+Work Log:
+- Read worklog.md, /support/page.tsx, AdminView.tsx, auth-server.ts,
+  the DonationSettings Prisma model, and the migration SQL to confirm
+  the singleton id="default" pattern with seeded acceptingDonations=true.
+- Created src/app/api/donation-settings/route.ts (public GET). Returns ONLY
+  the display fields (upiId, qrCodeUrl, accountName, accountNumber, ifsc,
+  bankName, branch, donationMessage, acceptingDonations). Strips id and
+  updatedAt. Returns acceptingDonations=true if the row is missing so the
+  public page degrades gracefully.
+- Created src/app/api/admin/donation-settings/route.ts (admin GET + PUT).
+  Uses getAuthUser() from @/lib/auth-server. Distinguishes 401 (no session)
+  from 403 (non-admin) per the API spec — requireAdmin() returns a tagged
+  union {user,response} so the handler can return the response directly.
+  GET lazy-creates the singleton if the seed didn't run. PUT coerces string
+  fields to string|null (empty strings → null) and acceptingDonations to a
+  strict boolean, then upserts on id="default".
+- Created src/components/crosscrafted/DonationMethods.tsx ("use client").
+  Receives settings as props and renders up to three cards:
+    UPI card — shown if upiId set; "Copy UPI ID" button uses
+      navigator.clipboard.writeText with a textarea+execCommand fallback
+      for insecure contexts / older browsers.
+    QR card — shown if qrCodeUrl set; uses a plain <img> (avoids Next/Image
+      remote-domain config friction for arbitrary Supabase URLs) plus an
+      <a download> link with target=_blank fallback.
+    Bank card — shown ONLY if all four of accountName/accountNumber/ifsc/
+      bankName are set (branch is optional display info). Spec: never show
+      fake/placeholder bank details — hide the card entirely if incomplete.
+  If no methods are configured, shows a "Donation methods haven't been
+  configured yet" message with a contact link instead of empty cards.
+- Rewrote src/app/support/page.tsx as a Server Component (no "use client").
+  Kept the existing hero ("Help Keep Koino Free") and the SUPPORT_AREAS grid.
+  Replaced the campaigns section with a "GIVE TO KOINO" section that:
+    - Fetches DonationSettings from Prisma directly (server-side).
+    - Shows "Donations are temporarily paused. Please check back later."
+      when acceptingDonations === false.
+    - Otherwise renders <DonationMethods settings={...}/> and the optional
+      donationMessage callout above the cards.
+    - Adds thank-you footer and the payment honesty note
+      ("Koino does not process online payments…").
+- Created src/components/crosscrafted/admin/DonationSettingsTab.tsx
+  ("use client"). Form with all 9 DonationSettings fields + a copy of the
+  acceptingDonations toggle (custom switch). Loads settings on mount via
+  GET /api/admin/donation-settings, saves via PUT. Uses sonner toasts for
+  success/error/feedback (same pattern as RedemptionsTab). QR code URL is a
+  plain text input — no file uploader (out of scope per spec). Includes a
+  live thumbnail preview of the QR URL (with onError hide to avoid broken
+  image icons). "Reset Form" button clears the form fields without hitting
+  the DB. "Last saved" timestamp badge updates after each successful save.
+- Wired DonationSettingsTab into AdminView.tsx:
+    - Added HandHeart to the existing lucide-react import block.
+    - Imported DonationSettingsTab from
+      @/components/crosscrafted/admin/DonationSettingsTab.
+    - Added "donations" to the AdminTab union type (between "redemptions"
+      and "analytics" per spec).
+    - Added { id: "donations", icon: HandHeart, labelKey: "admin.tab.donations" }
+      to the TABS array, placed after redemptions and before analytics.
+    - Added { activeTab === "donations" && <DonationSettingsTab /> } to
+      the tab content switch (between redemptions and analytics).
+- Added the i18n key "admin.tab.donations": "Donations" to
+  src/lib/i18n/en.ts, immediately after the existing "admin.tab.redemptions"
+  key (i.e. in spec'd position relative to analytics).
+- Ran `npx tsc --noEmit --project tsconfig.json`. Initial run flagged one
+  error in the admin PUT route (acceptingDonations needed strict boolean
+  for Prisma's create payload). Refactored the payload builder to use
+  properly-typed optional fields instead of a loose Record<string, string |
+  boolean | null>, plus extracted coerceString/coerceBool helpers. Re-ran
+  tsc — zero errors in any created/modified file (remaining tsc errors are
+  all pre-existing in examples/, scripts/, and skills/ directories).
+
+Stage Summary:
+- Public API: GET /api/donation-settings returns safe display-only fields.
+- Admin API: GET/PUT /api/admin/donation-settings with proper 401/403
+  separation and upsert-on-PUT semantics.
+- /support page is now a real Server Component that renders admin-configured
+  UPI / QR / Bank cards (or a paused notice, or an empty-config notice).
+- New admin "Donations" tab wired into AdminView with a full settings form
+  (toggle, all 9 fields, save/reset, live QR preview, toast feedback).
+- All TypeScript checks pass for the touched files; no file uploader was
+  built for the QR code (admin pastes a URL); no fake/placeholder bank
+  details are ever shown — sections hide automatically when fields are empty.
+
+---
+Task ID: admin-tabs-batch
+Agent: general-purpose (Admin Contact + Partner + Contributor tabs)
+Task: Build admin Contact Messages, Partner Inquiries, Contributor Applications tabs
+
+Work Log:
+- Read existing patterns: `AdminView.tsx` (tab registry + render switch),
+  `DonationSettingsTab.tsx` (component shape + `sonner` toast usage),
+  `redemptions` API route (admin auth via `requireAdmin()`), and the
+  existing `contributors` route (slugify + Contributor creation pattern).
+- Confirmed Prisma schema for `ContactMessage`, `PartnerInquiry`,
+  `Contributor`, and `ContributorApplication` models. `Contributor.userId`
+  + `Contributor.slug` + `Contributor.applicationId` are all `@unique` —
+  approval flow has to handle all three uniqueness constraints.
+- Created 3 collection API routes (GET list + POST action):
+  - `src/app/api/admin/contact-messages/route.ts`
+  - `src/app/api/admin/partner-inquiries/route.ts`
+  - `src/app/api/admin/contributor-applications/route.ts`
+  All use the donation-settings `requireAdmin()` shape: 401 if no session,
+  403 if `role !== "admin"`, never trusting client roles.
+- Created 3 per-item API routes (PATCH notes/verified + DELETE):
+  - `src/app/api/admin/contact-messages/[id]/route.ts`
+  - `src/app/api/admin/partner-inquiries/[id]/route.ts`
+  - `src/app/api/admin/contributor-applications/[id]/route.ts`
+- The contributor-applications `approve` action creates a linked
+  `Contributor` record idempotently — looks up by `applicationId` first.
+  The slug is generated via a `generateUniqueSlug()` helper that retries
+  up to 5 times with a 4-char random suffix on collision, with a final
+  timestamp fallback. If the application has a `userId` and a Contributor
+  already exists for it, that Contributor is reused (re-linked to this
+  applicationId + refreshed fields); otherwise the application.userId is
+  used (or a `pending-<id>` placeholder for anonymous applicants so the
+  @unique constraint isn't violated later).
+- The contributor-applications PATCH endpoint supports both `{ adminNotes }`
+  and `{ verified }` (or both). `verified` cascades to the linked
+  Contributor row and is rejected (400) when the application isn't yet
+  approved or has no linked Contributor.
+- Built 3 React tab components under `src/components/crosscrafted/admin/`:
+  - `ContactMessagesTab.tsx` — filter chips (All/New/Read/Replied/Closed)
+    with counts, client-side search, list cards with status badges,
+    detail modal with full message + admin notes textarea + status
+    actions + delete.
+  - `PartnerInquiriesTab.tsx` — same pattern; status colors new=blue,
+    contacted=green, archived=gray. Modal shows organization, website,
+    phone, partnershipType, message.
+  - `ContributorApplicationsTab.tsx` — filter chips (5 statuses), list
+    shows fullName/email/churchRole/contentInterests chips, modal shows
+    full bio + whyContribute + sampleUrl + expertise + contentInterests +
+    socialLinks, plus a "Verified Contributor" toggle (only visible after
+    approval) that PATCHes the linked Contributor's `verified` field.
+  All three components render `adminNotes` only inside the admin modal —
+  no public exposure.
+- Wired the three tabs into `src/components/crosscrafted/AdminView.tsx`:
+  extended `AdminTab` type, imported the three tab components + the
+  `Mail`/`Handshake`/`UserCheck` icons, added 3 entries to the `TABS`
+  array (placed after `donations`, before `analytics` per the spec),
+  and added 3 render branches in the tab content switch.
+- Added i18n keys to `src/lib/i18n/en.ts`:
+  `admin.tab.contactMessages`, `admin.tab.partnerInquiries`,
+  `admin.tab.contributors`.
+- Ran `npx tsc --noEmit --project tsconfig.json` — 0 errors in `src/`.
+  The only 5 remaining errors are pre-existing in unrelated
+  `examples/`, `scripts/`, and `skills/` directories (missing
+  `socket.io-client`, `re` module, etc.) and are NOT touched by this
+  task.
+
+Stage Summary:
+- 6 new admin API routes created across 3 feature domains.
+- 3 new admin tab components created with full list + filter + search
+  + detail modal + actions + admin notes workflow.
+- Contributor approval is idempotent and slug-safe (random suffix on
+  collision, placeholder userId for anonymous applicants).
+- `adminNotes`, `reviewedBy`, `reviewedAt` are returned ONLY by the
+  admin endpoints — public `/api/contact`, `/api/partner`, and
+  `/api/contributor/apply` routes already create records without
+  exposing these fields.
+- AdminView now renders 3 new tabs; the rest of the panel is untouched.
+- TypeScript clean (no new errors introduced).
+
+---
+Task ID: blog-system
+Agent: general-purpose (Blog system + sitemap)
+Task: Build admin Blog tab + improve public blog + dynamic sitemap
+
+Work Log:
+- Read existing patterns: `AdminView.tsx` (tab registry + render switch),
+  `DonationSettingsTab.tsx` + `ContactMessagesTab.tsx` (admin tab component
+  shape: filter chips, search, list+detail modal, sonner toast, dark theme),
+  `auth-server.ts` (`getAuthUser()`), the existing `/blog/page.tsx` and
+  `/blog/[slug]/page.tsx` (basic versions), and the `DonationSettingsTab`
+  admin API route (the `requireAdmin()` helper shape that distinguishes 401
+  from 403). Confirmed Prisma `BlogPost` schema already had all the fields
+  needed (featured, scheduledAt, canonicalUrl, relatedArticleIds, etc.).
+- Created 2 admin API routes:
+  - `src/app/api/admin/blog/route.ts`
+    - `GET` — admin-only. Returns ALL posts (incl. drafts + future-scheduled),
+      ordered by updatedAt DESC. Optional `?status=` filter (draft →
+      published=false; published → published=true; featured → featured=true).
+    - `POST` — admin-only. Creates a new post. Auto-slugifies title if slug
+      empty; de-dupes slug by appending `-2`, `-3`, etc. (capped at 20
+      attempts, timestamp fallback). Tags + relatedArticleIds accept either
+      CSV or array — coerced to JSON-array strings. If published=true and
+      publishedAt not set, defaults to now().
+  - `src/app/api/admin/blog/[id]/route.ts`
+    - `GET` — admin-only. Returns a single post by id (including drafts).
+    - `PATCH` — admin-only. Updates any field. Special handling for the
+      false→true published transition: defaults publishedAt to now() if
+      neither the body nor the existing row has one. Slug de-dupe check
+      (excluding self) prevents @unique violation. Scheduled-future + published
+      is allowed (admin override).
+    - `DELETE` — admin-only. Hard delete (BlogPost has no soft-delete column).
+- Built the admin tab component `src/components/crosscrafted/admin/BlogTab.tsx`:
+  - "use client". Loads posts on mount via GET /api/admin/blog.
+  - Filter chips: All / Drafts (amber) / Published (green) / Featured (purple),
+    each showing counts.
+  - Client-side search across title/slug/author.
+  - "New Post" button opens the editor modal in create mode; clicking a post
+    opens it in edit mode.
+  - List cards show title, slug, author, category chip, status badge
+    (Draft=amber, Published=green, Featured=purple), publishedAt/updatedAt
+    (time-ago format).
+  - Editor modal fields: Title, Slug (with live `/blog/...` preview,
+    auto-generated from title unless manually edited), Category + Author,
+    Excerpt, Content (large textarea), Featured Image URL (with live preview
+    thumbnail + onError hide), Tags (CSV with chip preview), Published +
+    Featured toggle cards, SEO Title/Description/Canonical URL
+    (grouped), Scheduled At (datetime-local), Related Article IDs (CSV).
+    Save button → POST (new) or PATCH (existing); Delete button with
+    two-step confirm. Sonner toast for success/error. Escape-to-close +
+    body-scroll lock. The Related Article IDs field uses free text since
+    the admin doesn't have a list of all post IDs in the modal context —
+    that's a future enhancement (could be a search-driven multi-select).
+- Wired Blog tab into `src/components/crosscrafted/AdminView.tsx`:
+  - Added `"blog"` to the `AdminTab` type union.
+  - Imported `BlogTab` + added `FileText` to the existing lucide-react
+    import block.
+  - Added entry to `TABS` array (after `contributors`, before `analytics`
+    per the spec).
+  - Added render branch `{activeTab === "blog" && <BlogTab />}`.
+- Added i18n key `"admin.tab.blog": "Blog"` to `src/lib/i18n/en.ts` after
+  the existing `admin.tab.contributors` key.
+- Rewrote public `/blog` page (`src/app/blog/page.tsx`):
+  - Server Component, `export const dynamic = "force-dynamic"`.
+  - PUBLIC query: `published=true AND (publishedAt IS NULL OR publishedAt <= now())`
+    — drafts and future-scheduled posts are NEVER shown.
+  - Proper `metadata` (title, description, OG, twitter card, canonical
+    `https://www.koino.in/blog`).
+  - Featured hero card (first featured post or fall back to first post),
+    with large image + Featured ribbon.
+  - Category filter chips + search input handled by a new client component
+    `BlogListClient.tsx` ("use client") that takes `posts` + `categories` as
+    props (search/filter entirely client-side; SEO stays server-rendered).
+  - Grid of post cards (1-col mobile, 2-col md+) with category eyebrow,
+    title, excerpt (line-clamp-2), publishedAt + author.
+  - Empty state ("No blog posts published yet") with link to /about.
+- Rewrote public `/blog/[slug]` page (`src/app/blog/[slug]/page.tsx`):
+  - Server Component, `force-dynamic`.
+  - `generateMetadata()` returns: title (seoTitle || `${title} — Koino Blog`),
+    description (seoDescription || excerpt), openGraph (type="article",
+    title, description, images=[featuredImage], siteName=Koino,
+    url=canonicalUrl || `/blog/${slug}`, publishedTime if set),
+    twitter (card: summary_large_image).
+  - Visibility gate: if post not found OR not published OR publishedAt is in
+    the future → `notFound()`. Same gate in `generateMetadata()` (no SEO for
+    future-scheduled posts).
+  - Article layout: back-to-blog link, category eyebrow, title, byline
+    (publishedAt + author), featured image, excerpt as styled lead,
+    content as `whitespace-pre-wrap`, tags as chips, canonical link notice
+    for cross-posted articles.
+  - "Related Articles" section: parses relatedArticleIds from JSON, fetches
+    those posts (published + visible only, excluding the current post),
+    re-orders to match the admin's chosen order, renders as 3-col small
+    cards (image, category, title, excerpt, date).
+- Created `src/app/sitemap.ts` (Next.js MetadataRoute.Sitemap convention):
+  - Combines static marketing URLs (/, /about, /blog, /community, /contact,
+    /partner, /support, /terms, /privacy, /cookies, /help) with every
+    published blog post.
+  - Only published + currently-visible posts are included (same gate as the
+    public /blog page).
+  - Per-URL: lastModified, changeFrequency="weekly", priority (1.0 for /,
+    0.7 for other static, 0.6 for blog posts).
+  - SITE_ORIGIN hardcoded to `https://www.koino.in`.
+  - Used `Promise<MetadataRoute.Sitemap>` return type to satisfy the strict
+    TS async-return-type check (the bare `MetadataRoute.Sitemap` form
+    triggers TS1064 in this codebase's TS config).
+- Deleted `public/sitemap.xml` so Next.js's auto-served `/sitemap.xml`
+  (from `src/app/sitemap.ts`) becomes the single source of truth. The
+  existing `public/robots.txt` already references `https://www.koino.in/sitemap.xml`,
+  so no robots.txt change was needed.
+- Ran `npx tsc --noEmit --project tsconfig.json`. First run flagged a
+  single error in `src/app/sitemap.ts` (the async return-type issue
+  above). Fixed by switching to `Promise<MetadataRoute.Sitemap>`.
+  Re-ran tsc — zero errors in `src/`. The only 5 remaining errors are
+  pre-existing in unrelated `examples/`, `scripts/`, and `skills/`
+  directories (socket.io-client, `re` module, etc.) and are NOT touched
+  by this task.
+
+Stage Summary:
+- 2 new admin API routes created (collection + per-item CRUD) with proper
+  401/403 separation and admin-only guards via `getAuthUser()`.
+- 1 new admin tab component (`BlogTab.tsx`) with full list + filter + search
+  + editor modal + create/update/delete workflow, status badges, and toast
+  feedback.
+- AdminView now renders a new "Blog" tab (placed between Contributors and
+  Analytics); rest of the panel is untouched.
+- Public `/blog` page rebuilt as a server component with hero card,
+  category chips, client-side search/filter, 2-col grid, and a proper
+  empty state. Public `/blog/[slug]` page rebuilt with full SEO metadata
+  (OG + Twitter + canonical), visibility gate, related-articles section,
+  and tags chips.
+- Public blog pages NEVER expose drafts or future-scheduled posts (gate
+  enforced at both the listing query and the single-post lookup).
+- Dynamic sitemap served at `/sitemap.xml` from `src/app/sitemap.ts`;
+  static `public/sitemap.xml` deleted to avoid shadowing.
+- All file uploads are out of scope — featuredImage is a URL input (admin
+  pastes Supabase Storage URL with live preview). No rich-text editor —
+  content is a plain textarea.
+- TypeScript clean (no new errors introduced).
+
+---
+Task ID: about-partner-contact
+Agent: general-purpose (About + Partner + Contact improvements)
+Task: Improve /about (koinonia + India focus), /partner (contributor flow), /contact (success message + contact info)
+
+Work Log:
+- Read all three existing pages (about, partner, contact) plus their API routes
+  (`/api/contact`, `/api/partner`, `/api/contributor/apply`) and the
+  ContributorApplicationsTab admin component to understand the contributor
+  application payload (fullName, email, church, churchRole, city, state,
+  country, bio, expertise[], website, socialLinks[], whyContribute,
+  contentInterests[], sampleUrl).
+- Read `PublicPageLayout` (client component wrapping Koino header + footer)
+  and confirmed design tokens (bg #12101A, card #1C1929, body #A09DB1,
+  coral #F39B9B / purple #7C3AED / blue #38BDF8 accents, `neo-input` class).
+
+Task 1 — /about (`src/app/about/page.tsx`):
+- Kept: Koino brand, hero, "Faith. Fellowship. Belong." pillars, features grid, CTA.
+- Added "The Meaning of Koino" section (after hero, before pillars): explains
+  koinonia (κοινωνία) as fellowship/communion/partnership/joint participation/
+  sharing life together, references Acts 2:42, Philippians 2:1, 1 John 1:3-7,
+  with a styled callout card quoting Acts 2:42.
+- Added "Built With India in Mind" section (after features): explains India focus,
+  state/city organization of churches/events/businesses, Bible Trivia tailored
+  for Indian Christian communities, long-term vision for Indian-language Bible.
+  HONESTLY lists: UI languages available (English, Hindi, Bengali, Telugu,
+  Marathi, Tamil, Gujarati, Urdu, Kannada, Oriya, Malayalam, Punjabi, Assamese),
+  and clearly states Bible translations currently available (KJV, WEB) with an
+  explicit note that Indian-language Bible translations are NOT yet available.
+- Added full Metadata export (title + description + OG).
+
+Task 2 — /partner:
+- Split into server wrapper (`page.tsx` exports Metadata + renders
+  PartnerPageClient) and client component (`PartnerPageClient.tsx`) so we can
+  have both metadata and client-side tab state.
+- Added hero (eyebrow "PARTNER WITH KOINO", headline about helping Christians
+  grow through teaching/experience/biblical knowledge, subheading).
+- Added "Who Can Partner?" grid of 10 partner types (Pastors, Church Leaders,
+  Bible Teachers, Apologists, Evangelists, Christian Authors, Theologians,
+  Ministry Leaders, Worship Leaders, Christian Content Creators) each with a
+  Lucide icon and one-line description.
+- Added "Contribution Areas" section (Blog Articles, Apologetics, Bible
+  Studies, Devotionals, Christian Q&A, Teaching Content).
+- Added "How It Works" 5-step workflow (Submit Application → Admin Review
+  PENDING→UNDER_REVIEW → Approval → Receive Permissions CAN_WRITE_* → Publish).
+- Added "✓ Koino Verified Contributor" callout clarifying that verification
+  means reviewed/approved, NOT endorsement of every theological statement.
+- Implemented a two-tab UI at the bottom: "Partnership Inquiry" (existing form,
+  POSTs to /api/partner with PartnerInquiry model — UNCHANGED) and "Become a
+  Contributor" (new form with all ContributorApplication fields, POSTs to
+  /api/contributor/apply which already exists). No duplicate contributor system
+  created.
+
+Task 3 — /contact:
+- Split into server wrapper (`page.tsx` exports Metadata + renders
+  ContactPageClient) and client component (`ContactPageClient.tsx`).
+- Updated success message to the exact spec: "Thank you for contacting Koino.
+  We have received your message." (replaces the old "Your message has been
+  received. We'll get back to you soon." copy).
+- Added "Contact Information" cards: Email (hello@koino.in, mailto link),
+  WhatsApp Channel (hardcoded https://whatsapp.com/channel/0029Vb96qSoBFLgTRTxI5v2q
+  with a note that it is configurable), Response Time ("We typically respond
+  within 2-3 business days.").
+- Added "Why Contact Us?" section with 5 cards (Report a problem/bug, Request a
+  feature, Ask about partnerships, Report inappropriate content, General
+  inquiries).
+- Widened the form layout to `max-w-5xl` outer / `lg:col-span-3` form card (was
+  `max-w-md`) and moved the form into a styled card on the right of the contact
+  info column. Form still POSTs to /api/contact with the same fields.
+- Added full Metadata (title "Contact Us | Koino" + description + OG).
+
+TypeScript: `npx tsc --noEmit --project tsconfig.json` runs clean for all
+modified files. The only 5 remaining errors are pre-existing in unrelated
+directories (`examples/websocket/*`, `scripts/translate-missing-i18n.ts`,
+`skills/image-edit/*`, `skills/stock-analysis-skill/*`) and were not introduced
+by this task.
+
+Stage Summary:
+- /about: now explains the biblical meaning of koinonia (with a verse callout
+  from Acts 2:42) and is transparent about India-focused vision + actual UI
+  language coverage and Bible translation availability (KJV + WEB only).
+- /partner: rebuilt as a two-track page — explanatory sections (who can
+  partner, contribution areas, workflow, verified contributor callout) plus a
+  tabbed form that preserves the existing PartnerInquiry flow on /api/partner
+  and adds a separate Contributor Application flow on /api/contributor/apply.
+- /contact: success message now matches spec exactly, contact info (email,
+  WhatsApp channel, response time) and a "Why Contact Us?" section added, form
+  widened.
+- All three pages export proper Next.js Metadata. No fake contact details —
+  only `hello@koino.in` placeholder and a hardcoded, clearly-marked-configurable
+  WhatsApp channel URL. No claims about Indian-language Bibles that don't
+  exist yet.
+---
+Task ID: blog-sections-landing-apphome
+Agent: general-purpose (Blog sections on landing + App Home)
+Task: Add "From the Koino Community" blog section to landing + "Latest from Koino" to App Home
+
+Work Log:
+- Read worklog, prisma schema (BlogPost model confirmed), existing public /blog
+  pages, and admin blog API to learn conventions (PrismaClient at module scope,
+  published gate, publishedAt null/lte(now) gate, serialization pattern).
+- Created `src/app/api/blog/latest/route.ts` — public GET endpoint returning up
+  to 3 (max 10 via ?limit) published posts. Selects only the public-safe fields
+  (id, title, slug, excerpt, featuredImage, category, author, publishedAt).
+  Serializes Date → ISO string. Fails soft: 200 with `{ posts: [] }` on internal
+  error so landing/App Home silently hide the section.
+- Modified `src/components/crosscrafted/LandingHero.tsx`:
+  - Added `useEffect`, `useState` imports + a local `BlogCardData` type.
+  - Added `blogPosts` / `blogLoading` state + a fetch-on-mount effect with a
+    `cancelled` flag for cleanup.
+  - Inserted a NEW `<section id="from-community">` between the "Meet
+    Christians Around the World" section and the "Final CTA" section per spec.
+  - Three states: skeleton (3 animate-pulse cards), empty ("Articles are being
+    prepared. Check back soon." — no CTA), and the 3-card grid + "VIEW ALL
+    ARTICLES" button linking to /blog. Cards use `<Link href={/blog/${slug}}>`
+    for client-side nav. Handles image-or-gradient placeholder, category
+    eyebrow, title (line-clamp-2), excerpt (line-clamp-2), publishedAt + author.
+- Modified `src/components/crosscrafted/AppHomeView.tsx`:
+  - Added `useEffect`, `useState` imports + `BlogCardData` type.
+  - Added fetch-on-mount effect (silently hides on error).
+  - Inserted a NEW "LATEST FROM KOINO" section AFTER the LordsbookCommunityCard
+    (truly at the bottom of the App Home). Uses the GROUPS label styling
+    (text-[10px] tracking-[0.25em] #F39B9B + gradient divider). 3-card grid
+    (1/2/3 cols responsive). Cards use `<a href={/blog/${slug}}>` for full route
+    nav since /blog/* is a public App Router page outside the SPA. Section is
+    conditionally rendered only when posts exist — no skeleton, no empty state.
+- Ran `npx tsc --noEmit --project tsconfig.json`: zero errors in any of the
+  modified/created files (only pre-existing errors in unrelated examples/,
+  scripts/, skills/ directories remain — those are not part of the Koino app).
+
+Stage Summary:
+- New public API: GET /api/blog/latest (max 10 posts, public-safe fields only,
+  draft + future-scheduled posts excluded). Mirrors the visibility gate used
+  by the /blog list and /blog/[slug] pages.
+- Landing page (`/`) now surfaces a "From the Koino Community" section with up
+  to 3 recent articles, a subtle skeleton loading state, an empty-state (no
+  View All CTA when no posts exist), and a "VIEW ALL ARTICLES" button linking
+  to /blog. Silently hidden on fetch error.
+- Authenticated App Home now surfaces a "LATEST FROM KOINO" section at the
+  bottom with up to 3 recent articles, hidden entirely when no posts/error.
+  Cards use `<a href>` for full-route navigation to the public blog article
+  (which renders inside PublicPageLayout and works for authed users too).
+- All three locations (public landing, public blog list, authenticated App
+  Home) now read from the same published-visibility gate, so draft and
+  future-scheduled posts are never exposed anywhere on the user-facing
+  surface.
+- No TypeScript errors introduced; no existing design tokens changed; only
+  additive sections were inserted (no redesign).
