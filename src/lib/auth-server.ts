@@ -23,13 +23,16 @@ export async function getAuthUser() {
   if (!user?.email) return null;
 
   // Mirror the Supabase auth user into our Prisma User table.
-  // First user with this email becomes a regular user; admins are
-  // bootstrapped via the BOOTSTRAP_ADMIN_EMAIL env var.
-  const bootstrapEmails = (process.env.BOOTSTRAP_ADMIN_EMAIL || "")
-    .split(",")
+  // Admins are bootstrapped via the BOOTSTRAP_ADMIN_EMAIL env var (comma-separated).
+  // Also check KOINO_ADMIN_EMAIL as an alias (single-admin config).
+  // Email comparison is case-insensitive (normalized to lowercase).
+  const adminEmails = [
+    ...(process.env.BOOTSTRAP_ADMIN_EMAIL || "").split(","),
+    ...(process.env.KOINO_ADMIN_EMAIL || "").split(","),
+  ]
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
-  const shouldBeAdmin = bootstrapEmails.includes(user.email.toLowerCase());
+  const shouldBeAdmin = adminEmails.includes(user.email.toLowerCase());
 
   let dbUser = await db.user.findUnique({ where: { email: user.email } });
   if (!dbUser) {

@@ -251,7 +251,7 @@ export default function Home() {
         {/* Desktop Sidebar */}
         <aside className="hidden md:flex flex-col w-56 border-r border-white/[0.04] min-h-[calc(100vh-56px)] sticky top-[56px] bg-[#0B1120] px-3 pt-6">
           <nav className="space-y-1">
-            {SIDEBAR_LINKS.map(({ id, icon: Icon, label }) => {
+            {SIDEBAR_LINKS.filter(({ id }) => id !== "admin" || isAdmin).map(({ id, icon: Icon, label }) => {
               const active = view === id;
               return (
                 <button
@@ -360,7 +360,13 @@ export default function Home() {
                 <BusinessDirectoryView onListBusiness={() => goView("list-business")} />
               )}
               {view === "small-groups" && <ComingSoonView title="Small Groups" />}
-              {view === "admin" && <AdminView />}
+              {view === "admin" && isAdmin && <AdminView />}
+              {view === "admin" && !isAdmin && (
+                <div className="text-center py-20">
+                  <Shield size={32} className="mx-auto text-[#EF4444] mb-3" />
+                  <p className="text-sm text-[#94A3B8]">You don't have permission to access the Admin Panel.</p>
+                </div>
+              )}
             </motion.div>
           </AnimatePresence>
         </main>
@@ -472,7 +478,7 @@ export default function Home() {
 
               <div className="p-5 grid grid-cols-3 gap-3">
                 {/* Show the 4 quick-access views too, so users have everything in one place */}
-                {[...MOBILE_NAV, ...MOBILE_MORE_VIEWS].map(({ id, icon: Icon, label }) => {
+                {[...MOBILE_NAV, ...MOBILE_MORE_VIEWS].filter(({ id }) => id !== "admin" || isAdmin).map(({ id, icon: Icon, label }) => {
                   const active = view === id;
                   return (
                     <button
