@@ -799,3 +799,50 @@ Stage Summary:
   * Audit log model + API
   * Notification system integration for winner notification
 - NO CHANGES TO: Existing TriviaQuestion model (800+ questions preserved), existing Faith Points system (server-authoritative, anti-farming), existing Daily Challenge/Spin/Badges/Stats/Leaderboard, existing difficulty values, existing Practice Mode, Bible Comics, Authentication, Brand colors/Koino logo.
+
+---
+Task ID: trivia-competition-phase2-end-to-end
+Agent: main
+Task: Complete the end-to-end competition play flow — quiz UI + result screen + leaderboard + automatic winner calculation.
+
+Work Log:
+- Created POST /api/trivia/competitions/[id]/start — server-side question selection + attempt creation. Verifies auth, competition liveness (server time), attempt limit (DB count). Selects questions SERVER-SIDE (client never chooses). Returns questions WITHOUT correct answers (stripped server-side). Creates attempt record pre-bound to userId + competitionId.
+- Updated POST /api/trivia/competitions/[id]/submit — now uses attemptId from /start (not creating a new attempt). Verifies attempt ownership (anti-cheat). Prevents duplicate submission. Updates existing attempt record with server-calculated score.
+- Created POST /api/trivia/competitions/[id]/finalize — IDEMPOTENT winner calculation (admin-only). Tie-breaking: score DESC → correctCount DESC → accuracy DESC → durationMs ASC → createdAt ASC. Uses DB transaction: creates winner records + decrements prize inventory atomically. @@unique([competitionId, userId]) prevents duplicates. Marks competition as "ended".
+- Created GET /api/trivia/competitions/[id]/leaderboard — public. Ranks by competition score (not lifetime FP). Deduplicates by userId (best attempt per user). Highlights current user's rank.
+- Created CompetitionQuizView.tsx — full-screen quiz UI: calls /start on mount, displays questions with progress bar, answer selection with A/B/C/D labels, Next/Back navigation, Submit Quiz on final question. Server-authoritative: client never sees correct answers.
+- Created CompetitionResultView — result screen: shows score, correct count, accuracy, rank, FP earned. "View Leaderboard" + "Back to Compete" buttons. Note: "Competition Score is separate from lifetime Faith Points."
+- Created CompetitionLeaderboard.tsx — competition-specific leaderboard: medal icons (🥇🥈🥉), highlights current user, shows rank/avatar/username/correct/accuracy/score. "Your Rank" card at top.
+- Updated TriviaView CompeteView: manages 3 sub-views (quiz, result, leaderboard). "Enter Challenge" button calls /start and opens CompetitionQuizView. After submission, CompetitionResultView shows with server-calculated score + rank. "View Leaderboard" / "View Results" buttons open CompetitionLeaderboard.
+- Fixed leaderboard route (was 404 because GET handler was inside finalize/route.ts — moved to its own leaderboard/route.ts file).
+- Committed as c199f79 + 27d51ee and pushed to main → Vercel deploy triggered.
+- Verified production after deploy:
+  * Homepage: HTTP 200 ✅
+  * /api/trivia/competitions: 200 with {competitions:[]} ✅
+  * /api/trivia/competitions/[id]/start: 401 for unauth ✅
+  * /api/trivia/competitions/[id]/submit: 401 for unauth ✅
+  * /api/trivia/competitions/[id]/finalize: 403 for non-admin ✅
+  * /api/trivia/competitions/[id]/leaderboard: 200 with {leaderboard:[], myRank:null, totalParticipants:0} ✅
+  * Genesis 1: HTTP 200 ✅ (no regression)
+
+Stage Summary:
+- END-TO-END FLOW (now working in code):
+  1. Admin creates competition via POST /api/admin/trivia/competitions
+  2. Admin sets status="live" + startAt/endAt
+  3. User opens Trivia → Compete tab → sees competition card with prize
+  4. User clicks "Enter Challenge" → /start creates attempt + returns questions (no correct answers)
+  5. User answers questions → clicks "Submit Quiz"
+  6. /submit validates answers server-side → calculates score + rank + FP
+  7. Result screen shows score, accuracy, rank, FP earned
+  8. User clicks "View Leaderboard" → sees competition leaderboard with their rank
+  9. When competition ends → admin calls /finalize → winners calculated + prizes allocated (idempotent)
+- FILES CHANGED: 7 files (2 new API routes + 1 updated API + 2 new components + 1 updated TriviaView + leaderboard route fix).
+- REAL DB-BACKED: Competition start/submit/finalize/leaderboard all query real Prisma models. Server-authoritative scoring. Attempt ownership verified. Prize inventory protected via DB transactions.
+- HONEST LIMITATIONS (not yet built):
+  * Admin Prize/Competition/Winner management UI in AdminView (APIs exist, admin panel tabs not wired)
+  * OTP mobile verification for prize claims (requires OTP provider integration)
+  * Shipping details collection form (fields exist in TriviaWinner model, UI not built)
+  * Cron job for automatic finalize (admin must manually call /finalize — can be triggered via curl or admin UI)
+  * Notification system integration for winner notification
+  * Anti-cheat detection (impossible submissions, rapid answers)
+  * Audit log model + API
