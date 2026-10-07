@@ -50,6 +50,15 @@ model User {
   // Signup method — "google" | "email" (set by the auth callback)
   signupMethod     String?  // "google" | "email"
 
+  // ─── ADMIN MEMBER MANAGEMENT ───
+  accountStatus    String   @default("active") // "active" | "blocked" | "suspended" | "deactivated"
+  moderationReason String?  // internal admin reason for blocking/suspending
+  verified         Boolean  @default(false) // ✓ Koino Verified (admin-controlled)
+  verifiedAt       DateTime?
+  verifiedBy       String?  // admin userId who verified
+  contributorType  String?  // "Pastor" | "Elder" | "Bible Teacher" | etc.
+  permissions      String   @default("[]") // JSON array of permission strings (on User for direct access)
+
   // Relations
   accounts          Account[]
   sessions          Session[]

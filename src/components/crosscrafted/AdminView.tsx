@@ -35,6 +35,8 @@ import {
   CheckCircle,
   BookOpen,
   AlertCircle,
+  BadgeCheck,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -44,6 +46,7 @@ import {
   PRAYERS,
   APOLOGETICS_QUESTIONS,
   TRIVIA_COMPETITIONS,
+  INDIAN_STATES,
   type Church,
   type EventItem,
   type Product,
@@ -56,6 +59,7 @@ import BibleComicsAdmin from "@/components/crosscrafted/BibleComicsAdmin";
 
 type AdminTab =
   | "dashboard"
+  | "members"
   | "churches"
   | "events"
   | "marketplace"
@@ -69,6 +73,7 @@ type AdminTab =
 
 const TABS: { id: AdminTab; icon: typeof Shield; labelKey: string }[] = [
   { id: "dashboard",    icon: LayoutDashboard, labelKey: "admin.tab.dashboard" },
+  { id: "members",      icon: Users,             labelKey: "admin.tab.members" },
   { id: "churches",     icon: Building2,        labelKey: "admin.tab.churches" },
   { id: "events",       icon: Calendar,         labelKey: "admin.tab.events" },
   { id: "marketplace",  icon: Store,             labelKey: "admin.tab.marketplace" },
@@ -203,6 +208,7 @@ export default function AdminView() {
           transition={{ duration: 0.15 }}
         >
           {activeTab === "dashboard" && <DashboardTab onNavigate={setActiveTab} />}
+          {activeTab === "members" && <MembersTab />}
           {activeTab === "churches" && <ChurchesTab />}
           {activeTab === "events" && <EventsTab />}
           {activeTab === "marketplace" && <MarketplaceTab />}
@@ -334,6 +340,324 @@ function DashboardTab({ onNavigate }: { onNavigate: (tab: AdminTab) => void }) {
           and prayer requests — keep the community safe and authentic.
         </p>
       </div>
+    </div>
+  );
+}
+
+// ─── MEMBERS ────────────────────────────────────────────────────────────────
+
+const ALL_PERMISSIONS = [
+  "CAN_WRITE_ARTICLES", "CAN_WRITE_BLOG", "CAN_WRITE_APOLOGETICS",
+  "CAN_ANSWER_QUESTIONS", "CAN_WRITE_BIBLE_STUDIES", "CAN_WRITE_DEVOTIONALS",
+  "CAN_UPLOAD_IMAGES", "CAN_EDIT_OWN_DRAFTS", "CAN_SUBMIT_FOR_REVIEW",
+  "CAN_PUBLISH_CONTENT",
+];
+
+const CONTRIBUTOR_TYPES = [
+  "Pastor", "Elder", "Bible Teacher", "Apologist", "Evangelist",
+  "Christian Author", "Theologian", "Ministry Leader", "Worship Leader",
+  "Christian Counselor", "Other",
+];
+
+const MODERATION_REASONS = [
+  "Fake profile", "Spam", "Harassment", "Fraud/scam",
+  "Inappropriate content", "Multiple accounts", "Other",
+];
+
+function MembersTab() {
+  const [members, setMembers] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [filterState, setFilterState] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterVerified, setFilterVerified] = useState("");
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const limit = 20;
+  const [selectedMember, setSelectedMember] = useState<any>(null);
+  const [memberDetail, setMemberDetail] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const loadMembers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: String(limit), offset: String(page * limit) });
+      if (search) params.set("search", search);
+      if (filterState) params.set("state", filterState);
+      if (filterStatus) params.set("profileCompleted", filterStatus);
+      const res = await fetch(`/api/admin/members?${params}`);
+      const data = await res.json();
+      setMembers(data.members || []);
+      setTotal(data.total || 0);
+    } catch { setMembers([]); }
+    finally { setLoading(false); }
+  }, [search, filterState, filterStatus, page]);
+
+  const loadStats = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/members?stats=true");
+      const data = await res.json();
+      setStats(data);
+    } catch {}
+  }, []);
+
+  useEffect(() => { loadMembers(); loadStats(); }, [loadMembers, loadStats]);
+
+  const openMember = async (id: string) => {
+    setSelectedMember(id);
+    setDetailLoading(true);
+    try {
+      const res = await fetch(`/api/admin/members/${id}`);
+      const data = await res.json();
+      setMemberDetail(data.member);
+    } catch {}
+    finally { setDetailLoading(false); }
+  };
+
+  const updateMember = async (updates: any) => {
+    if (!memberDetail) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/members/${memberDetail.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setMemberDetail(data.member);
+      toast.success("Member updated");
+      loadMembers();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to update");
+    } finally { setSaving(false); }
+  };
+
+  const togglePermission = (perm: string) => {
+    if (!memberDetail) return;
+    const current: string[] = JSON.parse(memberDetail.permissions || "[]");
+    const next = current.includes(perm) ? current.filter(p => p !== perm) : [...current, perm];
+    updateMember({ permissions: next });
+  };
+
+  return (
+    <div className="space-y-4">
+      <PreviewModeBanner section="Members" />
+
+      {/* Stats */}
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-[#1C1929] border border-white/[0.06] rounded-xl p-3">
+            <p className="text-xl font-extrabold text-white">{stats.totalMembers}</p>
+            <p className="text-[9px] text-[#94A3B8] uppercase">Total Members</p>
+          </div>
+          <div className="bg-[#1C1929] border border-white/[0.06] rounded-xl p-3">
+            <p className="text-xl font-extrabold text-[#22C55E]">{stats.newToday}</p>
+            <p className="text-[9px] text-[#94A3B8] uppercase">New Today</p>
+          </div>
+          <div className="bg-[#1C1929] border border-white/[0.06] rounded-xl p-3">
+            <p className="text-xl font-extrabold text-[#38BDF8]">{stats.newThisWeek}</p>
+            <p className="text-[9px] text-[#94A3B8] uppercase">This Week</p>
+          </div>
+          <div className="bg-[#1C1929] border border-white/[0.06] rounded-xl p-3">
+            <p className="text-xl font-extrabold text-[#A855F7]">{stats.newThisMonth}</p>
+            <p className="text-[9px] text-[#94A3B8] uppercase">This Month</p>
+          </div>
+        </div>
+      )}
+
+      {/* Recent signups */}
+      {stats?.recentSignups?.length > 0 && (
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[#F39B9B] mb-2">Recent Signups</p>
+          <div className="space-y-1.5">
+            {stats.recentSignups.slice(0, 5).map((m: any) => (
+              <button key={m.id} onClick={() => openMember(m.id)} className="w-full flex items-center gap-3 p-2 rounded-xl bg-[#1C1929] border border-white/[0.06] hover:border-white/[0.15] transition-all text-left">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#7C3AED] to-[#F39B9B] flex items-center justify-center text-white text-xs font-bold shrink-0 overflow-hidden">
+                  {m.image ? <img src={m.image} alt="" className="w-full h-full object-cover" /> : (m.username || m.email || "U").charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-white truncate">{m.username || m.name || m.email}</p>
+                  <p className="text-[9px] text-[#94A3B8]">{m.city ? `${m.city}, ` : ""}{m.state || ""} · {m.signupMethod || "email"}</p>
+                </div>
+                <span className="text-[8px] text-[#64748B] shrink-0">{new Date(m.createdAt).toLocaleDateString()}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Search + Filters */}
+      <div className="flex flex-wrap gap-2">
+        <input type="text" placeholder="Search username, email, name..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} className="neo-input text-xs flex-1 min-w-[150px]" />
+        <select value={filterState} onChange={(e) => { setFilterState(e.target.value); setPage(0); }} className="neo-input text-xs w-32">
+          <option value="">All States</option>
+          {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select value={filterStatus} onChange={(e) => { setFilterStatus(e.target.value); setPage(0); }} className="neo-input text-xs w-36">
+          <option value="">All Profiles</option>
+          <option value="true">Completed</option>
+          <option value="false">Incomplete</option>
+        </select>
+      </div>
+
+      {/* Members list */}
+      {loading ? (
+        <div className="flex justify-center py-8"><Loader2 size={24} className="text-[#F39B9B] animate-spin" /></div>
+      ) : members.length === 0 ? (
+        <EmptyState text="No members found." />
+      ) : (
+        <div className="space-y-2">
+          {members.map((m) => (
+            <button key={m.id} onClick={() => openMember(m.id)} className="w-full flex items-center gap-3 p-3 rounded-xl bg-[#1C1929] border border-white/[0.06] hover:border-white/[0.15] transition-all text-left">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#7C3AED] to-[#F39B9B] flex items-center justify-center text-white text-sm font-bold shrink-0 overflow-hidden">
+                {m.image ? <img src={m.image} alt="" className="w-full h-full object-cover" /> : (m.username || m.email || "U").charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-bold text-white truncate">{m.username || m.name || m.email}</p>
+                  {m.verified && <BadgeCheck size={12} className="text-[#38BDF8] shrink-0" />}
+                </div>
+                <p className="text-[9px] text-[#94A3B8]">{m.email} · {m.city || "—"}, {m.state || "—"}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <span className={`text-[8px] font-bold uppercase ${m.profileCompleted ? "text-[#22C55E]" : "text-[#F59E0B]"}`}>
+                  {m.profileCompleted ? "Complete" : "Incomplete"}
+                </span>
+                <p className="text-[8px] text-[#64748B]">{m.signupMethod || "email"}</p>
+              </div>
+            </button>
+          ))}
+          {/* Pagination */}
+          <div className="flex items-center justify-between pt-2">
+            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] text-xs font-bold disabled:opacity-30">Prev</button>
+            <span className="text-[10px] text-[#64748B]">{page * limit + 1}-{Math.min((page + 1) * limit, total)} of {total}</span>
+            <button onClick={() => setPage(p => p + 1)} disabled={(page + 1) * limit >= total} className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] text-xs font-bold disabled:opacity-30">Next</button>
+          </div>
+        </div>
+      )}
+
+      {/* Member Detail Modal */}
+      <AnimatePresence>
+        {selectedMember && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-end md:items-center justify-center z-[70] p-0 md:p-4" onClick={(e) => e.target === e.currentTarget && setSelectedMember(null)}>
+            <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="bg-[#1C1929] border border-white/[0.08] rounded-t-[28px] md:rounded-[24px] w-full max-w-lg max-h-[90vh] overflow-y-auto">
+              <div className="sticky top-0 bg-[#1C1929] z-10 flex justify-between items-center p-5 pb-3 border-b border-white/[0.04]">
+                <h2 className="text-base font-bold text-white">Member Details</h2>
+                <button onClick={() => setSelectedMember(null)} className="text-[#64748B] hover:text-white"><X size={18} /></button>
+              </div>
+
+              {detailLoading ? (
+                <div className="flex justify-center py-12"><Loader2 size={24} className="text-[#F39B9B] animate-spin" /></div>
+              ) : memberDetail ? (
+                <div className="p-5 space-y-4">
+                  {/* Profile */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#7C3AED] to-[#F39B9B] flex items-center justify-center text-white text-xl font-bold shrink-0 overflow-hidden">
+                      {memberDetail.image ? <img src={memberDetail.image} alt="" className="w-full h-full object-cover" /> : (memberDetail.username || memberDetail.email || "U").charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-bold text-white">{memberDetail.username || memberDetail.name || "—"}</p>
+                        {memberDetail.verified && <BadgeCheck size={14} className="text-[#38BDF8]" />}
+                      </div>
+                      <p className="text-[10px] text-[#94A3B8]">{memberDetail.email}</p>
+                      <p className="text-[9px] text-[#64748B]">Joined {new Date(memberDetail.createdAt).toLocaleDateString()} · {memberDetail.signupMethod || "email"}</p>
+                    </div>
+                  </div>
+
+                  {/* Info grid */}
+                  <div className="grid grid-cols-2 gap-2 text-[10px]">
+                    <div><p className="text-[#64748B]">Mobile</p><p className="text-white">{memberDetail.mobileNumber || "Not provided"}</p></div>
+                    <div><p className="text-[#64748B]">Gender</p><p className="text-white">{memberDetail.gender || "Not provided"}</p></div>
+                    <div><p className="text-[#64748B]">State</p><p className="text-white">{memberDetail.state || "Not provided"}</p></div>
+                    <div><p className="text-[#64748B]">City</p><p className="text-white">{memberDetail.city || "Not provided"}</p></div>
+                    <div><p className="text-[#64748B]">Faith Status</p><p className="text-white">{memberDetail.faithStatus?.replace(/_/g, " ") || "Not provided"}</p></div>
+                    <div><p className="text-[#64748B]">Faith Journey</p><p className="text-white">{memberDetail.faithJourney?.replace(/_/g, " ") || "Not provided"}</p></div>
+                    <div><p className="text-[#64748B]">Account Status</p><p className="text-white capitalize">{memberDetail.accountStatus}</p></div>
+                    <div><p className="text-[#64748B]">Profile</p><p className="text-white">{memberDetail.profileCompleted ? "Complete" : "Incomplete"}</p></div>
+                  </div>
+
+                  {/* Verification */}
+                  <div className="bg-[#1C1929] border border-white/[0.06] rounded-xl p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <BadgeCheck size={16} className={memberDetail.verified ? "text-[#38BDF8]" : "text-[#475569]"} />
+                        <div>
+                          <p className="text-xs font-bold text-white">Koino Verified</p>
+                          <p className="text-[9px] text-[#64748B]">{memberDetail.verified ? `Verified ${memberDetail.verifiedAt ? new Date(memberDetail.verifiedAt).toLocaleDateString() : ""}` : "Not verified"}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => updateMember({ verified: !memberDetail.verified })}
+                        disabled={saving}
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${memberDetail.verified ? "bg-[#EF4444]/15 text-[#EF4444]" : "bg-[#38BDF8]/15 text-[#38BDF8]"}`}
+                      >
+                        {memberDetail.verified ? "Unverify" : "Verify"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Contributor Type */}
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1.5">Contributor Type</p>
+                    <select
+                      value={memberDetail.contributorType || ""}
+                      onChange={(e) => updateMember({ contributorType: e.target.value || null })}
+                      disabled={saving}
+                      className="neo-input text-sm"
+                    >
+                      <option value="">None</option>
+                      {CONTRIBUTOR_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Permissions */}
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1.5">Content Permissions</p>
+                    <div className="space-y-1.5">
+                      {ALL_PERMISSIONS.map((perm) => {
+                        const current: string[] = JSON.parse(memberDetail.permissions || "[]");
+                        const enabled = current.includes(perm);
+                        return (
+                          <label key={perm} className="flex items-center gap-2 p-2 rounded-lg bg-white/[0.02] border border-white/[0.04] cursor-pointer hover:bg-white/[0.04] transition-all">
+                            <input type="checkbox" checked={enabled} onChange={() => togglePermission(perm)} className="accent-[#7C3AED]" />
+                            <span className={`text-[11px] font-bold ${enabled ? "text-white" : "text-[#64748B]"}`}>{perm.replace(/_/g, " ").toLowerCase().replace(/\w/g, c => c.toUpperCase())}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Account Status */}
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1.5">Account Status</p>
+                    <div className="flex gap-2">
+                      {["active", "blocked", "suspended", "deactivated"].map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => updateMember({ accountStatus: s })}
+                          disabled={saving || memberDetail.accountStatus === s}
+                          className={`flex-1 py-2 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${memberDetail.accountStatus === s ? "bg-[#7C3AED] text-white" : "bg-white/[0.04] text-[#94A3B8] hover:text-white"}`}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                    {memberDetail.moderationReason && <p className="text-[9px] text-[#EF4444] mt-1">Reason: {memberDetail.moderationReason}</p>}
+                  </div>
+
+                  <p className="text-[9px] text-[#475569] text-center">Mobile and DOB are private — visible only to authorized admins.</p>
+                </div>
+              ) : (
+                <EmptyState text="Member not found." />
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
