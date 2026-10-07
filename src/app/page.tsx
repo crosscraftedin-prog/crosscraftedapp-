@@ -19,6 +19,7 @@ import {
   Grid,
   X,
   Shield,
+  Globe,
 } from "lucide-react";
 import LandingHero from "@/components/crosscrafted/LandingHero";
 import ChurchesView from "@/components/crosscrafted/ChurchesView";
@@ -58,6 +59,7 @@ type View =
   | "list-business" // kept for backward-compat route (the ListYourEntity form)
   | "business-directory" // public browse page
   | "small-groups"
+  | "community" // Global Christian Community → navigates to /community (Lordsbook CTA page)
   | "admin";
 
 // Bible is the main feature — placed at the top of the sidebar.
@@ -66,6 +68,10 @@ type View =
 // Small Groups and List Church are also NOT top-level entries —
 // Small Groups is part of the Churches hub (Groups section inside church profile),
 // and List Your Church is a primary action inside the Churches hub.
+//
+// "community" is a special sidebar entry: clicking it does a full route
+// navigation to /community (the Lordsbook community CTA page). It does NOT
+// render inside the SPA — goView() catches it and redirects.
 const SIDEBAR_LINKS: { id: View; icon: typeof Search; label: string }[] = [
   { id: "home", icon: HomeIcon, label: "Home" },
   { id: "bible", icon: BookOpen, label: "Bible" },
@@ -73,6 +79,9 @@ const SIDEBAR_LINKS: { id: View; icon: typeof Search; label: string }[] = [
   { id: "events", icon: Calendar, label: "Events" },
   { id: "trivia", icon: Award, label: "Bible Trivia" },
   { id: "apologetics", icon: ListChecks, label: "Apologetics" },
+  // ─── COMMUNITY ─── Global Christian Community → /community
+  { id: "community", icon: Globe, label: "Global Christian Community" },
+  // ─── DISCOVER ─── Marketplace + Business Directory
   { id: "shop", icon: Store, label: "Marketplace" },
   { id: "business-directory", icon: Building2, label: "Business Directory" },
   { id: "prayer-wall", icon: HeartHandshake, label: "Prayer Wall" },
@@ -95,6 +104,7 @@ const MOBILE_NAV: { id: View; icon: typeof Search; label: string }[] = [
 const MOBILE_MORE_VIEWS: { id: View; icon: typeof Search; label: string }[] = [
   { id: "events", icon: Calendar, label: "Events" },
   { id: "apologetics", icon: ListChecks, label: "Apologetics" },
+  { id: "community", icon: Globe, label: "Global Christian Community" },
   { id: "prayer-wall", icon: HeartHandshake, label: "Prayer Wall" },
   { id: "business-directory", icon: Building2, label: "Business Directory" },
   { id: "admin", icon: Shield, label: "Admin" },
@@ -168,7 +178,29 @@ export default function Home() {
       navigate("landing");
     }
   };
-  const goView = (v: View) => navigate(v);
+  const goView = (v: View) => {
+    // "community" is a special pseudo-view: it doesn't render inside the SPA.
+    // Instead, navigate to the /community route (Lordsbook community CTA page).
+    // Fire-and-forget analytics if available, then perform a full route navigation.
+    if (v === "community") {
+      // Mirror the cleanup that navigate() does so the More sheet closes
+      // immediately on mobile and doesn't linger over the redirect.
+      setShowMoreSheet(false);
+      setHeaderVisible(true);
+      try {
+        fetch("/api/track", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ event: "global_christian_community_nav_click", source: "sidebar" }),
+        }).catch(() => {});
+      } catch {}
+      if (typeof window !== "undefined") {
+        window.location.href = "/community";
+      }
+      return;
+    }
+    navigate(v);
+  };
 
   // ─── AUTH LOADING GUARD ───
   // While auth is loading, show a minimal loading screen instead of flashing
