@@ -71,6 +71,9 @@ model User {
   // Streak + rewards
   userStreak          UserStreak?
   userRewards         UserReward[]
+
+  // Contributor
+  contributor         Contributor?
 }
 
 // ─── NEXTAUTH TABLES ────────────────────────────────────────────────────────
@@ -806,4 +809,138 @@ model UserReward {
   @@unique([userId, milestoneId]) // prevents duplicate milestone rewards (once-ever default)
   @@index([userId, status])
   @@index([rewardId])
+}
+
+// ─── APOLOGETICS + CONTRIBUTOR CMS ─────────────────────────────────────────
+// Unified content model for Articles, Blogs, Apologetics, Bible Studies,
+// Devotionals. One CMS architecture, multiple content types.
+
+model KoinoArticle {
+  id              String   @id @default(cuid())
+  title           String
+  slug            String   @unique
+  contentType     String   // "ARTICLE" | "BLOG" | "APOLOGETICS" | "BIBLE_STUDY" | "DEVOTIONAL"
+  category        String?  // e.g., "God & Existence", "Jesus Christ", "Resurrection"
+  subcategory     String?
+  seriesId        String?  // references ArticleSeries.id
+  excerpt         String?
+  shortAnswer     String?  // for Apologetics articles
+  content         String   // rich text / HTML
+  coverImageUrl   String?
+  authorId        String?  // references Contributor.id (or null for admin-created)
+  authorName      String?  // display name (denormalized for public display)
+  status          String   @default("draft") // "draft" | "submitted" | "changes_requested" | "approved" | "published" | "rejected" | "scheduled" | "archived"
+  difficulty       String?  // "BEGINNER" | "INTERMEDIATE" | "ADVANCED"
+  featured        Boolean  @default(false)
+  bibleRefs       String   @default("[]") // JSON array of Bible references (e.g., "John 20:1-29")
+  sources         String   @default("[]") // JSON array of source objects
+  relatedIds      String   @default("[]") // JSON array of related article IDs
+  reviewedBy      String?  // admin userId
+  reviewedAt      DateTime?
+  reviewNotes     String?  // admin feedback for "changes requested"
+  publishedAt     DateTime?
+  scheduledAt     DateTime?
+  seoTitle        String?
+  seoDescription  String?
+  canonicalUrl    String?
+  viewCount       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  series          ArticleSeries? @relation(fields: [seriesId], references: [id])
+  author          Contributor?   @relation(fields: [authorId], references: [id])
+
+  @@index([status, contentType, publishedAt])
+  @@index([category])
+  @@index([status])
+  @@index([slug])
+}
+
+model ArticleSeries {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  description     String?
+  coverImageUrl   String?
+  published       Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  articles        KoinoArticle[]
+}
+
+model Contributor {
+  id              String   @id @default(cuid())
+  userId          String   @unique // references User.id
+  displayName     String
+  slug            String   @unique // for /contributors/[slug]
+  profilePhoto    String?
+  bio             String?
+  church          String?
+  churchRole      String?  // "Pastor" | "Elder" | "Bible Teacher" | "Apologist" | etc.
+  location        String?
+  expertise       String   @default("[]") // JSON array
+  website         String?
+  socialLinks     String   @default("[]") // JSON array of {label, url}
+  verified        Boolean  @default(false) // ✓ Koino Verified Contributor badge
+  status          String   @default("pending") // "pending" | "approved" | "rejected" | "suspended"
+  permissions     String   @default("[]") // JSON array of permission strings
+  applicationId   String?  @unique
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application     ContributorApplication? @relation(fields: [applicationId], references: [id])
+  articles        KoinoArticle[]
+
+  @@index([status])
+  @@index([verified])
+}
+
+model ContributorApplication {
+  id              String   @id @default(cuid())
+  fullName        String
+  email           String
+  userId          String?  // references User.id if applicant is a Koino member
+  profilePhoto    String?
+  church          String?
+  churchRole      String?
+  city            String?
+  state           String?
+  country         String?
+  bio             String?
+  expertise       String   @default("[]") // JSON array
+  website         String?
+  socialLinks     String   @default("[]") // JSON array
+  whyContribute   String?
+  contentInterests String  @default("[]") // JSON array: ["Apologetics", "Blog", etc.]
+  sampleUrl       String?
+  status          String   @default("pending") // "pending" | "under_review" | "approved" | "rejected" | "suspended"
+  adminNotes      String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  contributor     Contributor?
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model UserQuestion {
+  id              String   @id @default(cuid())
+  question        String
+  askerName       String?
+  askerEmail      String?
+  askerUserId     String?  // references User.id if logged in
+  category        String?  // suggested apologetics category
+  status          String   @default("new") // "new" | "in_review" | "answered" | "turned_into_article" | "archived"
+  adminNotes      String?
+  articleId       String?  // if turned into article
+  createdAt       DateTime @default(now())
+
+  @@index([status])
+  @@index([createdAt])
 }
