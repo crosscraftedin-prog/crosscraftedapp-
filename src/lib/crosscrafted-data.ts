@@ -1095,7 +1095,8 @@ export const PRODUCTS: Product[] = [
     ],
     in_stock: true,
     whatsapp_number: "+919876543200",
-    buyUrl: "https://shop.believ.app/signature-tee",
+    // Koino Store products use the in-app "Add to Cart" flow (no buyUrl).
+    // Previously pointed to shop.believ.app (dead brand domain) — removed.
     status: "published",
     featured: true,
     variations: [
@@ -1131,7 +1132,8 @@ export const PRODUCTS: Product[] = [
     ],
     in_stock: true,
     whatsapp_number: "+919876543200",
-    buyUrl: "https://shop.believ.app/hoodie-scripture",
+    // Koino Store products use the in-app "Add to Cart" flow (no buyUrl).
+    // Previously pointed to shop.believ.app (dead brand domain) — removed.
     status: "published",
     featured: true,
     variations: [
@@ -1832,8 +1834,14 @@ export const TRIVIA_COMPETITIONS: TriviaCompetition[] = [
 ];
 
 // Player invitations - share links for inviting friends/groups
+// The share text contains a deep link back to Koino on the canonical
+// production domain (https://www.koino.in). The SPA reads the `view`
+// and `comp` query params on load and routes the user straight to the
+// competition. This URL MUST stay on www.koino.in — never use the
+// raw Vercel deployment URL (crosscraftedapp.vercel.app) or any old
+// brand domain (crosscrafted.app / believ.app) here.
 export function generateInviteLink(competitionId: string, playerName: string): string {
-  const invite = `Hey! ${playerName} invited you to join a Bible Trivia competition on Koino. Play now: https://crosscrafted.app/trivia?comp=${competitionId}&invited_by=${encodeURIComponent(playerName)}`;
+  const invite = `Hey! ${playerName} invited you to join a Bible Trivia competition on Koino. Play now: https://www.koino.in/?view=trivia&comp=${competitionId}&invited_by=${encodeURIComponent(playerName)}`;
   return invite;
 }
 
