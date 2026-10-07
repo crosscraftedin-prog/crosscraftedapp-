@@ -13,4 +13,4 @@ Allow: /
 User-agent: *
 Allow: /
 
-Sitemap: https://koino.in/sitemap.xml
+Sitemap: https://www.koino.in/sitemap.xml
