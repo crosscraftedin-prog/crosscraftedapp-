@@ -45,6 +45,8 @@ import {
 import StreakBadge from "@/components/crosscrafted/StreakBadge";
 import GamificationPanel from "@/components/crosscrafted/GamificationPanel";
 import LevelUpAnimation from "@/components/crosscrafted/LevelUpAnimation";
+import CompetitionQuizView, { CompetitionResultView } from "@/components/crosscrafted/CompetitionQuizView";
+import CompetitionLeaderboard from "@/components/crosscrafted/CompetitionLeaderboard";
 import { useTriviaApi } from "@/lib/trivia-api";
 
 const TIMER_SECONDS: Record<string, number> = {
@@ -1403,14 +1405,61 @@ function CompeteView() {
   const { isAuthenticated } = useSupabaseUser();
   const [competitions, setCompetitions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeCompetition, setActiveCompetition] = useState<{ id: string; title: string } | null>(null);
+  const [quizResult, setQuizResult] = useState<{ result: any; title: string } | null>(null);
+  const [leaderboardCompetition, setLeaderboardCompetition] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadCompetitions = useCallback(() => {
     fetch("/api/trivia/competitions")
       .then((r) => r.json())
       .then((data) => { setCompetitions(data.competitions || []); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { loadCompetitions(); }, [loadCompetitions]);
+
+  // ─── QUIZ VIEW (full screen) ───
+  if (activeCompetition) {
+    return (
+      <CompetitionQuizView
+        competitionId={activeCompetition.id}
+        competitionTitle={activeCompetition.title}
+        onClose={() => { setActiveCompetition(null); loadCompetitions(); }}
+        onComplete={(result) => {
+          setQuizResult({ result, title: activeCompetition.title });
+          setActiveCompetition(null);
+        }}
+      />
+    );
+  }
+
+  // ─── RESULT VIEW (full screen) ───
+  if (quizResult) {
+    return (
+      <CompetitionResultView
+        result={quizResult.result}
+        competitionTitle={quizResult.title}
+        onBackToCompete={() => { setQuizResult(null); loadCompetitions(); }}
+        onViewLeaderboard={() => {
+          // Find the competition ID from the result
+          const comp = competitions.find((c) => c.title === quizResult.title);
+          setLeaderboardCompetition(comp?.id || null);
+          setQuizResult(null);
+        }}
+      />
+    );
+  }
+
+  // ─── LEADERBOARD VIEW ───
+  if (leaderboardCompetition) {
+    return (
+      <CompetitionLeaderboard
+        competitionId={leaderboardCompetition}
+        onClose={() => { setLeaderboardCompetition(null); loadCompetitions(); }}
+      />
+    );
+  }
 
   if (loading) {
     return (
@@ -1502,8 +1551,27 @@ function CompeteView() {
         )}
 
         {c.status === "live" && isAuthenticated && c.userAttemptsRemaining > 0 && (
-          <button className="w-full py-2 rounded-xl bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 text-xs font-extrabold uppercase tracking-wider transition-all">
+          <button
+            onClick={() => setActiveCompetition({ id: c.id, title: c.title })}
+            className="w-full py-2 rounded-xl bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 text-xs font-extrabold uppercase tracking-wider transition-all"
+          >
             {c.userAttemptsUsed > 0 ? "Play Again" : "Enter Challenge"}
+          </button>
+        )}
+        {c.status === "live" && isAuthenticated && c.userAttemptsRemaining === 0 && (
+          <button
+            onClick={() => setLeaderboardCompetition(c.id)}
+            className="w-full py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold transition-all"
+          >
+            View Leaderboard
+          </button>
+        )}
+        {c.status === "ended" && (
+          <button
+            onClick={() => setLeaderboardCompetition(c.id)}
+            className="w-full py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold transition-all"
+          >
+            View Results
           </button>
         )}
         {c.status === "live" && !isAuthenticated && (

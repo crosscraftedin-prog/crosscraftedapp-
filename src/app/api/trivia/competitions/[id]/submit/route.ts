@@ -7,14 +7,21 @@ const db = new PrismaClient();
 /**
  * POST /api/trivia/competitions/[id]/submit
  *
- * Submits answers for a competition quiz. SERVER-AUTHORITATIVE scoring:
- * - userId from auth session (not body)
- * - correct answers validated server-side (client never sees them before submitting)
- * - score calculated server-side
- * - attempt limit enforced via DB count
+ * Submits answers for a competition attempt. SERVER-AUTHORITATIVE scoring.
  *
- * Body: { answers: [{ questionId, selectedAnswer }] }
- * Returns: { score, correctCount, totalQuestions, accuracy, rank }
+ * The attempt was already created by POST /api/trivia/competitions/[id]/start,
+ * which returned an `attemptId`. The client sends:
+ *   { attemptId, answers: [{ questionId, selectedAnswer }] }
+ *
+ * The server:
+ *   1. Verifies the attempt belongs to the authenticated user (anti-cheat)
+ *   2. Verifies the competition is still live (server time)
+ *   3. Validates answers against the actual TriviaQuestion records (server-side)
+ *   4. Calculates score server-side (competition score, NOT lifetime FP)
+ *   5. Updates the attempt record (not creating a new one)
+ *   6. Awards lifetime FP for NEW questions (anti-farming via existing constraint)
+ *
+ * Returns: { score, correctCount, totalQuestions, accuracy, durationMs, rank, fpAwarded, competitionScore }
  */
 export async function POST(
   req: NextRequest,
@@ -28,50 +35,62 @@ export async function POST(
 
     const { id: competitionId } = await params;
     const body = await req.json();
+    const attemptId: string | undefined = body.attemptId;
     const answers: { questionId: string; selectedAnswer: number }[] = body.answers || [];
+    const startTime: string | undefined = body.startTime;
 
+    if (!attemptId) {
+      return NextResponse.json({ error: "Missing attemptId (call /start first)" }, { status: 400 });
+    }
     if (!Array.isArray(answers) || answers.length === 0) {
       return NextResponse.json({ error: "No answers provided" }, { status: 400 });
     }
 
-    // ─── 1. Validate competition exists + is live ───
+    // ─── 1. Find the attempt + verify ownership ───
+    const attempt = await db.triviaCompetitionAttempt.findUnique({
+      where: { id: attemptId },
+    });
+    if (!attempt) {
+      return NextResponse.json({ error: "Attempt not found" }, { status: 404 });
+    }
+    // Anti-cheat: the attempt must belong to the authenticated user
+    if (attempt.userId !== user.id) {
+      return NextResponse.json({ error: "Attempt does not belong to this user" }, { status: 403 });
+    }
+    // The attempt must be for the correct competition
+    if (attempt.competitionId !== competitionId) {
+      return NextResponse.json({ error: "Attempt is for a different competition" }, { status: 400 });
+    }
+    // Prevent duplicate submission — if score > 0, the attempt was already submitted
+    if (attempt.score > 0 || attempt.correctCount > 0) {
+      return NextResponse.json({ error: "This attempt has already been submitted" }, { status: 403 });
+    }
+
+    // ─── 2. Verify competition is still live (server time, not client time) ───
     const competition = await db.triviaCompetition.findUnique({
       where: { id: competitionId },
     });
     if (!competition) {
       return NextResponse.json({ error: "Competition not found" }, { status: 404 });
     }
-
     const now = new Date();
     const isLive = competition.status === "live" && now >= competition.startAt && now < competition.endAt;
     if (!isLive) {
-      return NextResponse.json({ error: "Competition is not live or has ended" }, { status: 403 });
+      return NextResponse.json({ error: "Competition has ended — submissions are closed" }, { status: 403 });
     }
 
-    // ─── 2. Enforce attempt limit (server-side) ───
-    const attemptCount = await db.triviaCompetitionAttempt.count({
-      where: { competitionId, userId: user.id },
-    });
-    if (attemptCount >= competition.attemptLimit) {
-      return NextResponse.json(
-        { error: `Attempt limit reached (${competition.attemptLimit} attempt${competition.attemptLimit === 1 ? "" : "s"} allowed)` },
-        { status: 403 }
-      );
-    }
-
-    // ─── 3. Fetch the actual questions (server-side) to validate answers ───
-    // The answers must match the questions that were served to this user.
-    // For simplicity, we validate each answer against the TriviaQuestion record.
-    const questionIds = answers.map((a) => a.questionId);
+    // ─── 3. Fetch the actual questions to validate answers ───
+    // The attempt.questionIds contains the server-selected question IDs.
+    const attemptQuestionIds: string[] = JSON.parse(attempt.questionIds);
     const questions = await db.triviaQuestion.findMany({
-      where: { questionId: { in: questionIds } },
+      where: { questionId: { in: attemptQuestionIds } },
     });
 
     // ─── 4. Calculate score server-side ───
     let correctCount = 0;
     let totalPoints = 0;
-    const startTime = body.startTime ? new Date(body.startTime) : now;
-    const durationMs = Math.max(0, now.getTime() - startTime.getTime());
+    const attemptStart = startTime ? new Date(startTime) : attempt.createdAt;
+    const durationMs = Math.max(0, now.getTime() - attemptStart.getTime());
 
     for (const answer of answers) {
       const question = questions.find((q) => q.questionId === answer.questionId);
@@ -84,36 +103,31 @@ export async function POST(
 
     const accuracy = answers.length > 0 ? correctCount / answers.length : 0;
 
-    // ─── 5. Create the attempt record (transaction-safe) ───
-    const attempt = await db.triviaCompetitionAttempt.create({
+    // ─── 5. Update the attempt record (not create a new one) ───
+    await db.triviaCompetitionAttempt.update({
+      where: { id: attemptId },
       data: {
-        competitionId,
-        userId: user.id,
-        questionIds: JSON.stringify(questionIds),
         score: totalPoints,
         correctCount,
-        totalQuestions: answers.length,
         accuracy,
         durationMs,
       },
     });
 
-    // ─── 6. Also award Faith Points (lifetime FP) for correct answers ───
-    // Anti-farming: check if the user has already earned FP for each question
-    // (via TriviaQuestionAttempt @@unique([userId, questionId]))
+    // ─── 6. Award lifetime Faith Points for NEW questions ───
+    // Anti-farming: @@unique([userId, questionId]) prevents earning FP twice
+    // for the same question, regardless of where it was asked.
     let fpAwarded = 0;
     for (const answer of answers) {
       const question = questions.find((q) => q.questionId === answer.questionId);
       if (!question) continue;
       if (answer.selectedAnswer === question.correctAnswer) {
-        // Check if already earned FP for this question
         const existing = await db.triviaQuestionAttempt.findUnique({
           where: {
             userId_questionId: { userId: user.id, questionId: question.questionId },
           },
         });
         if (!existing) {
-          // Award FP + create attempt record + transaction (transaction-safe)
           await db.$transaction([
             db.triviaQuestionAttempt.create({
               data: {
@@ -150,7 +164,7 @@ export async function POST(
     const rank = higherScorers.length + 1;
 
     return NextResponse.json({
-      attemptId: attempt.id,
+      attemptId,
       score: totalPoints,
       correctCount,
       totalQuestions: answers.length,
@@ -158,7 +172,7 @@ export async function POST(
       durationMs,
       rank,
       fpAwarded,
-      competitionScore: totalPoints, // explicitly named — this is NOT lifetime FP
+      competitionScore: totalPoints,
     });
   } catch (error: any) {
     console.error("[trivia/competitions/submit] Error:", error);
