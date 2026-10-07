@@ -17,7 +17,7 @@ export const en: Record<string, string> = {
   "landing.title": "Koino",
   "landing.titleGradient": "Faith. Fellowship. Belong.",
   "landing.subtitle":
-    "An all-in-one Christian community platform where believers can grow in faith, connect with churches and communities, discover events, pray together, explore Scripture, and support Christian businesses.",
+    "An all-in-one Christian faith platform where believers can grow in faith, explore Scripture, connect with churches and communities, discover events, pray together, learn, and support Christian businesses.",
   "landing.cta.enterKoino": "Enter Koino",
   "landing.cta.readBible": "Read the Bible",
   "landing.cta.tryTrivia": "Try Trivia",
