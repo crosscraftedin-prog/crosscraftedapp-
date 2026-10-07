@@ -87,12 +87,12 @@ export async function GET(
       ${titleLines.map((line, i) => `<text x="${width / 2}" y="${130 + i * 56}" text-anchor="middle" fill="white" font-family="Georgia, serif" font-size="48" font-weight="bold">${line}</text>`).join("")}
       ${excerptLines.map((line, i) => `<text x="${width / 2}" y="${overlayY + 60 + i * 38}" text-anchor="middle" fill="#94A3B8" font-family="Arial, sans-serif" font-size="32">${line}</text>`).join("")}
       <rect x="${width / 2 - 90}" y="${height - 80}" width="180" height="44" rx="22" fill="#F39B9B"/>
-      <text x="${width / 2}" y="${height - 52}" text-anchor="middle" fill="#0f0f1a" font-family="Arial, sans-serif" font-size="24" font-weight="bold">believ.app</text>
+      <text x="${width / 2}" y="${height - 52}" text-anchor="middle" fill="#0f0f1a" font-family="Arial, sans-serif" font-size="24" font-weight="bold">koino.in</text>
     </svg>`;
 
     const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
 
-    return new NextResponse(pngBuffer, {
+    return new NextResponse(new Uint8Array(pngBuffer), {
       headers: {
         "Content-Type": "image/png",
         "Cache-Control": "public, max-age=86400",

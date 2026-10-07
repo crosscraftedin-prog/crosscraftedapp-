@@ -42,7 +42,7 @@ export const PRIZE_TIERS = [
 ] as const;
 
 export function getTier(points: number) {
-  let current = PRIZE_TIERS[0];
+  let current: any = PRIZE_TIERS[0];
   let next: (typeof PRIZE_TIERS)[number] | null = null;
   for (const tier of PRIZE_TIERS) {
     if (points >= tier.minPoints) {

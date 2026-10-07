@@ -64,7 +64,7 @@ export async function GET() {
     }
 
     // Check if user already answered
-    let userAttempt = null;
+    let userAttempt: any = null;
     if (userId) {
       userAttempt = await db.dailyChallengeAttempt.findUnique({
         where: {

@@ -4,7 +4,7 @@
 
 import { TRIVIA_GIFTS, type TriviaGift } from "@/lib/crosscrafted-data";
 
-const STORAGE_KEY = "crosscrafted_admin_gifts";
+const STORAGE_KEY = "koino_admin_gifts";
 
 /** Returns the merged list of default + admin-added gifts. */
 export function getAllGifts(): TriviaGift[] {

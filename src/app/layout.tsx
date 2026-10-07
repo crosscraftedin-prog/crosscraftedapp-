@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { Providers } from "@/components/crosscrafted/Providers";
+import ServiceWorkerRegister from "./register-sw";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -65,6 +66,7 @@ export default function RootLayout({
           {children}
           <Toaster />
           <SonnerToaster position="top-center" />
+          <ServiceWorkerRegister />
         </Providers>
       </body>
     </html>

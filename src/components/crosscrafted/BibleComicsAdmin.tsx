@@ -472,8 +472,8 @@ function StatsDashboard({ stats }: { stats: Stats }) {
             <div className="flex items-baseline gap-1">
               <p className="text-base font-extrabold text-white">{s.chapterCount}</p>
               <p className="text-[9px] text-[#64748B] uppercase tracking-wider">chapters</p>
-              {s.panelCount > 0 && (
-                <p className="text-[9px] text-[#94A3B8] ml-auto">{s.panelCount} panels</p>
+              {(s.panelCount ?? 0) > 0 && (
+                <p className="text-[9px] text-[#94A3B8] ml-auto">{s.panelCount ?? 0} panels</p>
               )}
             </div>
           </div>

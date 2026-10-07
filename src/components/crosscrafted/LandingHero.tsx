@@ -184,7 +184,7 @@ export default function LandingHero({ onEnterApp }: Props) {
               onClick={() => onEnterApp("home")}
               className="px-8 py-3.5 bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 font-extrabold rounded-2xl text-sm uppercase tracking-wider shadow-lg shadow-[#F39B9B]/20 flex items-center gap-2 transition-all hover:-translate-y-px"
             >
-              <ArrowRight size={18} /> {t("landing.cta.enterBeliev")}
+              <ArrowRight size={18} /> {t("landing.cta.enterKoino")}
             </button>
             <button
               onClick={() => onEnterApp("bible")}
