@@ -88,92 +88,117 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    // ─── Record Faith Streak for EARN_POINTS mode only ───
-    // Practice Mode does NOT count toward the streak.
-    let streakResult: any = null;
-    if (mode === "EARN_POINTS") {
-      try {
-        const now = new Date();
-        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-        const yesterday = new Date(now);
-        yesterday.setDate(now.getDate() - 1);
-        const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+    // ─── RETURN THE RESULT IMMEDIATELY ───
+    // The answer result must be displayed to the user as fast as possible.
+    // Streak recording + milestone checks + reward creation are secondary
+    // operations that should NOT block the API response.
+    //
+    // We fire the streak recording as a non-blocking background operation.
+    // If it fails, the user still gets their quiz result. The streak will
+    // be recorded on the next trivia play or page load.
 
-        let userStreak = await db.userStreak.findUnique({ where: { userId: user.id } });
-        if (!userStreak) {
-          userStreak = await db.userStreak.create({
-            data: { userId: user.id, currentStreak: 0, longestStreak: 0, lastActiveDate: null, totalActiveDays: 0 },
-          });
-        }
-
-        if (userStreak.lastActiveDate !== today) {
-          let newStreak: number;
-          if (userStreak.lastActiveDate === yesterdayStr) {
-            newStreak = userStreak.currentStreak + 1;
-          } else if (!userStreak.lastActiveDate) {
-            newStreak = 1;
-          } else {
-            newStreak = 1;
-          }
-
-          userStreak = await db.userStreak.update({
-            where: { userId: user.id },
-            data: {
-              currentStreak: newStreak,
-              longestStreak: Math.max(userStreak.longestStreak, newStreak),
-              lastActiveDate: today,
-              totalActiveDays: userStreak.totalActiveDays + 1,
-            },
-          });
-
-          // Check milestones + create rewards (idempotent)
-          const milestones = await db.streakMilestone.findMany({
-            where: { active: true, streakDays: newStreak },
-            include: { reward: true },
-          });
-
-          for (const milestone of milestones) {
-            if (!milestone.reward || !milestone.reward.active) continue;
-            const existing = await db.userReward.findUnique({
-              where: { userId_milestoneId: { userId: user.id, milestoneId: milestone.id } },
-            });
-            if (!existing) {
-              let expiresAt: Date | null = null;
-              if (milestone.reward.expiresAfterDays) {
-                expiresAt = new Date(now.getTime() + milestone.reward.expiresAfterDays * 24 * 60 * 60 * 1000);
-              }
-              const redemptionCode = `KOINO-${milestone.streakDays}D-${user.id.slice(-6).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
-              await db.userReward.create({
-                data: {
-                  userId: user.id,
-                  rewardId: milestone.rewardId,
-                  milestoneId: milestone.id,
-                  source: "streak_milestone",
-                  sourceMilestone: newStreak,
-                  status: "available",
-                  redemptionCode,
-                  expiresAt,
-                },
-              });
-            }
-          }
-
-          streakResult = { currentStreak: userStreak.currentStreak, newStreakDay: true };
-        } else {
-          streakResult = { currentStreak: userStreak.currentStreak, newStreakDay: false };
-        }
-      } catch (e) {
-        console.error("[trivia submit] Streak recording error:", e);
-      }
-    }
-
-    return NextResponse.json({
+    // Return immediately with the quiz result
+    const responseBody = {
       ...result,
       questionResults: enrichedResults,
-      streak: streakResult,
-    });
+      streak: null, // streak is recorded in background — don't block
+    };
+
+    // ─── FIRE-AND-FORGET: Record Faith Streak (non-blocking) ───
+    // This runs AFTER the response is sent. The user sees their result
+    // immediately, and the streak is recorded in the background.
+    if (mode === "EARN_POINTS") {
+      // Don't await — fire and forget
+      recordStreakInBackground(user.id).catch((e) => {
+        console.error("[trivia submit] Background streak recording error:", e);
+      });
+    }
+
+    return NextResponse.json(responseBody);
   } catch (error: any) {
     console.error("[trivia/submit] Error:", error);
     return NextResponse.json({ error: error.message || "Failed to submit quiz" }, { status: 500 });
+  }
+}
+
+/**
+ * Records the user's Faith Streak in the background (non-blocking).
+ * This function is called via fire-and-forget after the quiz result
+ * has already been returned to the user.
+ *
+ * It does:
+ * 1. Check if streak already recorded today (idempotent)
+ * 2. Update streak counter
+ * 3. Check milestones + create rewards (idempotent via @@unique)
+ *
+ * If this fails, the user still gets their quiz result. The streak
+ * will be recorded on the next trivia play or via /api/streak/record.
+ */
+async function recordStreakInBackground(userId: string): Promise<void> {
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+
+  let userStreak = await db.userStreak.findUnique({ where: { userId } });
+  if (!userStreak) {
+    userStreak = await db.userStreak.create({
+      data: { userId, currentStreak: 0, longestStreak: 0, lastActiveDate: null, totalActiveDays: 0 },
+    });
+  }
+
+  // Already active today — no-op
+  if (userStreak.lastActiveDate === today) return;
+
+  let newStreak: number;
+  if (userStreak.lastActiveDate === yesterdayStr) {
+    newStreak = userStreak.currentStreak + 1;
+  } else if (!userStreak.lastActiveDate) {
+    newStreak = 1;
+  } else {
+    newStreak = 1;
+  }
+
+  userStreak = await db.userStreak.update({
+    where: { userId },
+    data: {
+      currentStreak: newStreak,
+      longestStreak: Math.max(userStreak.longestStreak, newStreak),
+      lastActiveDate: today,
+      totalActiveDays: userStreak.totalActiveDays + 1,
+    },
+  });
+
+  // Check milestones + create rewards (idempotent via @@unique)
+  const milestones = await db.streakMilestone.findMany({
+    where: { active: true, streakDays: newStreak },
+    include: { reward: true },
+  });
+
+  for (const milestone of milestones) {
+    if (!milestone.reward || !milestone.reward.active) continue;
+    const existing = await db.userReward.findUnique({
+      where: { userId_milestoneId: { userId, milestoneId: milestone.id } },
+    });
+    if (!existing) {
+      let expiresAt: Date | null = null;
+      if (milestone.reward.expiresAfterDays) {
+        expiresAt = new Date(now.getTime() + milestone.reward.expiresAfterDays * 24 * 60 * 60 * 1000);
+      }
+      const redemptionCode = `KOINO-${milestone.streakDays}D-${userId.slice(-6).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
+      await db.userReward.create({
+        data: {
+          userId,
+          rewardId: milestone.rewardId,
+          milestoneId: milestone.id,
+          source: "streak_milestone",
+          sourceMilestone: newStreak,
+          status: "available",
+          redemptionCode,
+          expiresAt,
+        },
+      });
+    }
   }
 }

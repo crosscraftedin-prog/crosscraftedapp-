@@ -127,6 +127,7 @@ export default function TriviaView() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [activeTab, setActiveTab] = useState<"play" | "compete" | "rewards" | "leaderboard" | "stats">("play");
   const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [quizSession, setQuizSession] = useState<{ difficulty: string; category: string; mode: QuizMode } | null>(null);
   const [answers, setAnswers] = useState<{ questionId: string; selectedAnswer: number }[]>([]);
   const [newCount, setNewCount] = useState(0);
@@ -255,6 +256,9 @@ export default function TriviaView() {
 
   const finishQuiz = async () => {
     if (!quizSession) return;
+    if (isSubmitting) return; // Prevent double submission
+
+    setIsSubmitting(true); // Lock — prevent duplicate submits
 
     try {
       const result = await api.submitQuiz({
@@ -264,11 +268,13 @@ export default function TriviaView() {
         answers,
       });
 
+      // IMMEDIATELY show the result — don't wait for streaks/toasts
       setSubmitResult(result);
       setGameState("result");
 
+      // Secondary operations (non-blocking — don't await)
       if (result.mode === "EARN_POINTS") {
-        // Record streak (only for earn mode, once per day)
+        // Record localStorage streak (fire-and-forget)
         try {
           const streaksRaw = localStorage.getItem("crosscrafted_streaks") || "{}";
           const before = JSON.parse(streaksRaw);
@@ -286,6 +292,7 @@ export default function TriviaView() {
           }
         } catch {}
 
+        // Show FP toast (non-blocking)
         if (result.totalPointsEarned > 0) {
           toast.success(`+${result.totalPointsEarned} Faith Points earned!`, {
             description: `Your verified balance: ${result.newTotalPoints} FP`,
@@ -299,6 +306,8 @@ export default function TriviaView() {
     } catch (e: any) {
       toast.error("Failed to submit quiz", { description: e.message });
       setGameState("setup");
+    } finally {
+      setIsSubmitting(false); // Always release the lock
     }
   };
 
