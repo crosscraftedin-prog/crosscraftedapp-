@@ -102,7 +102,7 @@ const MOBILE_MORE_VIEWS: { id: View; icon: typeof Search; label: string }[] = [
 
 export default function Home() {
   const [view, setView] = useState<View>("landing");
-  const { isAuthenticated, profileCompleted, loading: authLoading } = useSupabaseUser();
+  const { isAuthenticated, profileCompleted, isAdmin, loading: authLoading } = useSupabaseUser();
   const [headerVisible, setHeaderVisible] = useState(true);
   const [showMoreSheet, setShowMoreSheet] = useState(false);
   const lastScrollY = useRef(0);
