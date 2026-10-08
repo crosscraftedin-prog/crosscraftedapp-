@@ -1300,3 +1300,93 @@ Stage Summary:
   surface.
 - No TypeScript errors introduced; no existing design tokens changed; only
   additive sections were inserted (no redesign).
+
+---
+Task ID: apologetics-cms
+Agent: general-purpose (Admin Apologetics article CMS)
+Task: Build ApologeticsTab + wire to /api/admin/articles (KoinoArticle, contentType=APOLOGETICS)
+
+Work Log:
+- Read worklog.md and the existing `BlogTab.tsx` (crosscrafted/admin) to learn
+  the canonical patterns (helpers, FilterChip, StatusBadge, modal lifecycle,
+  escape-to-close, body scroll lock, toast feedback, slug auto-gen, save/delete
+  flows, form primitives `Field` and `Toggle`).
+- Read `/api/admin/articles/route.ts` and `/api/admin/articles/[id]/route.ts`
+  to confirm the exact request/response shape — `?type=APOLOGETICS` list filter,
+  `?status=draft|published|featured` status filter, `{articles: [...]}` list
+  response, `{article: {...}}` single response, POST defaults `contentType`
+  to `"APOLOGETICS"`, PATCH supports partial updates, status transition to
+  `published` auto-stamps `publishedAt`.
+- Created `src/components/crosscrafted/admin/ApologeticsTab.tsx` as a near-clone
+  of `BlogTab.tsx` but adapted for the `KoinoArticle` model:
+    * `KoinoArticle` type mirrors the API serializer (camelCase fields
+      `coverImageUrl`, `authorName`, `bibleRefs`, `sources`, `relatedIds`,
+      `publishedAt`, `seoTitle`, etc.).
+    * `FormState` adds: `category`, `subcategory`, `difficulty`,
+      `shortAnswer`, `bibleRefs` (CSV), `coverImageUrl`, `authorName`.
+    * `EMPTY_FORM` defaults `status` to `"draft"`, `featured` to false, and
+      `difficulty` to `""` (None).
+    * `APOLOGETICS_CATEGORIES` constant lists the 11 canonical categories
+      (God & Existence, Jesus Christ, Resurrection, Bible, Science & Faith,
+      Suffering & Evil, Morality & Ethics, Other Worldviews, Doubt & Faith,
+      Culture & Christianity, Salvation) so admins pick from a `<select>`.
+    * `DIFFICULTY_OPTIONS = ["BEGINNER", "INTERMEDIATE", "ADVANCED"]`.
+    * `load()` hits `/api/admin/articles?type=APOLOGETICS&status=...` with
+      `cache: "no-store"`; uses `useCallback` + `useEffect` like BlogTab.
+    * Filter chips All / Drafts / Published / Featured use the same colors
+      as BlogTab (amber/green/purple).
+    * Card list shows: title, `/apologetics/<slug>` preview line with author,
+      excerpt, category + difficulty badges, last-updated time-ago stamp.
+    * `ApologeticsEditorModal` field order: Title, Slug (live preview
+      `/apologetics/<slug>`), Category dropdown, Subcategory, Difficulty
+      dropdown, Excerpt, Short Answer, Content (textarea), Cover Image URL
+      (with live `<img>` thumbnail), Author Name, Bible References (CSV with
+      live chip preview), Status+Featured toggles, SEO Title/Description/
+      Canonical URL group.
+    * Save: POSTs `contentType: "APOLOGETICS"` on create; PATCHes on edit.
+      Validates `title` and `content` required. Toasts success/error.
+    * Delete: two-step confirm dialog → DELETE → toast → reload.
+    * Preview button: only renders when editing an existing published article;
+      opens `/apologetics/<slug>` in a new tab via `target="_blank"`.
+    * Save button uses `bg-[#7C3AED]` (Koino purple) primary action color.
+- Modified `src/components/crosscrafted/AdminView.tsx`:
+    * Added `import ApologeticsTab from "@/components/crosscrafted/admin/ApologeticsTab";`
+      next to the existing BlogTab import.
+    * Deleted the local `function ApologeticsTab()` (~106 lines) that used
+      `APOLOGETICS_QUESTIONS` mock data + `PreviewModeBanner`.
+    * The render branch `{activeTab === "apologetics" && <ApologeticsTab />}`
+      at line ~235 now resolves to the imported component (no JSX change
+      needed because the names match).
+    * Removed the now-unused `type ApologeticsQuestion` import and the
+      `Send` Lucide icon (only the deleted local function used them).
+      Left `APOLOGETICS_QUESTIONS` and `HelpCircle` because they're still
+      used by the Dashboard tab stat cards and Analytics tab.
+- Self-correction mid-task: a `MultiEdit` call briefly removed 12 unrelated
+  Lucide imports (`LogIn`, `Tag`, `Palette`, `Package`, `Mail`, `Truck`,
+  `CheckCircle`, `BookOpen`, `AlertCircle`, `BadgeCheck`, `Loader2`, `Send`)
+  due to a bad regex pattern. Caught this via grep against the file body,
+  then restored the 11 still-used imports in the original alphabetical order.
+  The render branches at lines 88/90/95/134/333/522/535/578/601/1871/1973/
+  2444-2510/2564/2756 confirm those icons are all in active use.
+- Ran `npx tsc --noEmit --project tsconfig.json` — zero errors in `src/`.
+  Only the pre-existing expected errors remain (examples/, scripts/, skills/).
+
+Stage Summary:
+- New file: `src/components/crosscrafted/admin/ApologeticsTab.tsx` (~830 LOC)
+  — fully replaces the mock-based local tab. Talks to the already-built
+  `/api/admin/articles` REST API with `contentType=APOLOGETICS` enforced on
+  every create. Mirrors BlogTab's UX patterns so admins have a familiar
+  editor for the apologetics CMS.
+- Modified file: `src/components/crosscrafted/AdminView.tsx` — 1 import
+  added, 1 import added (component), 1 import removed (`type ApologeticsQuestion`),
+  1 icon import removed (`Send`), 1 local function (~106 LOC) deleted. The
+  render branch already used `<ApologeticsTab />` so the wiring was just a
+  naming swap from local-function to imported-component.
+- Public `/apologetics` and `/apologetics/[slug]` pages were untouched (they
+  already read from `KoinoArticle` with `status: "published"`, so newly
+  published articles via the admin editor will appear there immediately —
+  the API route already calls `revalidatePath("/", "layout")`).
+- No migrations were created. No SQL run. The KoinoArticle table already
+  exists in production Supabase.
+- TypeScript: `npx tsc --noEmit --project tsconfig.json 2>&1 | grep -E "^src/"`
+  returned zero lines.

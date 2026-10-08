@@ -25,7 +25,6 @@ import {
   Eye,
   Clock,
   Gift,
-  Send,
   LogIn,
   Tag,
   Palette,
@@ -56,7 +55,6 @@ import {
   type EventItem,
   type Product,
   type PrayerPost,
-  type ApologeticsQuestion,
   type TriviaGift,
 } from "@/lib/crosscrafted-data";
 import ImagePicker from "@/components/crosscrafted/ImagePicker";
@@ -66,6 +64,7 @@ import ContactMessagesTab from "@/components/crosscrafted/admin/ContactMessagesT
 import PartnerInquiriesTab from "@/components/crosscrafted/admin/PartnerInquiriesTab";
 import ContributorApplicationsTab from "@/components/crosscrafted/admin/ContributorApplicationsTab";
 import BlogTab from "@/components/crosscrafted/admin/BlogTab";
+import ApologeticsTab from "@/components/crosscrafted/admin/ApologeticsTab";
 
 type AdminTab =
   | "dashboard"
@@ -1433,115 +1432,6 @@ function PrayersTab() {
             </button>
           }
         />
-      ))}
-    </div>
-  );
-}
-
-// ─── APOLOGETICS ─────────────────────────────────────────────────────────
-
-function ApologeticsTab() {
-  const [questions, setQuestions] = useState<ApologeticsQuestion[]>(APOLOGETICS_QUESTIONS);
-  const [answerText, setAnswerText] = useState<Record<string, string>>({});
-
-  const postAnswer = (questionId: string) => {
-    const text = (answerText[questionId] || "").trim();
-    if (!text) {
-      toast.error("Please write your answer first");
-      return;
-    }
-    setQuestions((qs) =>
-      qs.map((q) =>
-        q.id === questionId
-          ? {
-              ...q,
-              status: "answered",
-              answers: [
-                ...q.answers,
-                {
-                  id: `admin_${Date.now()}`,
-                  author: "Admin (Pastor)",
-                  authorRole: "Pastor",
-                  body: text,
-                  date: new Date().toISOString().split("T")[0],
-                  is_accepted: true,
-                  likes: 0,
-                },
-              ],
-            }
-          : q
-      )
-    );
-    setAnswerText((prev) => ({ ...prev, [questionId]: "" }));
-    toast.success("Official answer posted!", { description: "Marked as accepted answer." });
-  };
-
-  const closeQuestion = (id: string) => {
-    setQuestions((qs) => qs.map((q) => (q.id === id ? { ...q, status: "closed" } : q)));
-    toast("Question closed");
-  };
-
-  const remove = (id: string) => {
-    setQuestions((qs) => qs.filter((q) => q.id !== id));
-    toast("Question removed");
-  };
-
-  return (
-    <div className="space-y-3">
-      <PreviewModeBanner section="Apologetics" />
-      <AdminSectionHeader title="Apologetics Q&A" count={questions.length} color="#38BDF8" />
-      {questions.map((q) => (
-        <div key={q.id} className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                q.status === "answered"
-                  ? "bg-[#22C55E]/15 text-[#22C55E]"
-                  : q.status === "closed"
-                  ? "bg-white/[0.06] text-[#94A3B8]"
-                  : "bg-[#F59E0B]/15 text-[#F59E0B]"
-              }`}
-            >
-              {q.status}
-            </span>
-            <span className="text-[10px] text-[#94A3B8]">{q.author}</span>
-            <span className="text-[10px] text-[#64748B]">· {q.answers.length} answers</span>
-          </div>
-          <h3 className="text-sm font-bold text-white mb-1">{q.title}</h3>
-          <p className="text-[12px] text-[#A09DB1] line-clamp-2 mb-3">{q.body}</p>
-
-          {/* Answer input */}
-          <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-2 mb-2">
-            <textarea
-              value={answerText[q.id] || ""}
-              onChange={(e) => setAnswerText((prev) => ({ ...prev, [q.id]: e.target.value }))}
-              placeholder="Post an official answer as Pastor/Admin..."
-              className="w-full bg-transparent text-xs text-white outline-none resize-none h-16 placeholder:text-[#64748B]"
-            />
-            <div className="flex gap-2 mt-1">
-              <button
-                onClick={() => postAnswer(q.id)}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#38BDF8]/15 border border-[#38BDF8]/30 text-[#38BDF8] text-xs font-bold hover:bg-[#38BDF8]/25 transition-all"
-              >
-                <Send size={11} /> Post Official Answer
-              </button>
-              {q.status !== "closed" && (
-                <button
-                  onClick={() => closeQuestion(q.id)}
-                  className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold transition-all"
-                >
-                  Close
-                </button>
-              )}
-              <button
-                onClick={() => remove(q.id)}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] text-xs font-bold hover:bg-[#EF4444]/25 transition-all ml-auto"
-              >
-                <Trash2 size={11} /> Remove
-              </button>
-            </div>
-          </div>
-        </div>
       ))}
     </div>
   );
