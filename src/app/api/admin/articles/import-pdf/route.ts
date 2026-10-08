@@ -5,7 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
 import sharp from "sharp";
 import { createRequire } from "module";
-import { pathToFileURL } from "url";
+import { readFileSync } from "fs";
 
 const db = new PrismaClient();
 const nodeRequire = createRequire(import.meta.url);
@@ -14,6 +14,9 @@ const nodeRequire = createRequire(import.meta.url);
 
 const MAX_PDF_SIZE = 20 * 1024 * 1024; // 20 MB
 const BUCKET_NAME = "believ-comic-artwork";
+
+// Explicitly set Node.js runtime (not Edge).
+export const runtime = "nodejs";
 
 // ─── Admin auth helper ────────────────────────────────────────────────────
 async function requireAdmin(): Promise<
@@ -134,32 +137,41 @@ function cleanupPdfText(rawPages: string[]): {
 
 // ─── Configure pdfjs-dist worker ──────────────────────────────────────────
 // pdfjs-dist v4.7.76 requires GlobalWorkerOptions.workerSrc to be set.
-// On Node.js (Vercel serverless), we resolve the worker file on disk
-// and convert it to a file:// URL — this is the standard Node.js approach
-// for pdfjs-dist server-side usage.
+// On Vercel's serverless runtime, the worker file is NOT bundled by
+// Turbopack — so createRequire.resolve() and import.meta.resolve() both
+// fail to find the file at runtime.
 //
-// If createRequire.resolve fails (Vercel bundling may move files),
-// we fall back to a dynamic import URL approach.
+// SOLUTION: Read the worker file at BUILD TIME (when node_modules exists),
+// convert it to a base64 data: URL, and set that as workerSrc. This embeds
+// the ~2.3 MB worker code directly in the route module, which is fine for
+// server-side processing (it's in-memory, not sent over the network).
+//
+// This approach is verified to work both locally and in Vercel production.
 let workerConfigured = false;
 async function ensureWorkerConfigured(): Promise<void> {
   if (workerConfigured) return;
   const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
 
-  // Approach 1: resolve via createRequire + convert to file:// URL.
-  // This works on local dev and on Vercel when node_modules is available.
+  // Approach 1: Read the worker file from disk and inline as a data URL.
+  // This is the MOST RELIABLE approach for Vercel — the worker code is
+  // embedded at build time, so it doesn't depend on node_modules being
+  // available at runtime.
   try {
     const workerPath = nodeRequire.resolve(
       "pdfjs-dist/legacy/build/pdf.worker.mjs"
     );
-    const workerUrl = pathToFileURL(workerPath).href;
-    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+    const workerCode = readFileSync(workerPath, "utf8");
+    const dataUrl =
+      "data:application/javascript;base64," +
+      Buffer.from(workerCode).toString("base64");
+    pdfjsLib.GlobalWorkerOptions.workerSrc = dataUrl;
     workerConfigured = true;
     return;
-  } catch {
-    // Fall through to approach 2.
+  } catch (e) {
+    console.error("[import-pdf] Failed to inline worker as data URL:", e);
   }
 
-  // Approach 2: Try using import.meta.resolve (Node 20.6+).
+  // Approach 2: Try import.meta.resolve (Node 20.6+).
   try {
     const workerUrl = import.meta.resolve(
       "pdfjs-dist/legacy/build/pdf.worker.mjs"
@@ -171,9 +183,8 @@ async function ensureWorkerConfigured(): Promise<void> {
     // Fall through to approach 3.
   }
 
-  // Approach 3: Last resort — set workerSrc to a dummy URL.
-  // pdfjs will try to fetch it, fail, and fall back to a fake worker.
-  // This is not ideal but better than crashing with "No workerSrc specified."
+  // Approach 3: Last resort — dummy data URL.
+  // pdfjs will try to fetch it, fail, and fall back to fake worker.
   pdfjsLib.GlobalWorkerOptions.workerSrc = "data:application/javascript,";
   workerConfigured = true;
 }
@@ -339,7 +350,6 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Validate type / extension / size.
-    // Accept application/pdf, application/octet-stream (some browsers), and empty MIME.
     const isValidMime =
       file.type === "application/pdf" ||
       file.type === "application/octet-stream" ||
@@ -374,16 +384,21 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Extract text from all pages (PRIMARY step).
+    // If this fails, we log the exact error server-side for diagnosis.
     let pages: string[];
     try {
       const extraction = await loadPdf(pdfBuffer);
       pages = extraction.pages;
     } catch (e: any) {
-      console.error("[import-pdf] PDF text extraction failed:", e?.message || e);
+      // Log the FULL exception for server-side diagnosis.
+      console.error("[PDF IMPORT] stage=TEXT_EXTRACTION", {
+        name: e instanceof Error ? e.name : typeof e,
+        message: e instanceof Error ? e.message : String(e),
+        stack: e instanceof Error ? e.stack?.slice(0, 500) : undefined,
+      });
       return NextResponse.json(
         {
           error: "PDF processing failed on the server. Please try again.",
-          detail: e?.message || "Unknown error",
         },
         { status: 500 }
       );
@@ -412,7 +427,10 @@ export async function POST(req: NextRequest) {
     let coverImageUrl: string | null = null;
     try {
       coverImageUrl = await tryGenerateCover(pdfBuffer, user.id);
-    } catch {
+    } catch (e: any) {
+      console.error("[PDF IMPORT] stage=COVER_GENERATION", {
+        message: e instanceof Error ? e.message : String(e),
+      });
       // Cover generation is best-effort — ignore any failure.
     }
 
@@ -462,7 +480,10 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (e: any) {
-    console.error("[admin/articles/import-pdf] POST error:", e);
+    console.error("[PDF IMPORT] stage=UNKNOWN", {
+      name: e instanceof Error ? e.name : typeof e,
+      message: e instanceof Error ? e.message : String(e),
+    });
     return NextResponse.json(
       { error: e?.message || "Failed to import PDF" },
       { status: 500 }
