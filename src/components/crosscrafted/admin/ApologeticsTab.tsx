@@ -121,6 +121,20 @@ const DIFFICULTY_OPTIONS = ["BEGINNER", "INTERMEDIATE", "ADVANCED"] as const;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
+// URL sanitizer — blocks dangerous protocols (javascript:, data:, vbscript:,
+// file:) in markdown links + images. Only allows http(s), mailto, tel, and
+// relative URLs. Defense-in-depth on top of react-markdown's built-in filtering.
+function safeUrl(url: string | undefined): string | null {
+  if (!url || typeof url !== "string") return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("/") || trimmed.startsWith("#")) return trimmed;
+  if (/^https?:\/\//i.test(trimmed) || /^mailto:/i.test(trimmed) || /^tel:/i.test(trimmed)) {
+    return trimmed;
+  }
+  return null;
+}
+
 function slugify(input: string): string {
   return input
     .toString()
@@ -619,22 +633,32 @@ function MarkdownPreview({
                 {...props}
               />
             ),
-            a: ({ node: _n, ...props }) => (
-              <a
-                className="text-[#38BDF8] underline"
-                target="_blank"
-                rel="noopener noreferrer"
-                {...props}
-              />
-            ),
-            img: ({ node: _n, ...props }) => (
+            a: ({ node: _n, href, ...props }) => {
+              const safeHref = safeUrl(href);
+              if (!safeHref) return <span className="text-[#94A3B8]">{props.children}</span>;
+              return (
+                <a
+                  href={safeHref}
+                  className="text-[#38BDF8] underline"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  {...props}
+                />
+              );
+            },
+            img: ({ node: _n, src, ...props }) => {
+              const safeSrc = safeUrl(src as string);
+              if (!safeSrc) return null;
               // eslint-disable-next-line @next/next/no-img-element
-              <img
-                className="rounded-xl max-w-full my-3 border border-white/[0.08]"
-                alt=""
-                {...props}
-              />
-            ),
+              return (
+                <img
+                  src={safeSrc}
+                  className="rounded-xl max-w-full my-3 border border-white/[0.08]"
+                  alt=""
+                  {...props}
+                />
+              );
+            },
             hr: () => <hr className="border-white/[0.1] my-4" />,
             strong: ({ node: _n, ...props }) => (
               <strong className="text-white font-bold" {...props} />

@@ -57,6 +57,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.warn("[sitemap] Failed to fetch blog posts for sitemap, serving static URLs only:", error);
   }
 
+  // Published Apologetics articles — only status=published + contentType=APOLOGETICS.
+  // Drafts are NEVER included in the sitemap.
+  let apologeticsArticles: { slug: string; updatedAt: Date }[] = [];
+  try {
+    apologeticsArticles = await db.koinoArticle.findMany({
+      where: {
+        status: "published",
+        contentType: "APOLOGETICS",
+      },
+      select: { slug: true, updatedAt: true },
+    });
+  } catch (error) {
+    console.warn("[sitemap] Failed to fetch apologetics articles for sitemap, serving static URLs only:", error);
+  }
+
   return [
     ...staticUrls.map((url) => ({
       url: `${SITE_ORIGIN}${url}`,
@@ -67,6 +82,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...posts.map((p) => ({
       url: `${SITE_ORIGIN}/blog/${p.slug}`,
       lastModified: p.updatedAt,
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    })),
+    ...apologeticsArticles.map((a) => ({
+      url: `${SITE_ORIGIN}/apologetics/${a.slug}`,
+      lastModified: a.updatedAt,
       changeFrequency: "weekly" as const,
       priority: 0.6,
     })),

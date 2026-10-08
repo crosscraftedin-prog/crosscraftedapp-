@@ -9,10 +9,35 @@ import ReactMarkdown from "react-markdown";
 const db = new PrismaClient();
 export const dynamic = "force-dynamic";
 
+// ─── URL sanitizer ─────────────────────────────────────────────────────────
+// Blocks dangerous protocols (javascript:, data:, vbscript:, file:) in
+// markdown links + images. Only allows http:, https:, mailto:, tel:, and
+// relative URLs (starting with / or #). This is defense-in-depth on top of
+// react-markdown's built-in filtering — we never trust author-controlled
+// URLs to be safe.
+function safeUrl(url: string | undefined): string | null {
+  if (!url || typeof url !== "string") return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  // Relative URLs (anchor links, internal paths) are safe.
+  if (trimmed.startsWith("/") || trimmed.startsWith("#")) return trimmed;
+  // Allow only http(s), mailto, tel.
+  if (/^https?:\/\//i.test(trimmed) || /^mailto:/i.test(trimmed) || /^tel:/i.test(trimmed)) {
+    return trimmed;
+  }
+  // Block everything else (javascript:, data:, vbscript:, file:, etc.)
+  return null;
+}
+
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const article = await db.koinoArticle.findUnique({ where: { slug } });
-  if (!article) return { title: "Article Not Found — Koino" };
+  // Drafts must NOT appear in metadata — return generic "not found" metadata
+  // for any article that isn't published + APOLOGETICS.
+  if (!article || article.status !== "published" || article.contentType !== "APOLOGETICS") {
+    return { title: "Article Not Found — Koino" };
+  }
   const canonical = article.canonicalUrl || `https://www.koino.in/apologetics/${article.slug}`;
   return {
     title: article.seoTitle || `${article.title} — Koino`,
@@ -44,7 +69,7 @@ export default async function ApologeticsArticlePage({ params }: { params: Promi
     },
   });
 
-  if (!article || article.status !== "published") notFound();
+  if (!article || article.status !== "published" || article.contentType !== "APOLOGETICS") notFound();
 
   const bibleRefs: string[] = JSON.parse(article.bibleRefs || "[]");
   const sources: any[] = JSON.parse(article.sources || "[]");
@@ -165,16 +190,28 @@ export default async function ApologeticsArticlePage({ params }: { params: Promi
                   <div className="text-[15px] text-[#C4BFD1] italic leading-[1.75]">{children}</div>
                 </blockquote>
               ),
-              // Links
-              a: ({ href, children }) => (
-                <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#38BDF8] underline decoration-[#38BDF8]/40 underline-offset-2 hover:decoration-[#38BDF8] transition-all">
-                  {children}
-                </a>
-              ),
-              // Images
-              img: ({ src, alt }) => (
-                <img src={src as string} alt={alt || ""} className="w-full rounded-xl my-4 max-h-96 object-cover" />
-              ),
+              // Links — sanitized to block javascript:/data:/vbscript: URLs
+              a: ({ href, children }) => {
+                const safeHref = safeUrl(href);
+                if (!safeHref) {
+                  // Dangerous URL — render as plain text, no clickable link
+                  return <span className="text-[#94A3B8]">{children}</span>;
+                }
+                return (
+                  <a href={safeHref} target="_blank" rel="noopener noreferrer" className="text-[#38BDF8] underline decoration-[#38BDF8]/40 underline-offset-2 hover:decoration-[#38BDF8] transition-all">
+                    {children}
+                  </a>
+                );
+              },
+              // Images — sanitized to block javascript:/data: URLs (data: URLs in
+              // <img src> can be used for tracking/fingerprinting; only allow http(s))
+              img: ({ src, alt }) => {
+                const safeSrc = safeUrl(src as string);
+                if (!safeSrc) return null; // dangerous image URL — don't render
+                return (
+                  <img src={safeSrc} alt={alt || ""} className="w-full rounded-xl my-4 max-h-96 object-cover" />
+                );
+              },
               // Horizontal rule
               hr: () => <hr className="border-white/[0.08] my-6" />,
               // Code
