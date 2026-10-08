@@ -255,8 +255,10 @@ export default function ApologeticsTab() {
   };
 
   const handleSaved = () => {
-    // Refresh the list without closing the editor — the editor stays open
-    // so the admin can keep iterating after Save Draft / Publish.
+    // Close the editor + refresh the list after a successful save.
+    // The spec requires: "modal closes, article list refreshes" after
+    // both Save Draft and Publish.
+    closeEditor();
     load();
   };
 

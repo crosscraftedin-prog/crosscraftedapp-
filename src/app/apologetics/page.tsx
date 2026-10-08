@@ -100,11 +100,24 @@ export default async function ApologeticsPage() {
           {rest.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {rest.map((article) => (
-                <Link key={article.id} href={`/apologetics/${article.slug}`} className="block bg-[#1C1929] border border-white/[0.06] rounded-xl p-4 hover:border-white/[0.15] transition-all">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-[#94A3B8]">{article.category}</span>
-                  <h3 className="text-sm font-bold text-white mt-1">{article.title}</h3>
-                  {article.excerpt && <p className="text-[11px] text-[#A09DB1] mt-1 line-clamp-2">{article.excerpt}</p>}
-                  {article.authorName && <p className="text-[9px] text-[#64748B] mt-2">by {article.authorName}</p>}
+                <Link key={article.id} href={`/apologetics/${article.slug}`} className="block bg-[#1C1929] border border-white/[0.06] rounded-xl overflow-hidden hover:border-white/[0.15] transition-all">
+                  {article.coverImageUrl ? (
+                    <div className="relative h-32 bg-[#0f0f1a]">
+                      <img src={article.coverImageUrl} alt={article.title} className="w-full h-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="relative h-32 bg-gradient-to-br from-[#1C1929] to-[#2B254E]">
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <BookOpen size={28} className="text-[#475569]" />
+                      </div>
+                    </div>
+                  )}
+                  <div className="p-4">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-[#94A3B8]">{article.category}</span>
+                    <h3 className="text-sm font-bold text-white mt-1">{article.title}</h3>
+                    {article.excerpt && <p className="text-[11px] text-[#A09DB1] mt-1 line-clamp-2">{article.excerpt}</p>}
+                    {article.authorName && <p className="text-[9px] text-[#64748B] mt-2">by {article.authorName}</p>}
+                  </div>
                 </Link>
               ))}
             </div>
