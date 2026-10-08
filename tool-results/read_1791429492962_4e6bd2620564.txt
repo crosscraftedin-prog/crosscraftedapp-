@@ -1,0 +1,891 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→import { useState, useMemo, useEffect } from "react";
+     4→     4→import { motion, AnimatePresence } from "framer-motion";
+     5→     5→import {
+     6→     6→  Heart,
+     7→     7→  MessageCircle,
+     8→     8→  Share2,
+     9→     9→  X,
+    10→    10→  Search,
+    11→    11→  Sparkles,
+    12→    12→  Eye,
+    13→    13→  Plus,
+    14→    14→  CheckCircle2,
+    15→    15→  HelpCircle,
+    16→    16→  Send,
+    17→    17→  BookOpen,
+    18→    18→  ShieldCheck,
+    19→    19→} from "lucide-react";
+    20→    20→import { toast } from "sonner";
+    21→    21→import {
+    22→    22→  APOLOGETICS_QUESTIONS,
+    23→    23→  APOLOGETICS_TOPICS,
+    24→    24→  CHURCH_GRADIENTS,
+    25→    25→  type ApologeticsPost,
+    26→    26→  type ApologeticsQuestion,
+    27→    27→  type ApologeticsAnswer,
+    28→    28→} from "@/lib/crosscrafted-data";
+    29→    29→import { useTranslation } from "@/lib/i18n/LanguageContext";
+    30→    30→
+    31→    31→// ─── Helper: map admin category label → APOLOGETICS_TOPICS id ──────────────
+    32→    32→// The admin editor uses category labels like "God & Existence", "Jesus Christ",
+    33→    33→// "Resurrection", "Bible", "Science & Faith", etc. The SPA's topic filter uses
+    34→    34→// IDs like "gods_existence", "resurrection", "bible_reliability".
+    35→    35→// This helper maps the label to the closest topic ID so the filter works.
+    36→    36→// If no match, returns "" (shows under "All Topics").
+    37→    37→function mapCategoryToTopicId(category: string | null | undefined): string {
+    38→    38→  if (!category) return "";
+    39→    39→  const c = category.toLowerCase().trim();
+    40→    40→  if (c.includes("god") && c.includes("exist")) return "gods_existence";
+    41→    41→  if (c.includes("evil") || c.includes("suffer")) return "problem_of_evil";
+    42→    42→  if (c.includes("resurrection") || c.includes("jesus")) return "resurrection";
+    43→    43→  if (c.includes("bible")) return "bible_reliability";
+    44→    44→  if (c.includes("science")) return "science_faith";
+    45→    45→  if (c.includes("world") || c.includes("religion")) return "world_religions";
+    46→    46→  return ""; // no topic match — shows under "All Topics"
+    47→    47→}
+    48→    48→
+    49→    49→export default function ApologeticsView() {
+    50→    50→  const t = useTranslation();
+    51→    51→  const [activeTab, setActiveTab] = useState<"articles" | "qa">("articles");
+    52→    52→  // ─── PUBLISHED ARTICLES (loaded from real DB via /api/articles) ───
+    53→    53→  // The APOLOGETICS_POSTS mock array is NO LONGER used — all articles come
+    54→    54→  // from the database. status=published + contentType=APOLOGETICS only
+    55→    55→  // (server-enforced). Admin-created articles appear here after publishing.
+    56→    56→  const [posts, setPosts] = useState<ApologeticsPost[]>([]);
+    57→    57→  const [postsLoading, setPostsLoading] = useState(true);
+    58→    58→  const [postsError, setPostsError] = useState<string | null>(null);
+    59→    59→  const [questions, setQuestions] = useState<ApologeticsQuestion[]>(APOLOGETICS_QUESTIONS);
+    60→    60→  const [liked, setLiked] = useState<Set<string>>(new Set());
+    61→    61→  const [search, setSearch] = useState("");
+    62→    62→  const [filterTopic, setFilterTopic] = useState("");
+    63→    63→  const [openPost, setOpenPost] = useState<ApologeticsPost | null>(null);
+    64→    64→  const [openQuestion, setOpenQuestion] = useState<ApologeticsQuestion | null>(null);
+    65→    65→  const [showAskModal, setShowAskModal] = useState(false);
+    66→    66→  const [askForm, setAskForm] = useState({ title: "", body: "", topic: "", author: "" });
+    67→    67→  const [answerText, setAnswerText] = useState<Record<string, string>>({});
+    68→    68→
+    69→    69→  // ─── Fetch published apologetics articles from the database ───
+    70→    70→  // Public API returns ONLY status=published + contentType=APOLOGETICS
+    71→    71→  // (server-enforced). Maps DB fields to the ApologeticsPost shape.
+    72→    72→  const loadPosts = async () => {
+    73→    73→    setPostsLoading(true);
+    74→    74→    setPostsError(null);
+    75→    75→    try {
+    76→    76→      const res = await fetch("/api/articles?type=APOLOGETICS", { cache: "no-store" });
+    77→    77→      const data = await res.json();
+    78→    78→      if (!res.ok) throw new Error(data.error || "Failed to load articles");
+    79→    79→      const articles = data.articles || [];
+    80→    80→      // Map DB article → ApologeticsPost shape
+    81→    81→      const mapped: ApologeticsPost[] = articles.map((a: any) => ({
+    82→    82→        id: a.id,
+    83→    83→        title: a.title,
+    84→    84→        body: a.excerpt || a.shortAnswer || "", // use excerpt as the preview body
+    85→    85→        author: a.authorName || "Koino",
+    86→    86→        topic: mapCategoryToTopicId(a.category), // map category label → topic id
+    87→    87→        date: a.publishedAt || a.createdAt,
+    88→    88→        likes: a.viewCount || 0, // use viewCount as a proxy for engagement
+    89→    89→        comments: 0,
+    90→    90→        cover_gradient: 0,
+    91→    91→        cover_image: a.coverImageUrl || undefined,
+    92→    92→        slug: a.slug, // for linking to /apologetics/[slug]
+    93→    93→        featured: a.featured,
+    94→    94→      }));
+    95→    95→      setPosts(mapped);
+    96→    96→    } catch (e: any) {
+    97→    97→      setPostsError(e.message || "Failed to load articles");
+    98→    98→      setPosts([]);
+    99→    99→    } finally {
+   100→   100→      setPostsLoading(false);
+   101→   101→    }
+   102→   102→  };
+   103→   103→
+   104→   104→  useEffect(() => {
+   105→   105→    loadPosts();
+   106→   106→  }, []);
+   107→   107→
+   108→   108→  const filtered = useMemo(() => {
+   109→   109→    return posts.filter((p) => {
+   110→   110→      if (filterTopic && p.topic !== filterTopic) return false;
+   111→   111→      if (search) {
+   112→   112→        const q = search.toLowerCase();
+   113→   113→        if (!p.title.toLowerCase().includes(q) && !p.body.toLowerCase().includes(q)) return false;
+   114→   114→      }
+   115→   115→      return true;
+   116→   116→    });
+   117→   117→  }, [posts, filterTopic, search]);
+   118→   118→
+   119→   119→  const filteredQuestions = useMemo(() => {
+   120→   120→    return questions.filter((q) => {
+   121→   121→      if (filterTopic && q.topic !== filterTopic) return false;
+   122→   122→      if (search) {
+   123→   123→        const s = search.toLowerCase();
+   124→   124→        if (!q.title.toLowerCase().includes(s) && !q.body.toLowerCase().includes(s)) return false;
+   125→   125→      }
+   126→   126→      return true;
+   127→   127→    });
+   128→   128→  }, [questions, filterTopic, search]);
+   129→   129→
+   130→   130→  const toggleLike = (id: string) => {
+   131→   131→    setLiked((prev) => {
+   132→   132→      const next = new Set(prev);
+   133→   133→      if (next.has(id)) next.delete(id);
+   134→   134→      else {
+   135→   135→        next.add(id);
+   136→   136→        toast.success("Liked!", { description: "Thanks for engaging with this content." });
+   137→   137→      }
+   138→   138→      return next;
+   139→   139→    });
+   140→   140→  };
+   141→   141→
+   142→   142→  const sharePost = (p: ApologeticsPost) => {
+   143→   143→    navigator.clipboard.writeText(`"${p.title}" by ${p.author} on CrossCrafted Apologetics`);
+   144→   144→    toast.success("Post link copied!");
+   145→   145→  };
+   146→   146→
+   147→   147→  const handleAskQuestion = (e: React.FormEvent) => {
+   148→   148→    e.preventDefault();
+   149→   149→    if (!askForm.title.trim() || !askForm.body.trim()) {
+   150→   150→      toast.error("Please enter both a title and question details");
+   151→   151→      return;
+   152→   152→    }
+   153→   153→    const newQ: ApologeticsQuestion = {
+   154→   154→      id: `qa${Date.now()}`,
+   155→   155→      title: askForm.title.trim(),
+   156→   156→      body: askForm.body.trim(),
+   157→   157→      author: askForm.author.trim() || "Anonymous",
+   158→   158→      topic: askForm.topic || "gods_existence",
+   159→   159→      date: new Date().toISOString().split("T")[0],
+   160→   160→      likes: 0,
+   161→   161→      answers: [],
+   162→   162→      status: "open",
+   163→   163→    };
+   164→   164→    setQuestions([newQ, ...questions]);
+   165→   165→    setAskForm({ title: "", body: "", topic: "", author: "" });
+   166→   166→    setShowAskModal(false);
+   167→   167→    toast.success("Question posted!", {
+   168→   168→      description: "Pastors and church leaders will be notified to answer.",
+   169→   169→    });
+   170→   170→  };
+   171→   171→
+   172→   172→  const handleAnswer = (questionId: string) => {
+   173→   173→    const text = (answerText[questionId] || "").trim();
+   174→   174→    if (!text) {
+   175→   175→      toast.error("Please write your answer");
+   176→   176→      return;
+   177→   177→    }
+   178→   178→    const newAnswer: ApologeticsAnswer = {
+   179→   179→      id: `qa${questionId}a${Date.now()}`,
+   180→   180→      author: "You",
+   181→   181→      authorRole: "Member",
+   182→   182→      body: text,
+   183→   183→      date: new Date().toISOString().split("T")[0],
+   184→   184→      is_accepted: false,
+   185→   185→      likes: 0,
+   186→   186→    };
+   187→   187→    setQuestions((qs) =>
+   188→   188→      qs.map((q) =>
+   189→   189→        q.id === questionId
+   190→   190→          ? { ...q, answers: [...q.answers, newAnswer], status: "answered" }
+   191→   191→          : q
+   192→   192→      )
+   193→   193→    );
+   194→   194→    if (openQuestion?.id === questionId) {
+   195→   195→      setOpenQuestion((q) =>
+   196→   196→        q ? { ...q, answers: [...q.answers, newAnswer], status: "answered" } : q
+   197→   197→      );
+   198→   198→    }
+   199→   199→    setAnswerText((prev) => ({ ...prev, [questionId]: "" }));
+   200→   200→    toast.success("Answer posted!", {
+   201→   201→      description: "Thank you for sharing your insight.",
+   202→   202→    });
+   203→   203→  };
+   204→   204→
+   205→   205→  const acceptAnswer = (questionId: string, answerId: string) => {
+   206→   206→    setQuestions((qs) =>
+   207→   207→      qs.map((q) =>
+   208→   208→        q.id === questionId
+   209→   209→          ? {
+   210→   210→              ...q,
+   211→   211→              answers: q.answers.map((a) => ({ ...a, is_accepted: a.id === answerId })),
+   212→   212→              status: "answered",
+   213→   213→            }
+   214→   214→          : q
+   215→   215→      )
+   216→   216→    );
+   217→   217→    if (openQuestion?.id === questionId) {
+   218→   218→      setOpenQuestion((q) =>
+   219→   219→        q
+   220→   220→          ? {
+   221→   221→              ...q,
+   222→   222→              answers: q.answers.map((a) => ({ ...a, is_accepted: a.id === answerId })),
+   223→   223→              status: "answered",
+   224→   224→            }
+   225→   225→          : q
+   226→   226→      );
+   227→   227→    }
+   228→   228→    toast.success("Answer accepted!", {
+   229→   229→      description: "This will be marked as the best answer for the question.",
+   230→   230→    });
+   231→   231→  };
+   232→   232→
+   233→   233→  return (
+   234→   234→    <div className="max-w-[680px] mx-auto px-4 py-5">
+   235→   235→      <div className="flex justify-between items-center mb-4">
+   236→   236→        <div>
+   237→   237→          <h1 className="text-xl font-bold text-white">{t("apologetics.title")}</h1>
+   238→   238→          <p className="text-xs text-[#94A3B8] mt-0.5">{t("apologetics.subtitle")}</p>
+   239→   239→        </div>
+   240→   240→        {activeTab === "qa" && (
+   241→   241→          <button
+   242→   242→            onClick={() => setShowAskModal(true)}
+   243→   243→            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-semibold text-white transition-all hover:-translate-y-px"
+   244→   244→            style={{ background: "linear-gradient(135deg, #38BDF8, #A855F7)" }}
+   245→   245→          >
+   246→   246→            <Plus size={14} /> Ask Question
+   247→   247→          </button>
+   248→   248→        )}
+   249→   249→      </div>
+   250→   250→
+   251→   251→      {/* Tabs */}
+   252→   252→      <div className="flex gap-1 p-1 bg-white/[0.04] border border-white/[0.06] rounded-2xl mb-4">
+   253→   253→        <button
+   254→   254→          onClick={() => setActiveTab("articles")}
+   255→   255→          className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+   256→   256→            activeTab === "articles" ? "bg-[#38BDF8] text-slate-950" : "text-[#94A3B8] hover:text-white"
+   257→   257→          }`}
+   258→   258→        >
+   259→   259→          <BookOpen size={12} /> Articles
+   260→   260→        </button>
+   261→   261→        <button
+   262→   262→          onClick={() => setActiveTab("qa")}
+   263→   263→          className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+   264→   264→            activeTab === "qa" ? "bg-[#38BDF8] text-slate-950" : "text-[#94A3B8] hover:text-white"
+   265→   265→          }`}
+   266→   266→        >
+   267→   267→          <HelpCircle size={12} /> Q&amp;A
+   268→   268→          {questions.filter((q) => q.status === "open").length > 0 && (
+   269→   269→            <span className="px-1.5 py-0.5 rounded-full bg-[#F59E0B]/20 text-[#F59E0B] text-[9px] font-bold">
+   270→   270→              {questions.filter((q) => q.status === "open").length}
+   271→   271→            </span>
+   272→   272→          )}
+   273→   273→        </button>
+   274→   274→      </div>
+   275→   275→
+   276→   276→      {/* Search */}
+   277→   277→      <input
+   278→   278→        type="text"
+   279→   279→        placeholder={`Search ${activeTab === "articles" ? "articles" : "questions"}...`}
+   280→   280→        value={search}
+   281→   281→        onChange={(e) => setSearch(e.target.value)}
+   282→   282→        className="neo-input text-sm mb-3"
+   283→   283→      />
+   284→   284→
+   285→   285→      {/* Topic Pills */}
+   286→   286→      <div className="flex gap-2 overflow-x-auto pb-3 -mx-4 px-4 mb-2">
+   287→   287→        <button
+   288→   288→          onClick={() => setFilterTopic("")}
+   289→   289→          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+   290→   290→            !filterTopic
+   291→   291→              ? "bg-white text-slate-950"
+   292→   292→              : "bg-white/[0.04] text-[#94A3B8] hover:text-white border border-white/[0.06]"
+   293→   293→          }`}
+   294→   294→        >
+   295→   295→          All Topics
+   296→   296→        </button>
+   297→   297→        {APOLOGETICS_TOPICS.map((t) => (
+   298→   298→          <button
+   299→   299→            key={t.id}
+   300→   300→            onClick={() => setFilterTopic(t.id)}
+   301→   301→            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+   302→   302→              filterTopic === t.id ? "text-slate-950" : "text-[#94A3B8] hover:text-white border border-white/[0.06]"
+   303→   303→            }`}
+   304→   304→            style={filterTopic === t.id ? { background: t.color } : {}}
+   305→   305→          >
+   306→   306→            {t.label}
+   307→   307→          </button>
+   308→   308→        ))}
+   309→   309→      </div>
+   310→   310→
+   311→   311→      <AnimatePresence mode="wait">
+   312→   312→        {activeTab === "articles" ? (
+   313→   313→          <motion.div key="articles" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+   314→   314→            {/* Loading state */}
+   315→   315→            {postsLoading && (
+   316→   316→              <div className="text-center py-12">
+   317→   317→                <div className="w-8 h-8 mx-auto rounded-full border-2 border-transparent border-t-[#7C3AED] animate-spin mb-3" />
+   318→   318→                <p className="text-xs text-[#94A3B8]">Loading articles…</p>
+   319→   319→              </div>
+   320→   320→            )}
+   321→   321→
+   322→   322→            {/* Error state */}
+   323→   323→            {!postsLoading && postsError && (
+   324→   324→              <div className="bg-[#EF4444]/8 border border-[#EF4444]/20 rounded-2xl p-5 text-center">
+   325→   325→                <p className="text-sm font-bold text-[#EF4444] mb-1">Failed to load articles</p>
+   326→   326→                <p className="text-xs text-[#A09DB1] mb-3">{postsError}</p>
+   327→   327→                <button
+   328→   328→                  onClick={loadPosts}
+   329→   329→                  className="px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold transition-all"
+   330→   330→                >
+   331→   331→                  Try again
+   332→   332→                </button>
+   333→   333→              </div>
+   334→   334→            )}
+   335→   335→
+   336→   336→            {/* Empty state — no published articles yet */}
+   337→   337→            {!postsLoading && !postsError && posts.length === 0 && (
+   338→   338→              <div className="text-center py-12">
+   339→   339→                <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#7C3AED]/15 border border-[#7C3AED]/25 mb-3">
+   340→   340→                  <BookOpen size={24} className="text-[#A78BFA]" />
+   341→   341→                </div>
+   342→   342→                <p className="text-sm font-bold text-white mb-1">No articles published yet</p>
+   343→   343→                <p className="text-xs text-[#A09DB1] max-w-sm mx-auto">
+   344→   344→                  Apologetics articles will appear here once they are published by the Koino team.
+   345→   345→                </p>
+   346→   346→              </div>
+   347→   347→            )}
+   348→   348→
+   349→   349→            {/* Articles list (only when not loading/error/empty) */}
+   350→   350→            {!postsLoading && !postsError && posts.length > 0 && (
+   351→   351→              <>
+   352→   352→            {/* Featured Post */}
+   353→   353→            {filtered[0] && !filterTopic && !search && (
+   354→   354→              <motion.div
+   355→   355→                initial={{ opacity: 0, y: 10 }}
+   356→   356→                animate={{ opacity: 1, y: 0 }}
+   357→   357→                onClick={() => {
+   358→   358→                  // If the post has a slug (DB-backed), navigate to the public
+   359→   359→                  // article page. Otherwise (legacy mock), open the modal.
+   360→   360→                  if (filtered[0].slug) {
+   361→   361→                    window.location.href = `/apologetics/${filtered[0].slug}`;
+   362→   362→                  } else {
+   363→   363→                    setOpenPost(filtered[0]);
+   364→   364→                  }
+   365→   365→                }}
+   366→   366→                className="relative rounded-2xl overflow-hidden cursor-pointer mb-4 border border-white/[0.06]"
+   367→   367→              >
+   368→   368→                <div className="relative h-44" style={{ background: CHURCH_GRADIENTS[filtered[0].cover_gradient] }}>
+   369→   369→                  <div className="absolute inset-0 bg-gradient-to-t from-[#1C1929] via-[#1C1929]/40 to-transparent" />
+   370→   370→                  <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-[#22C55E]/15 backdrop-blur-sm border border-[#22C55E]/30 text-[#22C55E] text-[10px] font-bold uppercase tracking-wider">
+   371→   371→                    Featured
+   372→   372→                  </div>
+   373→   373→                </div>
+   374→   374→                <div className="absolute bottom-0 left-0 right-0 p-4">
+   375→   375→                  <h2 className="text-lg font-extrabold text-white mb-1 leading-tight">{filtered[0].title}</h2>
+   376→   376→                  <p className="text-xs text-white/70 line-clamp-2 mb-2">{filtered[0].body}</p>
+   377→   377→                  <div className="flex items-center gap-3 text-[10px] text-white/60">
+   378→   378→                    <span className="font-bold text-white/80">{filtered[0].author}</span>
+   379→   379→                    <span>·</span>
+   380→   380→                    <span>{new Date(filtered[0].date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+   381→   381→                    <span>·</span>
+   382→   382→                    <span className="flex items-center gap-1">
+   383→   383→                      <Heart size={9} /> {filtered[0].likes}
+   384→   384→                    </span>
+   385→   385→                  </div>
+   386→   386→                </div>
+   387→   387→              </motion.div>
+   388→   388→            )}
+   389→   389→
+   390→   390→            {/* Post List */}
+   391→   391→            <div className="space-y-3">
+   392→   392→              {(filterTopic || search ? filtered : filtered.slice(1)).map((post, i) => {
+   393→   393→                const topic = APOLOGETICS_TOPICS.find((t) => t.id === post.topic);
+   394→   394→                const hasLiked = liked.has(post.id);
+   395→   395→                return (
+   396→   396→                  <motion.div
+   397→   397→                    key={post.id}
+   398→   398→                    initial={{ opacity: 0, y: 12 }}
+   399→   399→                    animate={{ opacity: 1, y: 0 }}
+   400→   400→                    transition={{ delay: i * 0.05 }}
+   401→   401→                    onClick={() => {
+   402→   402→                      // If the post has a slug (DB-backed), navigate to the
+   403→   403→                      // public article page. Otherwise (legacy mock), open modal.
+   404→   404→                      if (post.slug) {
+   405→   405→                        window.location.href = `/apologetics/${post.slug}`;
+   406→   406→                      } else {
+   407→   407→                        setOpenPost(post);
+   408→   408→                      }
+   409→   409→                    }}
+   410→   410→                    className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4 cursor-pointer hover:border-white/[0.12] transition-all"
+   411→   411→                  >
+   412→   412→                    <div className="flex items-start gap-3 mb-2">
+   413→   413→                      <div
+   414→   414→                        className="w-1.5 h-12 rounded-full shrink-0 mt-1"
+   415→   415→                        style={{ background: topic?.color }}
+   416→   416→                      />
+   417→   417→                      <div className="flex-1 min-w-0">
+   418→   418→                        <span
+   419→   419→                          className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider inline-block mb-1.5"
+   420→   420→                          style={{ backgroundColor: `${topic?.color}20`, color: topic?.color }}
+   421→   421→                        >
+   422→   422→                          {topic?.label}
+   423→   423→                        </span>
+   424→   424→                        <h3 className="text-base font-bold text-white leading-tight">{post.title}</h3>
+   425→   425→                      </div>
+   426→   426→                    </div>
+   427→   427→                    <p className="text-[13px] text-[#A09DB1] leading-relaxed line-clamp-3 mb-3">{post.body}</p>
+   428→   428→                    <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
+   429→   429→                      <div className="flex items-center gap-3">
+   430→   430→                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#38BDF8] to-[#A855F7] flex items-center justify-center text-[10px] font-bold text-white">
+   431→   431→                          {post.author.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+   432→   432→                        </div>
+   433→   433→                        <div>
+   434→   434→                          <p className="text-[11px] font-bold text-white">{post.author}</p>
+   435→   435→                          <p className="text-[9px] text-[#94A3B8]">
+   436→   436→                            {new Date(post.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+   437→   437→                          </p>
+   438→   438→                        </div>
+   439→   439→                      </div>
+   440→   440→                      <div className="flex items-center gap-3 text-[#94A3B8]">
+   441→   441→                        <button
+   442→   442→                          onClick={(e) => {
+   443→   443→                            e.stopPropagation();
+   444→   444→                            toggleLike(post.id);
+   445→   445→                          }}
+   446→   446→                          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+   447→   447→                            hasLiked ? "bg-[#EC4899]/15 text-[#EC4899]" : "hover:text-white"
+   448→   448→                          }`}
+   449→   449→                        >
+   450→   450→                          <Heart size={12} fill={hasLiked ? "currentColor" : "none"} />
+   451→   451→                          {post.likes + (hasLiked ? 1 : 0)}
+   452→   452→                        </button>
+   453→   453→                        <span className="flex items-center gap-1 text-[10px]">
+   454→   454→                          <MessageCircle size={12} /> {post.comments}
+   455→   455→                        </span>
+   456→   456→                      </div>
+   457→   457→                    </div>
+   458→   458→                  </motion.div>
+   459→   459→                );
+   460→   460→              })}
+   461→   461→            </div>
+   462→   462→
+   463→   463→            {filtered.length === 0 && (
+   464→   464→              <div className="text-center py-12">
+   465→   465→                <Search size={32} className="mx-auto text-[#475569] mb-2" />
+   466→   466→                <p className="text-sm text-[#475569]">No articles found.</p>
+   467→   467→              </div>
+   468→   468→            )}
+   469→   469→              </>
+   470→   470→            )}
+   471→   471→          </motion.div>
+   472→   472→        ) : (
+   473→   473→          <motion.div key="qa" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+   474→   474→            {/* Q&A Banner */}
+   475→   475→            <div className="bg-gradient-to-br from-[#1C1929] to-[#2B254E] border border-[#38BDF8]/20 rounded-2xl p-4 mb-4">
+   476→   476→              <div className="flex items-start gap-3">
+   477→   477→                <div className="w-10 h-10 rounded-xl bg-[#38BDF8]/15 border border-[#38BDF8]/30 flex items-center justify-center shrink-0">
+   478→   478→                  <HelpCircle size={18} className="text-[#38BDF8]" />
+   479→   479→                </div>
+   480→   480→                <div>
+   481→   481→                  <p className="text-sm font-bold text-white mb-1">Have a question about faith?</p>
+   482→   482→                  <p className="text-[11px] text-[#A09DB1] leading-relaxed">
+   483→   483→                    Ask anything — pastors, church leaders, and verified admins will answer.
+   484→   484→                    Mark the best answer as accepted to help others.
+   485→   485→                  </p>
+   486→   486→                </div>
+   487→   487→              </div>
+   488→   488→            </div>
+   489→   489→
+   490→   490→            {/* Questions List */}
+   491→   491→            <div className="space-y-3">
+   492→   492→              {filteredQuestions.map((q, i) => {
+   493→   493→                const topic = APOLOGETICS_TOPICS.find((t) => t.id === q.topic);
+   494→   494→                const hasLiked = liked.has(q.id);
+   495→   495→                return (
+   496→   496→                  <motion.div
+   497→   497→                    key={q.id}
+   498→   498→                    initial={{ opacity: 0, y: 12 }}
+   499→   499→                    animate={{ opacity: 1, y: 0 }}
+   500→   500→                    transition={{ delay: i * 0.05 }}
+   501→   501→                    onClick={() => setOpenQuestion(q)}
+   502→   502→                    className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4 cursor-pointer hover:border-white/[0.12] transition-all"
+   503→   503→                  >
+   504→   504→                    <div className="flex items-center gap-2 mb-2">
+   505→   505→                      <span
+   506→   506→                        className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
+   507→   507→                        style={{ backgroundColor: `${topic?.color}20`, color: topic?.color }}
+   508→   508→                      >
+   509→   509→                        {topic?.label}
+   510→   510→                      </span>
+   511→   511→                      <span
+   512→   512→                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+   513→   513→                          q.status === "answered"
+   514→   514→                            ? "bg-[#22C55E]/15 text-[#22C55E]"
+   515→   515→                            : "bg-[#F59E0B]/15 text-[#F59E0B]"
+   516→   516→                        }`}
+   517→   517→                      >
+   518→   518→                        {q.status === "answered" ? "Answered" : "Open"}
+   519→   519→                      </span>
+   520→   520→                    </div>
+   521→   521→                    <h3 className="text-base font-bold text-white leading-tight mb-1">{q.title}</h3>
+   522→   522→                    <p className="text-[13px] text-[#A09DB1] leading-relaxed line-clamp-2 mb-2">{q.body}</p>
+   523→   523→                    <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
+   524→   524→                      <div className="flex items-center gap-2">
+   525→   525→                        <div className="w-6 h-6 rounded-lg bg-white/[0.06] flex items-center justify-center text-[10px] font-bold text-white">
+   526→   526→                          {q.author === "Anonymous" ? "?" : q.author.charAt(0)}
+   527→   527→                        </div>
+   528→   528→                        <div>
+   529→   529→                          <p className="text-[11px] font-bold text-white">{q.author}</p>
+   530→   530→                          <p className="text-[9px] text-[#94A3B8]">
+   531→   531→                            {new Date(q.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+   532→   532→                          </p>
+   533→   533→                        </div>
+   534→   534→                      </div>
+   535→   535→                      <div className="flex items-center gap-3 text-[#94A3B8]">
+   536→   536→                        {q.answers.length > 0 && (
+   537→   537→                          <span className="flex items-center gap-1 text-[10px] font-bold">
+   538→   538→                            <MessageCircle size={12} /> {q.answers.length} {q.answers.length === 1 ? "answer" : "answers"}
+   539→   539→                          </span>
+   540→   540→                        )}
+   541→   541→                        <span className="flex items-center gap-1 text-[10px]">
+   542→   542→                          <Heart size={12} /> {q.likes}
+   543→   543→                        </span>
+   544→   544→                      </div>
+   545→   545→                    </div>
+   546→   546→                  </motion.div>
+   547→   547→                );
+   548→   548→              })}
+   549→   549→            </div>
+   550→   550→
+   551→   551→            {filteredQuestions.length === 0 && (
+   552→   552→              <div className="text-center py-12">
+   553→   553→                <HelpCircle size={32} className="mx-auto text-[#475569] mb-2" />
+   554→   554→                <p className="text-sm text-[#475569] mb-3">No questions found.</p>
+   555→   555→                <button
+   556→   556→                  onClick={() => setShowAskModal(true)}
+   557→   557→                  className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white"
+   558→   558→                  style={{ background: "linear-gradient(135deg, #38BDF8, #A855F7)" }}
+   559→   559→                >
+   560→   560→                  Ask the First Question
+   561→   561→                </button>
+   562→   562→              </div>
+   563→   563→            )}
+   564→   564→          </motion.div>
+   565→   565→        )}
+   566→   566→      </AnimatePresence>
+   567→   567→
+   568→   568→      {/* Post Detail Modal */}
+   569→   569→      <AnimatePresence>
+   570→   570→        {openPost && (
+   571→   571→          <motion.div
+   572→   572→            initial={{ opacity: 0 }}
+   573→   573→            animate={{ opacity: 1 }}
+   574→   574→            exit={{ opacity: 0 }}
+   575→   575→            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-end md:items-center justify-center z-[60] p-0 md:p-6"
+   576→   576→            onClick={(e) => e.target === e.currentTarget && setOpenPost(null)}
+   577→   577→          >
+   578→   578→            <motion.div
+   579→   579→              initial={{ y: 100, opacity: 0 }}
+   580→   580→              animate={{ y: 0, opacity: 1 }}
+   581→   581→              exit={{ y: 100, opacity: 0 }}
+   582→   582→              transition={{ type: "spring", damping: 30, stiffness: 350 }}
+   583→   583→              className="bg-[#1C1929] border border-white/[0.08] rounded-t-[28px] md:rounded-[24px] w-full max-w-lg max-h-[90vh] overflow-y-auto"
+   584→   584→            >
+   585→   585→              <div className="relative h-32" style={{ background: CHURCH_GRADIENTS[openPost.cover_gradient] }}>
+   586→   586→                <div className="absolute inset-0 bg-gradient-to-t from-[#1C1929] to-transparent" />
+   587→   587→                <button
+   588→   588→                  onClick={() => setOpenPost(null)}
+   589→   589→                  className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white/80 hover:text-white"
+   590→   590→                >
+   591→   591→                  <X size={18} />
+   592→   592→                </button>
+   593→   593→              </div>
+   594→   594→
+   595→   595→              <div className="p-5 space-y-4">
+   596→   596→                <div className="flex items-center gap-3 -mt-12 relative">
+   597→   597→                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#38BDF8] to-[#A855F7] flex items-center justify-center text-base font-bold text-white border-4 border-[#1C1929]">
+   598→   598→                    {openPost.author.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+   599→   599→                  </div>
+   600→   600→                  <div>
+   601→   601→                    <p className="text-sm font-bold text-white">{openPost.author}</p>
+   602→   602→                    <p className="text-[10px] text-[#94A3B8]">
+   603→   603→                      {new Date(openPost.date).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+   604→   604→                    </p>
+   605→   605→                  </div>
+   606→   606→                </div>
+   607→   607→
+   608→   608→                {(() => {
+   609→   609→                  const topic = APOLOGETICS_TOPICS.find((t) => t.id === openPost.topic);
+   610→   610→                  return (
+   611→   611→                    <span
+   612→   612→                      className="inline-block px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
+   613→   613→                      style={{ backgroundColor: `${topic?.color}20`, color: topic?.color }}
+   614→   614→                    >
+   615→   615→                      {topic?.label}
+   616→   616→                    </span>
+   617→   617→                  );
+   618→   618→                })()}
+   619→   619→
+   620→   620→                <h2 className="text-xl font-extrabold text-white leading-tight">{openPost.title}</h2>
+   621→   621→                <p className="text-sm text-[#A09DB1] leading-relaxed whitespace-pre-line">{openPost.body}</p>
+   622→   622→
+   623→   623→                <div className="flex items-center gap-3 pt-3 border-t border-white/[0.06]">
+   624→   624→                  <button
+   625→   625→                    onClick={() => toggleLike(openPost.id)}
+   626→   626→                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+   627→   627→                      liked.has(openPost.id)
+   628→   628→                        ? "bg-[#EC4899]/15 text-[#EC4899] border border-[#EC4899]/30"
+   629→   629→                        : "bg-white/[0.04] text-[#94A3B8] hover:text-white border border-white/[0.06]"
+   630→   630→                    }`}
+   631→   631→                  >
+   632→   632→                    <Heart size={14} fill={liked.has(openPost.id) ? "currentColor" : "none"} />
+   633→   633→                    {openPost.likes + (liked.has(openPost.id) ? 1 : 0)}
+   634→   634→                  </button>
+   635→   635→                  <button
+   636→   636→                    onClick={() => sharePost(openPost)}
+   637→   637→                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-white/[0.04] text-[#94A3B8] hover:text-white border border-white/[0.06] transition-all"
+   638→   638→                  >
+   639→   639→                    <Share2 size={14} /> Share
+   640→   640→                  </button>
+   641→   641→                  <div className="ml-auto flex items-center gap-1 text-[10px] text-[#94A3B8]">
+   642→   642→                    <Eye size={12} /> {(openPost.likes * 8).toLocaleString()} views
+   643→   643→                  </div>
+   644→   644→                </div>
+   645→   645→              </div>
+   646→   646→            </motion.div>
+   647→   647→          </motion.div>
+   648→   648→        )}
+   649→   649→      </AnimatePresence>
+   650→   650→
+   651→   651→      {/* Question Detail Modal */}
+   652→   652→      <AnimatePresence>
+   653→   653→        {openQuestion && (
+   654→   654→          <motion.div
+   655→   655→            initial={{ opacity: 0 }}
+   656→   656→            animate={{ opacity: 1 }}
+   657→   657→            exit={{ opacity: 0 }}
+   658→   658→            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-end md:items-center justify-center z-[60] p-0 md:p-6"
+   659→   659→            onClick={(e) => e.target === e.currentTarget && setOpenQuestion(null)}
+   660→   660→          >
+   661→   661→            <motion.div
+   662→   662→              initial={{ y: 100, opacity: 0 }}
+   663→   663→              animate={{ y: 0, opacity: 1 }}
+   664→   664→              exit={{ y: 100, opacity: 0 }}
+   665→   665→              transition={{ type: "spring", damping: 30, stiffness: 350 }}
+   666→   666→              className="bg-[#1C1929] border border-white/[0.08] rounded-t-[28px] md:rounded-[24px] w-full max-w-lg max-h-[90vh] overflow-y-auto"
+   667→   667→            >
+   668→   668→              <div className="p-5 space-y-4">
+   669→   669→                <div className="flex items-center justify-between">
+   670→   670→                  <button
+   671→   671→                    onClick={() => setOpenQuestion(null)}
+   672→   672→                    className="flex items-center gap-1 text-xs text-[#94A3B8] hover:text-white transition-colors"
+   673→   673→                  >
+   674→   674→                    <X size={14} /> Close
+   675→   675→                  </button>
+   676→   676→                  <span
+   677→   677→                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+   678→   678→                      openQuestion.status === "answered"
+   679→   679→                        ? "bg-[#22C55E]/15 text-[#22C55E]"
+   680→   680→                        : "bg-[#F59E0B]/15 text-[#F59E0B]"
+   681→   681→                    }`}
+   682→   682→                  >
+   683→   683→                    {openQuestion.status === "answered" ? "Answered" : "Open"}
+   684→   684→                  </span>
+   685→   685→                </div>
+   686→   686→
+   687→   687→                {(() => {
+   688→   688→                  const topic = APOLOGETICS_TOPICS.find((t) => t.id === openQuestion.topic);
+   689→   689→                  return (
+   690→   690→                    <span
+   691→   691→                      className="inline-block px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
+   692→   692→                      style={{ backgroundColor: `${topic?.color}20`, color: topic?.color }}
+   693→   693→                    >
+   694→   694→                      {topic?.label}
+   695→   695→                    </span>
+   696→   696→                  );
+   697→   697→                })()}
+   698→   698→
+   699→   699→                <h2 className="text-xl font-extrabold text-white leading-tight">{openQuestion.title}</h2>
+   700→   700→                <p className="text-sm text-[#A09DB1] leading-relaxed">{openQuestion.body}</p>
+   701→   701→
+   702→   702→                <div className="flex items-center gap-3 pt-3 border-t border-white/[0.06]">
+   703→   703→                  <div className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center text-[10px] font-bold text-white">
+   704→   704→                    {openQuestion.author === "Anonymous" ? "?" : openQuestion.author.charAt(0)}
+   705→   705→                  </div>
+   706→   706→                  <div>
+   707→   707→                    <p className="text-[11px] font-bold text-white">{openQuestion.author}</p>
+   708→   708→                    <p className="text-[9px] text-[#94A3B8]">
+   709→   709→                      {new Date(openQuestion.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+   710→   710→                    </p>
+   711→   711→                  </div>
+   712→   712→                </div>
+   713→   713→
+   714→   714→                {/* Answers */}
+   715→   715→                <div>
+   716→   716→                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-3">
+   717→   717→                    {openQuestion.answers.length} {openQuestion.answers.length === 1 ? "Answer" : "Answers"}
+   718→   718→                  </p>
+   719→   719→                  <div className="space-y-3">
+   720→   720→                    {openQuestion.answers.map((a) => (
+   721→   721→                      <div
+   722→   722→                        key={a.id}
+   723→   723→                        className={`rounded-xl p-3 border ${
+   724→   724→                          a.is_accepted
+   725→   725→                            ? "bg-[#22C55E]/8 border-[#22C55E]/30"
+   726→   726→                            : "bg-white/[0.03] border-white/[0.06]"
+   727→   727→                        }`}
+   728→   728→                      >
+   729→   729→                        <div className="flex items-center gap-2 mb-2">
+   730→   730→                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#A855F7] to-[#38BDF8] flex items-center justify-center text-[10px] font-bold text-white">
+   731→   731→                            {a.author.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+   732→   732→                          </div>
+   733→   733→                          <div className="flex-1">
+   734→   734→                            <p className="text-[11px] font-bold text-white flex items-center gap-1.5">
+   735→   735→                              {a.author}
+   736→   736→                              {a.is_accepted && (
+   737→   737→                                <span className="flex items-center gap-0.5 text-[#22C55E] text-[9px] font-bold uppercase">
+   738→   738→                                  <CheckCircle2 size={10} /> Accepted
+   739→   739→                                </span>
+   740→   740→                              )}
+   741→   741→                            </p>
+   742→   742→                            <p className="text-[9px] text-[#94A3B8]">
+   743→   743→                              {a.authorRole}{a.authorChurch ? ` · ${a.authorChurch}` : ""} · {a.date}
+   744→   744→                            </p>
+   745→   745→                          </div>
+   746→   746→                        </div>
+   747→   747→                        <p className="text-[12px] text-[#A09DB1] leading-relaxed">{a.body}</p>
+   748→   748→                        {!a.is_accepted && (
+   749→   749→                          <button
+   750→   750→                            onClick={() => acceptAnswer(openQuestion.id, a.id)}
+   751→   751→                            className="mt-2 text-[10px] font-bold text-[#22C55E] hover:underline"
+   752→   752→                          >
+   753→   753→                            ✓ Mark as accepted
+   754→   754→                          </button>
+   755→   755→                        )}
+   756→   756→                      </div>
+   757→   757→                    ))}
+   758→   758→                  </div>
+   759→   759→
+   760→   760→                  {/* Answer input */}
+   761→   761→                  <div className="mt-4 pt-3 border-t border-white/[0.06]">
+   762→   762→                    <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">
+   763→   763→                      Your Answer
+   764→   764→                    </p>
+   765→   765→                    <textarea
+   766→   766→                      value={answerText[openQuestion.id] || ""}
+   767→   767→                      onChange={(e) => setAnswerText((prev) => ({ ...prev, [openQuestion.id]: e.target.value }))}
+   768→   768→                      placeholder="Share your insight with biblical and logical reasoning..."
+   769→   769→                      className="neo-input h-24 resize-none text-sm mb-2"
+   770→   770→                    />
+   771→   771→                    <button
+   772→   772→                      onClick={() => handleAnswer(openQuestion.id)}
+   773→   773→                      className="w-full py-2.5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2"
+   774→   774→                      style={{ background: "linear-gradient(135deg, #38BDF8, #A855F7)" }}
+   775→   775→                    >
+   776→   776→                      <Send size={14} /> Post Answer
+   777→   777→                    </button>
+   778→   778→                    <p className="text-[10px] text-[#64748B] mt-2 text-center">
+   779→   779→                      Note: In production, only verified pastors/admins can post official answers.
+   780→   780→                    </p>
+   781→   781→                  </div>
+   782→   782→                </div>
+   783→   783→              </div>
+   784→   784→            </motion.div>
+   785→   785→          </motion.div>
+   786→   786→        )}
+   787→   787→      </AnimatePresence>
+   788→   788→
+   789→   789→      {/* Ask Question Modal */}
+   790→   790→      <AnimatePresence>
+   791→   791→        {showAskModal && (
+   792→   792→          <motion.div
+   793→   793→            initial={{ opacity: 0 }}
+   794→   794→            animate={{ opacity: 1 }}
+   795→   795→            exit={{ opacity: 0 }}
+   796→   796→            className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-end md:items-center justify-center z-[60]"
+   797→   797→            onClick={(e) => e.target === e.currentTarget && setShowAskModal(false)}
+   798→   798→          >
+   799→   799→            <motion.div
+   800→   800→              initial={{ y: 100 }}
+   801→   801→              animate={{ y: 0 }}
+   802→   802→              exit={{ y: 100 }}
+   803→   803→              transition={{ type: "spring", damping: 30, stiffness: 350 }}
+   804→   804→              className="bg-[#1C1929] border-t md:border border-white/[0.08] rounded-t-[28px] md:rounded-[24px] w-full max-w-lg p-5 max-h-[85vh] overflow-y-auto"
+   805→   805→            >
+   806→   806→              <div className="flex justify-between items-center mb-4">
+   807→   807→                <h2 className="text-lg font-bold bg-gradient-to-r from-[#38BDF8] to-[#A855F7] bg-clip-text text-transparent">
+   808→   808→                  Ask a Question
+   809→   809→                </h2>
+   810→   810→                <button onClick={() => setShowAskModal(false)} className="text-[#64748B] hover:text-white p-1">
+   811→   811→                  <X size={20} />
+   812→   812→                </button>
+   813→   813→              </div>
+   814→   814→              <form onSubmit={handleAskQuestion} className="space-y-3">
+   815→   815→                <div>
+   816→   816→                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+   817→   817→                    Question Title *
+   818→   818→                  </label>
+   819→   819→                  <input
+   820→   820→                    type="text"
+   821→   821→                    value={askForm.title}
+   822→   822→                    onChange={(e) => setAskForm({ ...askForm, title: e.target.value })}
+   823→   823→                    className="neo-input text-sm"
+   824→   824→                    placeholder="e.g. How do we know Jesus is God?"
+   825→   825→                    required
+   826→   826→                  />
+   827→   827→                </div>
+   828→   828→                <div>
+   829→   829→                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+   830→   830→                    Topic
+   831→   831→                  </label>
+   832→   832→                  <select
+   833→   833→                    value={askForm.topic}
+   834→   834→                    onChange={(e) => setAskForm({ ...askForm, topic: e.target.value })}
+   835→   835→                    className="neo-input text-sm"
+   836→   836→                  >
+   837→   837→                    <option value="">Select topic</option>
+   838→   838→                    {APOLOGETICS_TOPICS.map((t) => (
+   839→   839→                      <option key={t.id} value={t.id}>{t.label}</option>
+   840→   840→                    ))}
+   841→   841→                  </select>
+   842→   842→                </div>
+   843→   843→                <div>
+   844→   844→                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+   845→   845→                    Question Details *
+   846→   846→                  </label>
+   847→   847→                  <textarea
+   848→   848→                    value={askForm.body}
+   849→   849→                    onChange={(e) => setAskForm({ ...askForm, body: e.target.value })}
+   850→   850→                    className="neo-input h-32 resize-none text-sm"
+   851→   851→                    placeholder="Provide context, what you've read so far, what specifically you're struggling with..."
+   852→   852→                    required
+   853→   853→                  />
+   854→   854→                </div>
+   855→   855→                <div>
+   856→   856→                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+   857→   857→                    Your Name (optional)
+   858→   858→                  </label>
+   859→   859→                  <input
+   860→   860→                    type="text"
+   861→   861→                    value={askForm.author}
+   862→   862→                    onChange={(e) => setAskForm({ ...askForm, author: e.target.value })}
+   863→   863→                    className="neo-input text-sm"
+   864→   864→                    placeholder="Leave blank for Anonymous"
+   865→   865→                  />
+   866→   866→                </div>
+   867→   867→                <div className="flex gap-2 pt-1">
+   868→   868→                  <button
+   869→   869→                    type="button"
+   870→   870→                    onClick={() => setShowAskModal(false)}
+   871→   871→                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-white/[0.04] text-[#94A3B8] hover:text-white border border-white/[0.06]"
+   872→   872→                  >
+   873→   873→                    Cancel
+   874→   874→                  </button>
+   875→   875→                  <button
+   876→   876→                    type="submit"
+   877→   877→                    className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white"
+   878→   878→                    style={{ background: "linear-gradient(135deg, #38BDF8, #A855F7)" }}
+   879→   879→                  >
+   880→   880→                    Post Question
+   881→   881→                  </button>
+   882→   882→                </div>
+   883→   883→              </form>
+   884→   884→            </motion.div>
+   885→   885→          </motion.div>
+   886→   886→        )}
+   887→   887→      </AnimatePresence>
+   888→   888→    </div>
+   889→   889→  );
+   890→   890→}
+   891→   891→

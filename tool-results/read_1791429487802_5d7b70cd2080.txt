@@ -1,0 +1,2002 @@
+     1→"use client";
+     2→
+     3→import { useState, useEffect, useCallback, useMemo } from "react";
+     4→import { motion, AnimatePresence } from "framer-motion";
+     5→import { useSupabaseUser } from "@/lib/supabase/use-user";
+     6→import { useTranslation } from "@/lib/i18n/LanguageContext";
+     7→import {
+     8→  Shield,
+     9→  LayoutDashboard,
+    10→  Building2,
+    11→  Calendar,
+    12→  Store,
+    13→  HeartHandshake,
+    14→  HelpCircle,
+    15→  Trophy,
+    16→  Megaphone,
+    17→  BarChart3,
+    18→  Lock,
+    19→  X,
+    20→  Check,
+    21→  Trash2,
+    22→  Plus,
+    23→  TrendingUp,
+    24→  Users,
+    25→  Eye,
+    26→  Clock,
+    27→  Gift,
+    28→  LogIn,
+    29→  Tag,
+    30→  Palette,
+    31→  Package,
+    32→  Mail,
+    33→  Truck,
+    34→  CheckCircle,
+    35→  BookOpen,
+    36→  AlertCircle,
+    37→  BadgeCheck,
+    38→  Loader2,
+    39→  HandHeart,
+    40→  Handshake,
+    41→  UserCheck,
+    42→  FileText,
+    43→  Star,
+    44→} from "lucide-react";
+    45→import { toast } from "sonner";
+    46→import {
+    47→  CHURCHES,
+    48→  EVENTS,
+    49→  PRODUCTS,
+    50→  PRAYERS,
+    51→  APOLOGETICS_QUESTIONS,
+    52→  TRIVIA_COMPETITIONS,
+    53→  INDIAN_STATES,
+    54→  type Church,
+    55→  type EventItem,
+    56→  type Product,
+    57→  type PrayerPost,
+    58→  type TriviaGift,
+    59→} from "@/lib/crosscrafted-data";
+    60→import ImagePicker from "@/components/crosscrafted/ImagePicker";
+    61→import BibleComicsAdmin from "@/components/crosscrafted/BibleComicsAdmin";
+    62→import DonationSettingsTab from "@/components/crosscrafted/admin/DonationSettingsTab";
+    63→import ContactMessagesTab from "@/components/crosscrafted/admin/ContactMessagesTab";
+    64→import PartnerInquiriesTab from "@/components/crosscrafted/admin/PartnerInquiriesTab";
+    65→import ContributorApplicationsTab from "@/components/crosscrafted/admin/ContributorApplicationsTab";
+    66→import BlogTab from "@/components/crosscrafted/admin/BlogTab";
+    67→import ApologeticsTab from "@/components/crosscrafted/admin/ApologeticsTab";
+    68→
+    69→type AdminTab =
+    70→  | "dashboard"
+    71→  | "members"
+    72→  | "churches"
+    73→  | "events"
+    74→  | "marketplace"
+    75→  | "prayers"
+    76→  | "apologetics"
+    77→  | "competitions"
+    78→  | "announcements"
+    79→  | "redemptions"
+    80→  | "donations"
+    81→  | "contact-messages"
+    82→  | "partner-inquiries"
+    83→  | "contributors"
+    84→  | "blog"
+    85→  | "analytics"
+    86→  | "bible-comics";
+    87→
+    88→const TABS: { id: AdminTab; icon: typeof Shield; labelKey: string }[] = [
+    89→  { id: "dashboard",    icon: LayoutDashboard, labelKey: "admin.tab.dashboard" },
+    90→  { id: "members",      icon: Users,             labelKey: "admin.tab.members" },
+    91→  { id: "churches",     icon: Building2,        labelKey: "admin.tab.churches" },
+    92→  { id: "events",       icon: Calendar,         labelKey: "admin.tab.events" },
+    93→  { id: "marketplace",  icon: Store,             labelKey: "admin.tab.marketplace" },
+    94→  { id: "prayers",      icon: HeartHandshake,   labelKey: "admin.tab.prayers" },
+    95→  { id: "apologetics",  icon: HelpCircle,       labelKey: "admin.tab.apologetics" },
+    96→  { id: "competitions", icon: Trophy,            labelKey: "admin.tab.competitions" },
+    97→  { id: "announcements",icon: Megaphone,         labelKey: "admin.tab.announcements" },
+    98→  { id: "redemptions",  icon: Package,           labelKey: "admin.tab.redemptions" },
+    99→  { id: "donations",    icon: HandHeart,         labelKey: "admin.tab.donations" },
+   100→  { id: "contact-messages", icon: Mail,          labelKey: "admin.tab.contactMessages" },
+   101→  { id: "partner-inquiries", icon: Handshake,    labelKey: "admin.tab.partnerInquiries" },
+   102→  { id: "contributors", icon: UserCheck,         labelKey: "admin.tab.contributors" },
+   103→  { id: "blog",         icon: FileText,          labelKey: "admin.tab.blog" },
+   104→  { id: "analytics",    icon: BarChart3,         labelKey: "admin.tab.analytics" },
+   105→  { id: "bible-comics", icon: BookOpen,          labelKey: "admin.tab.bibleComics" },
+   106→];
+   107→
+   108→export default function AdminView() {
+   109→  const { user, isAuthenticated, isAdmin, loading } = useSupabaseUser();
+   110→  const t = useTranslation();
+   111→  const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
+   112→
+   113→  // Loading state
+   114→  if (loading) {
+   115→    return (
+   116→      <div className="flex items-center justify-center min-h-[40vh]">
+   117→        <div className="w-8 h-8 rounded-full border-2 border-transparent border-t-[#7C3AED] animate-spin" />
+   118→      </div>
+   119→    );
+   120→  }
+   121→
+   122→  // Not signed in — show login prompt
+   123→  if (!isAuthenticated) {
+   124→    return (
+   125→      <div className="max-w-md mx-auto px-4 py-12">
+   126→        <motion.div
+   127→          initial={{ opacity: 0, y: 20 }}
+   128→          animate={{ opacity: 1, y: 0 }}
+   129→          className="bg-gradient-to-br from-[#1C1929] to-[#2B254E] border border-[#7C3AED]/20 rounded-3xl p-8"
+   130→        >
+   131→          <div className="text-center mb-6">
+   132→            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#7C3AED]/15 border border-[#7C3AED]/30 mb-4">
+   133→              <Shield size={28} className="text-[#A78BFA]" />
+   134→            </div>
+   135→            <h1 className="text-2xl font-extrabold text-white">{t('admin.access.title')}</h1>
+   136→            <p className="text-sm text-[#A09DB1] mt-1">Sign in with an admin account</p>
+   137→          </div>
+   138→
+   139→          <a
+   140→            href="/auth/signin"
+   141→            className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all hover:-translate-y-px flex items-center justify-center gap-2"
+   142→            style={{ background: "linear-gradient(135deg, #7C3AED, #EC4899)" }}
+   143→          >
+   144→            <LogIn size={16} /> Sign In
+   145→          </a>
+   146→
+   147→          <div className="mt-6 p-3 rounded-xl bg-[#38BDF8]/8 border border-[#38BDF8]/20">
+   148→            <p className="text-[10px] font-bold uppercase tracking-wider text-[#38BDF8] mb-1">Admin Access</p>
+   149→            <p className="text-[11px] text-[#A09DB1] leading-relaxed">
+   150→              Admin authorization is verified server-side via your authenticated session role.
+   151→              Only users with the <span className="font-bold text-white">admin</span> role in the database
+   152→              can access this panel.
+   153→            </p>
+   154→          </div>
+   155→        </motion.div>
+   156→      </div>
+   157→    );
+   158→  }
+   159→
+   160→  // Signed in but NOT admin
+   161→  if (!isAdmin) {
+   162→    return (
+   163→      <div className="max-w-md mx-auto px-4 py-12">
+   164→        <motion.div
+   165→          initial={{ opacity: 0, y: 20 }}
+   166→          animate={{ opacity: 1, y: 0 }}
+   167→          className="bg-gradient-to-br from-[#1C1929] to-[#2B254E] border border-[#EF4444]/20 rounded-3xl p-8 text-center"
+   168→        >
+   169→          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#EF4444]/15 border border-[#EF4444]/30 mb-4">
+   170→            <Lock size={28} className="text-[#EF4444]" />
+   171→          </div>
+   172→          <h1 className="text-2xl font-extrabold text-white mb-2">{t('admin.accessDenied.title')}</h1>
+   173→          <p className="text-sm text-[#A09DB1] mb-4">
+   174→            You're signed in as <span className="font-bold text-white">{user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email}</span>,
+   175→            but your account doesn't have admin privileges.
+   176→          </p>
+   177→          <p className="text-[11px] text-[#64748B]">
+   178→            Admin access is granted by setting <code className="text-[#A78BFA]">role = "admin"</code> in the
+   179→            database User table. Contact the site administrator if you believe this is an error.
+   180→          </p>
+   181→        </motion.div>
+   182→      </div>
+   183→    );
+   184→  }
+   185→
+   186→  // Admin dashboard — user is authenticated AND has admin role
+   187→  return (
+   188→    <div className="max-w-[1100px] mx-auto px-4 py-5">
+   189→      {/* Header */}
+   190→      <div className="flex items-center justify-between mb-5">
+   191→        <div className="flex items-center gap-2">
+   192→          <div className="w-9 h-9 rounded-xl bg-[#7C3AED]/15 border border-[#7C3AED]/30 flex items-center justify-center">
+   193→            <Shield size={16} className="text-[#A78BFA]" />
+   194→          </div>
+   195→          <div>
+   196→            <h1 className="text-lg font-extrabold text-white">{t('admin.title')}</h1>
+   197→            <p className="text-[10px] text-[#94A3B8]">{t('admin.signedInAs', { name: user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email })}</p>
+   198→          </div>
+   199→        </div>
+   200→      </div>
+   201→
+   202→      {/* Tabs */}
+   203→      <div className="flex gap-1 p-1 bg-white/[0.04] border border-white/[0.06] rounded-2xl mb-5 overflow-x-auto">
+   204→        {TABS.map((tab) => (
+   205→          <button
+   206→            key={tab.id}
+   207→            onClick={() => setActiveTab(tab.id)}
+   208→            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+   209→              activeTab === tab.id
+   210→                ? "bg-[#7C3AED] text-white shadow-lg shadow-[#7C3AED]/25"
+   211→                : "text-[#94A3B8] hover:text-white"
+   212→            }`}
+   213→          >
+   214→            <tab.icon size={12} />
+   215→            {t(tab.labelKey)}
+   216→          </button>
+   217→        ))}
+   218→      </div>
+   219→
+   220→      {/* Tab content */}
+   221→      <AnimatePresence mode="wait">
+   222→        <motion.div
+   223→          key={activeTab}
+   224→          initial={{ opacity: 0, y: 8 }}
+   225→          animate={{ opacity: 1, y: 0 }}
+   226→          exit={{ opacity: 0, y: -8 }}
+   227→          transition={{ duration: 0.15 }}
+   228→        >
+   229→          {activeTab === "dashboard" && <DashboardTab onNavigate={setActiveTab} />}
+   230→          {activeTab === "members" && <MembersTab />}
+   231→          {activeTab === "churches" && <ChurchesTab />}
+   232→          {activeTab === "events" && <EventsTab />}
+   233→          {activeTab === "marketplace" && <MarketplaceTab />}
+   234→          {activeTab === "prayers" && <PrayersTab />}
+   235→          {activeTab === "apologetics" && <ApologeticsTab />}
+   236→          {activeTab === "competitions" && <CompetitionsTab />}
+   237→          {activeTab === "announcements" && <AnnouncementsTab />}
+   238→          {activeTab === "redemptions" && <RedemptionsTab />}
+   239→          {activeTab === "donations" && <DonationSettingsTab />}
+   240→          {activeTab === "contact-messages" && <ContactMessagesTab />}
+   241→          {activeTab === "partner-inquiries" && <PartnerInquiriesTab />}
+   242→          {activeTab === "contributors" && <ContributorApplicationsTab />}
+   243→          {activeTab === "blog" && <BlogTab />}
+   244→          {activeTab === "analytics" && <AnalyticsTab />}
+   245→          {activeTab === "bible-comics" && <BibleComicsAdmin />}
+   246→        </motion.div>
+   247→      </AnimatePresence>
+   248→    </div>
+   249→  );
+   250→}
+   251→
+   252→// ─── DASHBOARD ────────────────────────────────────────────────────────────
+   253→
+   254→function DashboardTab({ onNavigate }: { onNavigate: (tab: AdminTab) => void }) {
+   255→  // Overview cards — each navigates to its admin section.
+   256→  // HONEST NOTE: Churches/Events/Products/Prayers/Questions/Competitions are
+   257→  // currently backed by mock data (crosscrafted-data.ts arrays), NOT Prisma
+   258→  // models. The counts below reflect the mock dataset. Approve/reject actions
+   259→  // in those tabs update local React state only — they do NOT persist to a
+   260→  // database. See the "Preview Mode" banner on each tab for details.
+   261→  // The ONLY fully DB-backed admin section is Bible Comics (ComicChapter /
+   262→  // ComicPanel Prisma models + 14 admin API routes).
+   263→  const stats: { label: string; value: number; pending: number; icon: typeof Shield; color: string; tab: AdminTab }[] = [
+   264→    { label: "Churches", value: CHURCHES.length, pending: CHURCHES.filter((c) => c.status === "pending").length, icon: Building2, color: "#A855F7", tab: "churches" },
+   265→    { label: "Events", value: EVENTS.length, pending: 0, icon: Calendar, color: "#EC4899", tab: "events" },
+   266→    { label: "Products", value: PRODUCTS.length, pending: 0, icon: Store, color: "#9786E3", tab: "marketplace" },
+   267→    { label: "Prayers", value: PRAYERS.length, pending: 0, icon: HeartHandshake, color: "#F59E0B", tab: "prayers" },
+   268→    { label: "Questions", value: APOLOGETICS_QUESTIONS.length, pending: APOLOGETICS_QUESTIONS.filter((q) => q.status === "open").length, icon: HelpCircle, color: "#38BDF8", tab: "apologetics" },
+   269→    { label: "Competitions", value: TRIVIA_COMPETITIONS.length, pending: TRIVIA_COMPETITIONS.filter((c) => c.status === "upcoming").length, icon: Trophy, color: "#22C55E", tab: "competitions" },
+   270→  ];
+   271→
+   272→  // Quick Actions — each wired to navigate to the correct admin section.
+   273→  // These are REAL navigation actions (not dead buttons).
+   274→  const quickActions: { label: string; color: string; tab: AdminTab; icon: typeof Shield }[] = [
+   275→    { label: "Review Churches", color: "#A855F7", tab: "churches", icon: Building2 },
+   276→    { label: "Moderate Prayers", color: "#F59E0B", tab: "prayers", icon: HeartHandshake },
+   277→    { label: "Answer Questions", color: "#38BDF8", tab: "apologetics", icon: HelpCircle },
+   278→    { label: "Host Competition", color: "#22C55E", tab: "competitions", icon: Trophy },
+   279→    { label: "Post Announcement", color: "#EC4899", tab: "announcements", icon: Megaphone },
+   280→    { label: "View Analytics", color: "#9786E3", tab: "analytics", icon: BarChart3 },
+   281→  ];
+   282→
+   283→  return (
+   284→    <div className="space-y-4">
+   285→      <div>
+   286→        <h2 className="text-base font-bold text-white mb-3">Overview</h2>
+   287→        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+   288→          {stats.map((s) => (
+   289→            <button
+   290→              key={s.label}
+   291→              onClick={() => onNavigate(s.tab)}
+   292→              className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4 text-left hover:border-white/[0.15] hover:bg-[#22202F] transition-all group"
+   293→            >
+   294→              <div className="flex items-center justify-between mb-2">
+   295→                <div
+   296→                  className="w-9 h-9 rounded-xl flex items-center justify-center"
+   297→                  style={{ backgroundColor: `${s.color}15`, border: `1px solid ${s.color}30` }}
+   298→                >
+   299→                  <s.icon size={16} style={{ color: s.color }} />
+   300→                </div>
+   301→                {s.pending > 0 && (
+   302→                  <span className="px-1.5 py-0.5 rounded-md bg-[#F59E0B]/15 text-[#F59E0B] text-[9px] font-bold uppercase tracking-wider">
+   303→                    {s.pending} pending
+   304→                  </span>
+   305→                )}
+   306→              </div>
+   307→              <p className="text-2xl font-extrabold text-white">{s.value}</p>
+   308→              <p className="text-[10px] text-[#94A3B8] uppercase tracking-wider mt-0.5">{s.label}</p>
+   309→              <p className="text-[9px] text-[#475569] mt-1 group-hover:text-[#64748B] transition-colors">
+   310→                Open {s.label} admin →
+   311→              </p>
+   312→            </button>
+   313→          ))}
+   314→        </div>
+   315→      </div>
+   316→
+   317→      <div>
+   318→        <h2 className="text-base font-bold text-white mb-3">Quick Actions</h2>
+   319→        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+   320→          {quickActions.map((a) => (
+   321→            <button
+   322→              key={a.label}
+   323→              onClick={() => onNavigate(a.tab)}
+   324→              className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:border-white/[0.15] hover:bg-white/[0.06] transition-all text-center group"
+   325→            >
+   326→              <div className="flex items-center justify-center mb-1">
+   327→                <div
+   328→                  className="w-7 h-7 rounded-lg flex items-center justify-center"
+   329→                  style={{ backgroundColor: `${a.color}15`, border: `1px solid ${a.color}30` }}
+   330→                >
+   331→                  <a.icon size={13} style={{ color: a.color }} />
+   332→                </div>
+   333→              </div>
+   334→              <p className="text-xs font-bold text-white">{a.label}</p>
+   335→            </button>
+   336→          ))}
+   337→        </div>
+   338→      </div>
+   339→
+   340→      {/* Honest architecture status — tells the admin which sections are DB-backed vs. preview */}
+   341→      <div className="bg-[#1C1929] border border-[#F59E0B]/20 rounded-2xl p-4">
+   342→        <div className="flex items-center gap-2 mb-2">
+   343→          <AlertCircle size={14} className="text-[#F59E0B]" />
+   344→          <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B]">Architecture Status</p>
+   345→        </div>
+   346→        <div className="space-y-1.5 text-[11px] text-[#A09DB1] leading-relaxed">
+   347→          <p>
+   348→            <span className="text-[#22C55E] font-bold">● DB-backed:</span> Bible Comics (ComicChapter/ComicPanel Prisma models + 14 admin API routes), Trivia Questions (800+ in DB), Gifts & Redemptions.
+   349→          </p>
+   350→          <p>
+   351→            <span className="text-[#F59E0B] font-bold">● Preview mode:</span> Churches, Events, Marketplace, Prayers, Apologetics, Competitions, Announcements, Analytics — these sections use mock data arrays. Approve/reject/edit actions update local state only and do NOT persist to a database yet. A future task needs Prisma models + admin APIs for each.
+   352→          </p>
+   353→        </div>
+   354→      </div>
+   355→
+   356→      <div className="bg-gradient-to-br from-[#1C1929] to-[#2B254E] border border-[#7C3AED]/20 rounded-2xl p-4">
+   357→        <div className="flex items-center gap-2 mb-2">
+   358→          <Megaphone size={14} className="text-[#A78BFA]" />
+   359→          <p className="text-[10px] font-bold uppercase tracking-wider text-[#A78BFA]">Admin Tip</p>
+   360→        </div>
+   361→        <p className="text-xs text-[#A09DB1] leading-relaxed">
+   362→          New church submissions need approval before they appear in the public directory.
+   363→          Check the Churches tab to review pending submissions. Same goes for marketplace products
+   364→          and prayer requests — keep the community safe and authentic.
+   365→        </p>
+   366→      </div>
+   367→    </div>
+   368→  );
+   369→}
+   370→
+   371→// ─── MEMBERS ────────────────────────────────────────────────────────────────
+   372→
+   373→const ALL_PERMISSIONS = [
+   374→  "CAN_WRITE_ARTICLES", "CAN_WRITE_BLOG", "CAN_WRITE_APOLOGETICS",
+   375→  "CAN_ANSWER_QUESTIONS", "CAN_WRITE_BIBLE_STUDIES", "CAN_WRITE_DEVOTIONALS",
+   376→  "CAN_UPLOAD_IMAGES", "CAN_EDIT_OWN_DRAFTS", "CAN_SUBMIT_FOR_REVIEW",
+   377→  "CAN_PUBLISH_CONTENT",
+   378→];
+   379→
+   380→const CONTRIBUTOR_TYPES = [
+   381→  "Pastor", "Elder", "Bible Teacher", "Apologist", "Evangelist",
+   382→  "Christian Author", "Theologian", "Ministry Leader", "Worship Leader",
+   383→  "Christian Counselor", "Other",
+   384→];
+   385→
+   386→const MODERATION_REASONS = [
+   387→  "Fake profile", "Spam", "Harassment", "Fraud/scam",
+   388→  "Inappropriate content", "Multiple accounts", "Other",
+   389→];
+   390→
+   391→function MembersTab() {
+   392→  const [members, setMembers] = useState<any[]>([]);
+   393→  const [stats, setStats] = useState<any>(null);
+   394→  const [loading, setLoading] = useState(true);
+   395→  const [search, setSearch] = useState("");
+   396→  const [filterState, setFilterState] = useState("");
+   397→  const [filterStatus, setFilterStatus] = useState("");
+   398→  const [filterVerified, setFilterVerified] = useState("");
+   399→  const [total, setTotal] = useState(0);
+   400→  const [page, setPage] = useState(0);
+   401→  const limit = 20;
+   402→  const [selectedMember, setSelectedMember] = useState<any>(null);
+   403→  const [memberDetail, setMemberDetail] = useState<any>(null);
+   404→  const [detailLoading, setDetailLoading] = useState(false);
+   405→  const [saving, setSaving] = useState(false);
+   406→
+   407→  const loadMembers = useCallback(async () => {
+   408→    setLoading(true);
+   409→    try {
+   410→      const params = new URLSearchParams({ limit: String(limit), offset: String(page * limit) });
+   411→      if (search) params.set("search", search);
+   412→      if (filterState) params.set("state", filterState);
+   413→      if (filterStatus) params.set("profileCompleted", filterStatus);
+   414→      const res = await fetch(`/api/admin/members?${params}`);
+   415→      const data = await res.json();
+   416→      setMembers(data.members || []);
+   417→      setTotal(data.total || 0);
+   418→    } catch { setMembers([]); }
+   419→    finally { setLoading(false); }
+   420→  }, [search, filterState, filterStatus, page]);
+   421→
+   422→  const loadStats = useCallback(async () => {
+   423→    try {
+   424→      const res = await fetch("/api/admin/members?stats=true");
+   425→      const data = await res.json();
+   426→      setStats(data);
+   427→    } catch {}
+   428→  }, []);
+   429→
+   430→  useEffect(() => { loadMembers(); loadStats(); }, [loadMembers, loadStats]);
+   431→
+   432→  const openMember = async (id: string) => {
+   433→    setSelectedMember(id);
+   434→    setDetailLoading(true);
+   435→    try {
+   436→      const res = await fetch(`/api/admin/members/${id}`);
+   437→      const data = await res.json();
+   438→      setMemberDetail(data.member);
+   439→    } catch {}
+   440→    finally { setDetailLoading(false); }
+   441→  };
+   442→
+   443→  const updateMember = async (updates: any) => {
+   444→    if (!memberDetail) return;
+   445→    setSaving(true);
+   446→    try {
+   447→      const res = await fetch(`/api/admin/members/${memberDetail.id}`, {
+   448→        method: "PATCH",
+   449→        headers: { "Content-Type": "application/json" },
+   450→        body: JSON.stringify(updates),
+   451→      });
+   452→      const data = await res.json();
+   453→      if (!res.ok) throw new Error(data.error);
+   454→      setMemberDetail(data.member);
+   455→      toast.success("Member updated");
+   456→      loadMembers();
+   457→    } catch (e: any) {
+   458→      toast.error(e.message || "Failed to update");
+   459→    } finally { setSaving(false); }
+   460→  };
+   461→
+   462→  const togglePermission = (perm: string) => {
+   463→    if (!memberDetail) return;
+   464→    const current: string[] = JSON.parse(memberDetail.permissions || "[]");
+   465→    const next = current.includes(perm) ? current.filter(p => p !== perm) : [...current, perm];
+   466→    updateMember({ permissions: next });
+   467→  };
+   468→
+   469→  return (
+   470→    <div className="space-y-4">
+   471→      <PreviewModeBanner section="Members" />
+   472→
+   473→      {/* Stats */}
+   474→      {stats && (
+   475→        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   476→          <div className="bg-[#1C1929] border border-white/[0.06] rounded-xl p-3">
+   477→            <p className="text-xl font-extrabold text-white">{stats.totalMembers}</p>
+   478→            <p className="text-[9px] text-[#94A3B8] uppercase">Total Members</p>
+   479→          </div>
+   480→          <div className="bg-[#1C1929] border border-white/[0.06] rounded-xl p-3">
+   481→            <p className="text-xl font-extrabold text-[#22C55E]">{stats.newToday}</p>
+   482→            <p className="text-[9px] text-[#94A3B8] uppercase">New Today</p>
+   483→          </div>
+   484→          <div className="bg-[#1C1929] border border-white/[0.06] rounded-xl p-3">
+   485→            <p className="text-xl font-extrabold text-[#38BDF8]">{stats.newThisWeek}</p>
+   486→            <p className="text-[9px] text-[#94A3B8] uppercase">This Week</p>
+   487→          </div>
+   488→          <div className="bg-[#1C1929] border border-white/[0.06] rounded-xl p-3">
+   489→            <p className="text-xl font-extrabold text-[#A855F7]">{stats.newThisMonth}</p>
+   490→            <p className="text-[9px] text-[#94A3B8] uppercase">This Month</p>
+   491→          </div>
+   492→        </div>
+   493→      )}
+   494→
+   495→      {/* Recent signups */}
+   496→      {stats?.recentSignups?.length > 0 && (
+   497→        <div>
+   498→          <p className="text-[10px] font-bold uppercase tracking-wider text-[#F39B9B] mb-2">Recent Signups</p>
+   499→          <div className="space-y-1.5">
+   500→            {stats.recentSignups.slice(0, 5).map((m: any) => (
+   501→              <button key={m.id} onClick={() => openMember(m.id)} className="w-full flex items-center gap-3 p-2 rounded-xl bg-[#1C1929] border border-white/[0.06] hover:border-white/[0.15] transition-all text-left">
+   502→                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#7C3AED] to-[#F39B9B] flex items-center justify-center text-white text-xs font-bold shrink-0 overflow-hidden">
+   503→                  {m.image ? <img src={m.image} alt="" className="w-full h-full object-cover" /> : (m.username || m.email || "U").charAt(0).toUpperCase()}
+   504→                </div>
+   505→                <div className="flex-1 min-w-0">
+   506→                  <p className="text-xs font-bold text-white truncate">{m.username || m.name || m.email}</p>
+   507→                  <p className="text-[9px] text-[#94A3B8]">{m.city ? `${m.city}, ` : ""}{m.state || ""} · {m.signupMethod || "email"}</p>
+   508→                </div>
+   509→                <span className="text-[8px] text-[#64748B] shrink-0">{new Date(m.createdAt).toLocaleDateString()}</span>
+   510→              </button>
+   511→            ))}
+   512→          </div>
+   513→        </div>
+   514→      )}
+   515→
+   516→      {/* Search + Filters */}
+   517→      <div className="flex flex-wrap gap-2">
+   518→        <input type="text" placeholder="Search username, email, name..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} className="neo-input text-xs flex-1 min-w-[150px]" />
+   519→        <select value={filterState} onChange={(e) => { setFilterState(e.target.value); setPage(0); }} className="neo-input text-xs w-32">
+   520→          <option value="">All States</option>
+   521→          {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+   522→        </select>
+   523→        <select value={filterStatus} onChange={(e) => { setFilterStatus(e.target.value); setPage(0); }} className="neo-input text-xs w-36">
+   524→          <option value="">All Profiles</option>
+   525→          <option value="true">Completed</option>
+   526→          <option value="false">Incomplete</option>
+   527→        </select>
+   528→      </div>
+   529→
+   530→      {/* Members list */}
+   531→      {loading ? (
+   532→        <div className="flex justify-center py-8"><Loader2 size={24} className="text-[#F39B9B] animate-spin" /></div>
+   533→      ) : members.length === 0 ? (
+   534→        <EmptyState text="No members found." />
+   535→      ) : (
+   536→        <div className="space-y-2">
+   537→          {members.map((m) => (
+   538→            <button key={m.id} onClick={() => openMember(m.id)} className="w-full flex items-center gap-3 p-3 rounded-xl bg-[#1C1929] border border-white/[0.06] hover:border-white/[0.15] transition-all text-left">
+   539→              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#7C3AED] to-[#F39B9B] flex items-center justify-center text-white text-sm font-bold shrink-0 overflow-hidden">
+   540→                {m.image ? <img src={m.image} alt="" className="w-full h-full object-cover" /> : (m.username || m.email || "U").charAt(0).toUpperCase()}
+   541→              </div>
+   542→              <div className="flex-1 min-w-0">
+   543→                <div className="flex items-center gap-1.5">
+   544→                  <p className="text-xs font-bold text-white truncate">{m.username || m.name || m.email}</p>
+   545→                  {m.verified && <BadgeCheck size={12} className="text-[#38BDF8] shrink-0" />}
+   546→                </div>
+   547→                <p className="text-[9px] text-[#94A3B8]">{m.email} · {m.city || "—"}, {m.state || "—"}</p>
+   548→              </div>
+   549→              <div className="text-right shrink-0">
+   550→                <span className={`text-[8px] font-bold uppercase ${m.profileCompleted ? "text-[#22C55E]" : "text-[#F59E0B]"}`}>
+   551→                  {m.profileCompleted ? "Complete" : "Incomplete"}
+   552→                </span>
+   553→                <p className="text-[8px] text-[#64748B]">{m.signupMethod || "email"}</p>
+   554→              </div>
+   555→            </button>
+   556→          ))}
+   557→          {/* Pagination */}
+   558→          <div className="flex items-center justify-between pt-2">
+   559→            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] text-xs font-bold disabled:opacity-30">Prev</button>
+   560→            <span className="text-[10px] text-[#64748B]">{page * limit + 1}-{Math.min((page + 1) * limit, total)} of {total}</span>
+   561→            <button onClick={() => setPage(p => p + 1)} disabled={(page + 1) * limit >= total} className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] text-xs font-bold disabled:opacity-30">Next</button>
+   562→          </div>
+   563→        </div>
+   564→      )}
+   565→
+   566→      {/* Member Detail Modal */}
+   567→      <AnimatePresence>
+   568→        {selectedMember && (
+   569→          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-end md:items-center justify-center z-[70] p-0 md:p-4" onClick={(e) => e.target === e.currentTarget && setSelectedMember(null)}>
+   570→            <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="bg-[#1C1929] border border-white/[0.08] rounded-t-[28px] md:rounded-[24px] w-full max-w-lg max-h-[90vh] overflow-y-auto">
+   571→              <div className="sticky top-0 bg-[#1C1929] z-10 flex justify-between items-center p-5 pb-3 border-b border-white/[0.04]">
+   572→                <h2 className="text-base font-bold text-white">Member Details</h2>
+   573→                <button onClick={() => setSelectedMember(null)} className="text-[#64748B] hover:text-white"><X size={18} /></button>
+   574→              </div>
+   575→
+   576→              {detailLoading ? (
+   577→                <div className="flex justify-center py-12"><Loader2 size={24} className="text-[#F39B9B] animate-spin" /></div>
+   578→              ) : memberDetail ? (
+   579→                <div className="p-5 space-y-4">
+   580→                  {/* Profile */}
+   581→                  <div className="flex items-center gap-3">
+   582→                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#7C3AED] to-[#F39B9B] flex items-center justify-center text-white text-xl font-bold shrink-0 overflow-hidden">
+   583→                      {memberDetail.image ? <img src={memberDetail.image} alt="" className="w-full h-full object-cover" /> : (memberDetail.username || memberDetail.email || "U").charAt(0).toUpperCase()}
+   584→                    </div>
+   585→                    <div className="flex-1 min-w-0">
+   586→                      <div className="flex items-center gap-1.5">
+   587→                        <p className="text-sm font-bold text-white">{memberDetail.username || memberDetail.name || "—"}</p>
+   588→                        {memberDetail.verified && <BadgeCheck size={14} className="text-[#38BDF8]" />}
+   589→                      </div>
+   590→                      <p className="text-[10px] text-[#94A3B8]">{memberDetail.email}</p>
+   591→                      <p className="text-[9px] text-[#64748B]">Joined {new Date(memberDetail.createdAt).toLocaleDateString()} · {memberDetail.signupMethod || "email"}</p>
+   592→                    </div>
+   593→                  </div>
+   594→
+   595→                  {/* Info grid */}
+   596→                  <div className="grid grid-cols-2 gap-2 text-[10px]">
+   597→                    <div><p className="text-[#64748B]">Mobile</p><p className="text-white">{memberDetail.mobileNumber || "Not provided"}</p></div>
+   598→                    <div><p className="text-[#64748B]">Gender</p><p className="text-white">{memberDetail.gender || "Not provided"}</p></div>
+   599→                    <div><p className="text-[#64748B]">State</p><p className="text-white">{memberDetail.state || "Not provided"}</p></div>
+   600→                    <div><p className="text-[#64748B]">City</p><p className="text-white">{memberDetail.city || "Not provided"}</p></div>
+   601→                    <div><p className="text-[#64748B]">Faith Status</p><p className="text-white">{memberDetail.faithStatus?.replace(/_/g, " ") || "Not provided"}</p></div>
+   602→                    <div><p className="text-[#64748B]">Faith Journey</p><p className="text-white">{memberDetail.faithJourney?.replace(/_/g, " ") || "Not provided"}</p></div>
+   603→                    <div><p className="text-[#64748B]">Account Status</p><p className="text-white capitalize">{memberDetail.accountStatus}</p></div>
+   604→                    <div><p className="text-[#64748B]">Profile</p><p className="text-white">{memberDetail.profileCompleted ? "Complete" : "Incomplete"}</p></div>
+   605→                  </div>
+   606→
+   607→                  {/* Verification */}
+   608→                  <div className="bg-[#1C1929] border border-white/[0.06] rounded-xl p-3">
+   609→                    <div className="flex items-center justify-between">
+   610→                      <div className="flex items-center gap-2">
+   611→                        <BadgeCheck size={16} className={memberDetail.verified ? "text-[#38BDF8]" : "text-[#475569]"} />
+   612→                        <div>
+   613→                          <p className="text-xs font-bold text-white">Koino Verified</p>
+   614→                          <p className="text-[9px] text-[#64748B]">{memberDetail.verified ? `Verified ${memberDetail.verifiedAt ? new Date(memberDetail.verifiedAt).toLocaleDateString() : ""}` : "Not verified"}</p>
+   615→                        </div>
+   616→                      </div>
+   617→                      <button
+   618→                        onClick={() => updateMember({ verified: !memberDetail.verified })}
+   619→                        disabled={saving}
+   620→                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${memberDetail.verified ? "bg-[#EF4444]/15 text-[#EF4444]" : "bg-[#38BDF8]/15 text-[#38BDF8]"}`}
+   621→                      >
+   622→                        {memberDetail.verified ? "Unverify" : "Verify"}
+   623→                      </button>
+   624→                    </div>
+   625→                  </div>
+   626→
+   627→                  {/* Contributor Type */}
+   628→                  <div>
+   629→                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1.5">Contributor Type</p>
+   630→                    <select
+   631→                      value={memberDetail.contributorType || ""}
+   632→                      onChange={(e) => updateMember({ contributorType: e.target.value || null })}
+   633→                      disabled={saving}
+   634→                      className="neo-input text-sm"
+   635→                    >
+   636→                      <option value="">None</option>
+   637→                      {CONTRIBUTOR_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+   638→                    </select>
+   639→                  </div>
+   640→
+   641→                  {/* Permissions */}
+   642→                  <div>
+   643→                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1.5">Content Permissions</p>
+   644→                    <div className="space-y-1.5">
+   645→                      {ALL_PERMISSIONS.map((perm) => {
+   646→                        const current: string[] = JSON.parse(memberDetail.permissions || "[]");
+   647→                        const enabled = current.includes(perm);
+   648→                        return (
+   649→                          <label key={perm} className="flex items-center gap-2 p-2 rounded-lg bg-white/[0.02] border border-white/[0.04] cursor-pointer hover:bg-white/[0.04] transition-all">
+   650→                            <input type="checkbox" checked={enabled} onChange={() => togglePermission(perm)} className="accent-[#7C3AED]" />
+   651→                            <span className={`text-[11px] font-bold ${enabled ? "text-white" : "text-[#64748B]"}`}>{perm.replace(/_/g, " ").toLowerCase().replace(/\w/g, c => c.toUpperCase())}</span>
+   652→                          </label>
+   653→                        );
+   654→                      })}
+   655→                    </div>
+   656→                  </div>
+   657→
+   658→                  {/* Account Status */}
+   659→                  <div>
+   660→                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8] mb-1.5">Account Status</p>
+   661→                    <div className="flex gap-2">
+   662→                      {["active", "blocked", "suspended", "deactivated"].map((s) => (
+   663→                        <button
+   664→                          key={s}
+   665→                          onClick={() => updateMember({ accountStatus: s })}
+   666→                          disabled={saving || memberDetail.accountStatus === s}
+   667→                          className={`flex-1 py-2 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${memberDetail.accountStatus === s ? "bg-[#7C3AED] text-white" : "bg-white/[0.04] text-[#94A3B8] hover:text-white"}`}
+   668→                        >
+   669→                          {s}
+   670→                        </button>
+   671→                      ))}
+   672→                    </div>
+   673→                    {memberDetail.moderationReason && <p className="text-[9px] text-[#EF4444] mt-1">Reason: {memberDetail.moderationReason}</p>}
+   674→                  </div>
+   675→
+   676→                  <p className="text-[9px] text-[#475569] text-center">Mobile and DOB are private — visible only to authorized admins.</p>
+   677→                </div>
+   678→              ) : (
+   679→                <EmptyState text="Member not found." />
+   680→              )}
+   681→            </motion.div>
+   682→          </motion.div>
+   683→        )}
+   684→      </AnimatePresence>
+   685→    </div>
+   686→  );
+   687→}
+   688→
+   689→// ─── CHURCHES ─────────────────────────────────────────────────────────────
+   690→// REAL DATABASE-BACKED CHURCHES — no longer mock data.
+   691→// User-submitted churches arrive with status=PENDING. Admin can:
+   692→//   Approve (PENDING → PUBLISHED), Reject (PENDING → REJECTED),
+   693→//   Cancel (PUBLISHED → CANCELLED), Reopen (any → PENDING),
+   694→//   Feature/Unfeature, Delete (permanent).
+   695→// Public /api/churches only returns PUBLISHED churches.
+   696→
+   697→type AdminChurch = Omit<Church, "status"> & {
+   698→  status: "PENDING" | "PUBLISHED" | "REJECTED" | "CANCELLED";
+   699→};
+   700→
+   701→function ChurchesTab() {
+   702→  const [churches, setChurches] = useState<AdminChurch[]>([]);
+   703→  const [counts, setCounts] = useState<{ all: number; PENDING: number; PUBLISHED: number; REJECTED: number; CANCELLED: number }>({ all: 0, PENDING: 0, PUBLISHED: 0, REJECTED: 0, CANCELLED: 0 });
+   704→  const [statusFilter, setStatusFilter] = useState<"all" | "PENDING" | "PUBLISHED" | "REJECTED" | "CANCELLED">("all");
+   705→  const [loading, setLoading] = useState(true);
+   706→  const [error, setError] = useState<string | null>(null);
+   707→  const [searchQuery, setSearchQuery] = useState("");
+   708→  const [rejectingId, setRejectingId] = useState<string | null>(null);
+   709→  const [rejectReason, setRejectReason] = useState("");
+   710→
+   711→  const loadChurches = async (status: "all" | "PENDING" | "PUBLISHED" | "REJECTED" | "CANCELLED" = statusFilter) => {
+   712→    setLoading(true);
+   713→    setError(null);
+   714→    try {
+   715→      const url = status === "all" ? "/api/admin/churches" : `/api/admin/churches?status=${status}`;
+   716→      const res = await fetch(url, { cache: "no-store" });
+   717→      const data = await res.json();
+   718→      if (!res.ok) {
+   719→        const apiError = data?.error || `Failed to load churches (HTTP ${res.status})`;
+   720→        const prismaCode = data?.prismaCode || data?.code;
+   721→        const detail = data?.detail;
+   722→        const fullError = prismaCode
+   723→          ? `${apiError} (Prisma code: ${prismaCode}${detail ? ` — ${detail}` : ""})`
+   724→          : apiError;
+   725→        throw new Error(fullError);
+   726→      }
+   727→      setChurches(data.churches || []);
+   728→      if (data.counts) setCounts(data.counts);
+   729→    } catch (e: any) {
+   730→      setError(e.message || "Failed to load churches");
+   731→      setChurches([]);
+   732→    } finally {
+   733→      setLoading(false);
+   734→    }
+   735→  };
+   736→
+   737→  useEffect(() => {
+   738→    loadChurches("all");
+   739→    // eslint-disable-next-line react-hooks/exhaustive-deps
+   740→  }, []);
+   741→
+   742→  const handleAction = async (id: string, action: string, extra?: Record<string, unknown>) => {
+   743→    try {
+   744→      const res = await fetch("/api/admin/churches", {
+   745→        method: "POST",
+   746→        headers: { "Content-Type": "application/json" },
+   747→        body: JSON.stringify({ id, action, ...extra }),
+   748→      });
+   749→      const data = await res.json();
+   750→      if (!res.ok) throw new Error(data.error || `Failed to ${action} church`);
+   751→      toast.success(`Church ${action}d`, {
+   752→        description: action === "approve" ? "Now visible publicly" : action === "reject" ? "Removed from public directory" : undefined,
+   753→      });
+   754→      await loadChurches();
+   755→    } catch (e: any) {
+   756→      toast.error(e.message || `Failed to ${action} church`);
+   757→    }
+   758→  };
+   759→
+   760→  const handleDelete = async (id: string) => {
+   761→    if (!confirm("Permanently delete this church? This cannot be undone. For moderation, prefer Reject or Cancel.")) return;
+   762→    try {
+   763→      const res = await fetch(`/api/admin/churches/${id}`, { method: "DELETE" });
+   764→      const data = await res.json();
+   765→      if (!res.ok) throw new Error(data.error || "Failed to delete church");
+   766→      toast.success("Church deleted");
+   767→      await loadChurches();
+   768→    } catch (e: any) {
+   769→      toast.error(e.message || "Failed to delete church");
+   770→    }
+   771→  };
+   772→
+   773→  const confirmReject = async (id: string) => {
+   774→    await handleAction(id, "reject", { rejectionReason: rejectReason || null });
+   775→    setRejectingId(null);
+   776→    setRejectReason("");
+   777→  };
+   778→
+   779→  const filtered = useMemo(() => {
+   780→    if (!searchQuery.trim()) return churches;
+   781→    const q = searchQuery.toLowerCase();
+   782→    return churches.filter((c) =>
+   783→      `${c.name} ${c.description} ${c.city} ${c.state} ${c.denomination} ${c.createdByEmail || ""}`
+   784→        .toLowerCase()
+   785→        .includes(q)
+   786→    );
+   787→  }, [churches, searchQuery]);
+   788→
+   789→  const statusChips: { id: typeof statusFilter; label: string; color: string; count: number }[] = [
+   790→    { id: "all", label: "All", color: "#94A3B8", count: counts.all },
+   791→    { id: "PENDING", label: "Pending", color: "#F59E0B", count: counts.PENDING },
+   792→    { id: "PUBLISHED", label: "Published", color: "#22C55E", count: counts.PUBLISHED },
+   793→    { id: "REJECTED", label: "Rejected", color: "#EF4444", count: counts.REJECTED },
+   794→    { id: "CANCELLED", label: "Cancelled", color: "#64748B", count: counts.CANCELLED },
+   795→  ];
+   796→
+   797→  const statusBadge = (status: string) => {
+   798→    const colors: Record<string, string> = {
+   799→      PENDING: "#F59E0B",
+   800→      PUBLISHED: "#22C55E",
+   801→      REJECTED: "#EF4444",
+   802→      CANCELLED: "#64748B",
+   803→    };
+   804→    return { color: colors[status] || "#94A3B8", label: status };
+   805→  };
+   806→
+   807→  return (
+   808→    <div className="space-y-3">
+   809→      {/* Status filter chips */}
+   810→      <div className="flex gap-1 p-1 bg-white/[0.04] border border-white/[0.06] rounded-xl overflow-x-auto">
+   811→        {statusChips.map((chip) => (
+   812→          <button
+   813→            key={chip.id}
+   814→            onClick={() => {
+   815→              setStatusFilter(chip.id);
+   816→              loadChurches(chip.id);
+   817→            }}
+   818→            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
+   819→              statusFilter === chip.id
+   820→                ? "bg-[#7C3AED] text-white"
+   821→                : "text-[#94A3B8] hover:text-white"
+   822→            }`}
+   823→          >
+   824→            {chip.label}
+   825→            <span
+   826→              className="px-1.5 py-0.5 rounded-full text-[9px] font-bold"
+   827→              style={{ backgroundColor: `${chip.color}25`, color: chip.color }}
+   828→            >
+   829→              {chip.count}
+   830→            </span>
+   831→          </button>
+   832→        ))}
+   833→      </div>
+   834→
+   835→      {/* Search */}
+   836→      <input
+   837→        type="text"
+   838→        value={searchQuery}
+   839→        onChange={(e) => setSearchQuery(e.target.value)}
+   840→        placeholder="Search by name, city, denomination, submitter email…"
+   841→        className="neo-input text-sm"
+   842→      />
+   843→
+   844→      {/* Loading */}
+   845→      {loading && (
+   846→        <div className="text-center py-8">
+   847→          <div className="w-8 h-8 mx-auto rounded-full border-2 border-transparent border-t-[#7C3AED] animate-spin" />
+   848→          <p className="text-xs text-[#94A3B8] mt-2">Loading churches…</p>
+   849→        </div>
+   850→      )}
+   851→
+   852→      {/* Error */}
+   853→      {!loading && error && (
+   854→        <div className="bg-[#EF4444]/8 border border-[#EF4444]/20 rounded-xl p-4">
+   855→          <p className="text-sm font-bold text-[#EF4444] mb-1">Failed to load churches</p>
+   856→          <p className="text-xs text-[#A09DB1] mb-3 leading-relaxed break-words">{error}</p>
+   857→          {/migration|table|relation|P2021|P2022|P1003/i.test(error) && (
+   858→            <div className="bg-[#F59E0B]/8 border border-[#F59E0B]/20 rounded-lg p-3 mt-2 mb-2">
+   859→              <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B] mb-1">
+   860→                Action required — apply Prisma migration
+   861→              </p>
+   862→              <p className="text-[11px] text-[#A09DB1] leading-relaxed mb-2">
+   863→                The <code className="text-[#A78BFA]">Church</code> table does not exist in the production database yet.
+   864→                Run this SQL in the Supabase SQL Editor (the migration file is at <code className="text-[#A78BFA]">prisma/migrations/20261008000000_add_churches_table/</code>):
+   865→              </p>
+   866→              <pre className="text-[10px] text-[#22C55E] bg-black/40 rounded-lg p-2 overflow-x-auto">
+   867→{`-- Open Supabase Dashboard → SQL Editor → paste the contents of
+   868→-- prisma/migrations/20261008000000_add_churches_table/migration.sql
+   869→-- and click Run.`}
+   870→              </pre>
+   871→            </div>
+   872→          )}
+   873→          <button onClick={() => loadChurches()} className="px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold">
+   874→            Try again
+   875→          </button>
+   876→        </div>
+   877→      )}
+   878→
+   879→      {/* Empty */}
+   880→      {!loading && !error && filtered.length === 0 && (
+   881→        <EmptyState text={statusFilter === "all" ? "No churches submitted yet." : `No ${statusFilter.toLowerCase()} churches.`} />
+   882→      )}
+   883→
+   884→      {/* Churches list */}
+   885→      {!loading && !error && filtered.map((c) => {
+   886→        const badge = statusBadge(c.status);
+   887→        return (
+   888→          <AdminCard
+   889→            key={c.id}
+   890→            title={c.name}
+   891→            subtitle={`${c.city || "—"}, ${c.state || "—"}${c.denomination ? ` · ${c.denomination}` : ""}${c.createdByEmail ? ` · by ${c.createdByEmail}` : ""}`}
+   892→            description={c.description}
+   893→            image={c.cover_image}
+   894→            badge={badge.label}
+   895→            badgeColor={badge.color}
+   896→            actions={
+   897→              <div className="flex flex-wrap gap-1.5">
+   898→                {c.status === "PENDING" && (
+   899→                  <>
+   900→                    <button
+   901→                      onClick={() => handleAction(c.id, "approve")}
+   902→                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#22C55E]/15 border border-[#22C55E]/30 text-[#22C55E] hover:bg-[#22C55E]/25 text-[11px] font-bold transition-all"
+   903→                    >
+   904→                      <Check size={12} /> Approve
+   905→                    </button>
+   906→                    <button
+   907→                      onClick={() => { setRejectingId(c.id); setRejectReason(""); }}
+   908→                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] hover:bg-[#EF4444]/25 text-[11px] font-bold transition-all"
+   909→                    >
+   910→                      <X size={12} /> Reject
+   911→                    </button>
+   912→                  </>
+   913→                )}
+   914→                {c.status === "PUBLISHED" && (
+   915→                  <>
+   916→                    {c.featured ? (
+   917→                      <button
+   918→                        onClick={() => handleAction(c.id, "unfeature")}
+   919→                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#A855F7]/15 border border-[#A855F7]/30 text-[#A855F7] hover:bg-[#A855F7]/25 text-[11px] font-bold transition-all"
+   920→                      >
+   921→                        <Star size={12} fill="currentColor" /> Unfeature
+   922→                      </button>
+   923→                    ) : (
+   924→                      <button
+   925→                        onClick={() => handleAction(c.id, "feature")}
+   926→                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-[#A855F7] text-[11px] font-bold transition-all"
+   927→                      >
+   928→                        <Star size={12} /> Feature
+   929→                      </button>
+   930→                    )}
+   931→                    <button
+   932→                      onClick={() => handleAction(c.id, "cancel")}
+   933→                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#64748B]/15 border border-[#64748B]/30 text-[#94A3B8] hover:bg-[#64748B]/25 text-[11px] font-bold transition-all"
+   934→                    >
+   935→                      Cancel
+   936→                    </button>
+   937→                  </>
+   938→                )}
+   939→                {(c.status === "REJECTED" || c.status === "CANCELLED") && (
+   940→                  <button
+   941→                    onClick={() => handleAction(c.id, "reopen")}
+   942→                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#F59E0B]/15 border border-[#F59E0B]/30 text-[#F59E0B] hover:bg-[#F59E0B]/25 text-[11px] font-bold transition-all"
+   943→                  >
+   944→                    Reopen
+   945→                  </button>
+   946→                )}
+   947→                <button
+   948→                  onClick={() => handleDelete(c.id)}
+   949→                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] hover:bg-[#EF4444]/25 text-[11px] font-bold transition-all"
+   950→                >
+   951→                  <Trash2 size={12} /> Delete
+   952→                </button>
+   953→              </div>
+   954→            }
+   955→          />
+   956→        );
+   957→      })}
+   958→
+   959→      {/* Reject modal */}
+   960→      <AnimatePresence>
+   961→        {rejectingId && (
+   962→          <motion.div
+   963→            initial={{ opacity: 0 }}
+   964→            animate={{ opacity: 1 }}
+   965→            exit={{ opacity: 0 }}
+   966→            className="fixed inset-0 bg-black/70 backdrop-blur-md z-[60] flex items-center justify-center p-4"
+   967→            onClick={(e) => e.target === e.currentTarget && setRejectingId(null)}
+   968→          >
+   969→            <motion.div
+   970→              initial={{ scale: 0.95 }}
+   971→              animate={{ scale: 1 }}
+   972→              exit={{ scale: 0.95 }}
+   973→              className="bg-[#1C1929] border border-white/[0.08] rounded-3xl p-6 max-w-md w-full"
+   974→            >
+   975→              <h3 className="text-base font-bold text-white mb-2">Reject Church</h3>
+   976→              <p className="text-xs text-[#A09DB1] mb-3">
+   977→                The church will be marked as REJECTED and will not appear publicly. The submitter will not be automatically notified.
+   978→              </p>
+   979→              <textarea
+   980→                value={rejectReason}
+   981→                onChange={(e) => setRejectReason(e.target.value)}
+   982→                placeholder="Optional: rejection reason (internal note, not shown to submitter)"
+   983→                className="neo-input text-sm h-24 resize-none mb-4"
+   984→              />
+   985→              <div className="flex gap-2 justify-end">
+   986→                <button
+   987→                  onClick={() => setRejectingId(null)}
+   988→                  className="px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold"
+   989→                >
+   990→                  Cancel
+   991→                </button>
+   992→                <button
+   993→                  onClick={() => confirmReject(rejectingId)}
+   994→                  className="px-4 py-2 rounded-xl bg-[#EF4444] hover:bg-[#DC2626] text-white text-xs font-bold"
+   995→                >
+   996→                  Reject Church
+   997→                </button>
+   998→              </div>
+   999→            </motion.div>
+  1000→          </motion.div>
+  1001→        )}
+  1002→      </AnimatePresence>
+  1003→    </div>
+  1004→  );
+  1005→}
+  1006→
+  1007→// ─── EVENTS ──────────────────────────────────────────────────────────────
+  1008→// REAL DATABASE-BACKED EVENTS — no longer mock data.
+  1009→// User-submitted events arrive with status=PENDING. Admin can:
+  1010→//   Approve (PENDING → PUBLISHED), Reject (PENDING → REJECTED),
+  1011→//   Cancel (PUBLISHED → CANCELLED), Reopen (any → PENDING),
+  1012→//   Feature/Unfeature, Delete (permanent).
+  1013→// Public /api/events only returns PUBLISHED events.
+  1014→
+  1015→type AdminEvent = Omit<EventItem, "status"> & {
+  1016→  status: "PENDING" | "PUBLISHED" | "REJECTED" | "CANCELLED";
+  1017→  rejectionReason?: string | null;
+  1018→  reviewedBy?: string | null;
+  1019→  reviewedAt?: string | null;
+  1020→  createdById?: string | null;
+  1021→  createdByEmail?: string | null;
+  1022→  createdAt?: string;
+  1023→  updatedAt?: string;
+  1024→};
+  1025→
+  1026→function EventsTab() {
+  1027→  const [events, setEvents] = useState<AdminEvent[]>([]);
+  1028→  const [counts, setCounts] = useState<{ all: number; PENDING: number; PUBLISHED: number; REJECTED: number; CANCELLED: number }>({ all: 0, PENDING: 0, PUBLISHED: 0, REJECTED: 0, CANCELLED: 0 });
+  1029→  const [statusFilter, setStatusFilter] = useState<"all" | "PENDING" | "PUBLISHED" | "REJECTED" | "CANCELLED">("all");
+  1030→  const [loading, setLoading] = useState(true);
+  1031→  const [error, setError] = useState<string | null>(null);
+  1032→  const [searchQuery, setSearchQuery] = useState("");
+  1033→  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  1034→  const [rejectReason, setRejectReason] = useState("");
+  1035→
+  1036→  const loadEvents = async (status: "all" | "PENDING" | "PUBLISHED" | "REJECTED" | "CANCELLED" = statusFilter) => {
+  1037→    setLoading(true);
+  1038→    setError(null);
+  1039→    try {
+  1040→      const url = status === "all" ? "/api/admin/events" : `/api/admin/events?status=${status}`;
+  1041→      const res = await fetch(url, { cache: "no-store" });
+  1042→      const data = await res.json();
+  1043→      if (!res.ok) {
+  1044→        // Surface the actual API error message — includes Prisma error codes
+  1045→        // (P2021/P2022/P1003 = table/relation does not exist) so the admin
+  1046→        // can diagnose "migration not applied" vs other errors.
+  1047→        const apiError = data?.error || `Failed to load events (HTTP ${res.status})`;
+  1048→        const prismaCode = data?.prismaCode || data?.code;
+  1049→        const detail = data?.detail;
+  1050→        const fullError = prismaCode
+  1051→          ? `${apiError} (Prisma code: ${prismaCode}${detail ? ` — ${detail}` : ""})`
+  1052→          : apiError;
+  1053→        throw new Error(fullError);
+  1054→      }
+  1055→      setEvents(data.events || []);
+  1056→      if (data.counts) setCounts(data.counts);
+  1057→    } catch (e: any) {
+  1058→      setError(e.message || "Failed to load events");
+  1059→      setEvents([]);
+  1060→    } finally {
+  1061→      setLoading(false);
+  1062→    }
+  1063→  };
+  1064→
+  1065→  useEffect(() => {
+  1066→    loadEvents("all");
+  1067→    // eslint-disable-next-line react-hooks/exhaustive-deps
+  1068→  }, []);
+  1069→
+  1070→  const handleAction = async (id: string, action: string, extra?: Record<string, unknown>) => {
+  1071→    try {
+  1072→      const res = await fetch("/api/admin/events", {
+  1073→        method: "POST",
+  1074→        headers: { "Content-Type": "application/json" },
+  1075→        body: JSON.stringify({ id, action, ...extra }),
+  1076→      });
+  1077→      const data = await res.json();
+  1078→      if (!res.ok) throw new Error(data.error || `Failed to ${action} event`);
+  1079→      toast.success(`Event ${action}d`, {
+  1080→        description: action === "approve" ? "Now visible publicly" : action === "reject" ? "Removed from public view" : undefined,
+  1081→      });
+  1082→      // Refresh the list — counts may have changed
+  1083→      await loadEvents();
+  1084→    } catch (e: any) {
+  1085→      toast.error(e.message || `Failed to ${action} event`);
+  1086→    }
+  1087→  };
+  1088→
+  1089→  const handleDelete = async (id: string) => {
+  1090→    if (!confirm("Permanently delete this event? This cannot be undone. For moderation, prefer Reject or Cancel.")) return;
+  1091→    try {
+  1092→      const res = await fetch(`/api/admin/events/${id}`, { method: "DELETE" });
+  1093→      const data = await res.json();
+  1094→      if (!res.ok) throw new Error(data.error || "Failed to delete event");
+  1095→      toast.success("Event deleted");
+  1096→      await loadEvents();
+  1097→    } catch (e: any) {
+  1098→      toast.error(e.message || "Failed to delete event");
+  1099→    }
+  1100→  };
+  1101→
+  1102→  const confirmReject = async (id: string) => {
+  1103→    await handleAction(id, "reject", { rejectionReason: rejectReason || null });
+  1104→    setRejectingId(null);
+  1105→    setRejectReason("");
+  1106→  };
+  1107→
+  1108→  // Client-side search filter (in addition to server-side status filter)
+  1109→  const filtered = useMemo(() => {
+  1110→    if (!searchQuery.trim()) return events;
+  1111→    const q = searchQuery.toLowerCase();
+  1112→    return events.filter((e) =>
+  1113→      `${e.title} ${e.description} ${e.city} ${e.state} ${e.church} ${e.category} ${e.organizerName || ""} ${e.createdByEmail || ""}`
+  1114→        .toLowerCase()
+  1115→        .includes(q)
+  1116→    );
+  1117→  }, [events, searchQuery]);
+  1118→
+  1119→  const statusChips: { id: typeof statusFilter; label: string; color: string; count: number }[] = [
+  1120→    { id: "all", label: "All", color: "#94A3B8", count: counts.all },
+  1121→    { id: "PENDING", label: "Pending", color: "#F59E0B", count: counts.PENDING },
+  1122→    { id: "PUBLISHED", label: "Published", color: "#22C55E", count: counts.PUBLISHED },
+  1123→    { id: "REJECTED", label: "Rejected", color: "#EF4444", count: counts.REJECTED },
+  1124→    { id: "CANCELLED", label: "Cancelled", color: "#64748B", count: counts.CANCELLED },
+  1125→  ];
+  1126→
+  1127→  const statusBadge = (status: string) => {
+  1128→    const colors: Record<string, string> = {
+  1129→      PENDING: "#F59E0B",
+  1130→      PUBLISHED: "#22C55E",
+  1131→      REJECTED: "#EF4444",
+  1132→      CANCELLED: "#64748B",
+  1133→    };
+  1134→    return { color: colors[status] || "#94A3B8", label: status };
+  1135→  };
+  1136→
+  1137→  return (
+  1138→    <div className="space-y-3">
+  1139→      {/* Status filter chips */}
+  1140→      <div className="flex gap-1 p-1 bg-white/[0.04] border border-white/[0.06] rounded-xl overflow-x-auto">
+  1141→        {statusChips.map((chip) => (
+  1142→          <button
+  1143→            key={chip.id}
+  1144→            onClick={() => {
+  1145→              setStatusFilter(chip.id);
+  1146→              loadEvents(chip.id);
+  1147→            }}
+  1148→            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
+  1149→              statusFilter === chip.id
+  1150→                ? "bg-[#7C3AED] text-white"
+  1151→                : "text-[#94A3B8] hover:text-white"
+  1152→            }`}
+  1153→          >
+  1154→            {chip.label}
+  1155→            <span
+  1156→              className="px-1.5 py-0.5 rounded-full text-[9px] font-bold"
+  1157→              style={{ backgroundColor: `${chip.color}25`, color: chip.color }}
+  1158→            >
+  1159→              {chip.count}
+  1160→            </span>
+  1161→          </button>
+  1162→        ))}
+  1163→      </div>
+  1164→
+  1165→      {/* Search */}
+  1166→      <input
+  1167→        type="text"
+  1168→        value={searchQuery}
+  1169→        onChange={(e) => setSearchQuery(e.target.value)}
+  1170→        placeholder="Search by title, city, organizer, submitter email…"
+  1171→        className="neo-input text-sm"
+  1172→      />
+  1173→
+  1174→      {/* Loading */}
+  1175→      {loading && (
+  1176→        <div className="text-center py-8">
+  1177→          <div className="w-8 h-8 mx-auto rounded-full border-2 border-transparent border-t-[#7C3AED] animate-spin" />
+  1178→          <p className="text-xs text-[#94A3B8] mt-2">Loading events…</p>
+  1179→        </div>
+  1180→      )}
+  1181→
+  1182→      {/* Error */}
+  1183→      {!loading && error && (
+  1184→        <div className="bg-[#EF4444]/8 border border-[#EF4444]/20 rounded-xl p-4">
+  1185→          <p className="text-sm font-bold text-[#EF4444] mb-1">Failed to load events</p>
+  1186→          <p className="text-xs text-[#A09DB1] mb-3 leading-relaxed break-words">{error}</p>
+  1187→          {/* If this is a "table not found" / migration error, show actionable guidance */}
+  1188→          {/migration|table|relation|P2021|P2022|P1003/i.test(error) && (
+  1189→            <div className="bg-[#F59E0B]/8 border border-[#F59E0B]/20 rounded-lg p-3 mt-2 mb-2">
+  1190→              <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B] mb-1">
+  1191→                Action required — apply Prisma migration
+  1192→              </p>
+  1193→              <p className="text-[11px] text-[#A09DB1] leading-relaxed mb-2">
+  1194→                The <code className="text-[#A78BFA]">Event</code> table does not exist in the production database yet.
+  1195→                The migration file exists in the repo (<code className="text-[#A78BFA]">prisma/migrations/20261007120000_add_events_table/</code>)
+  1196→                but has not been applied to Supabase. Run this command locally with your production <code className="text-[#A78BFA]">DATABASE_URL</code>:
+  1197→              </p>
+  1198→              <pre className="text-[10px] text-[#22C55E] bg-black/40 rounded-lg p-2 overflow-x-auto">
+  1199→{`# Set production DATABASE_URL in .env first, then:
+  1200→npx prisma migrate deploy
+  1201→
+  1202→# OR (faster, applies schema directly):
+  1203→npx prisma db push`}
+  1204→              </pre>
+  1205→              <p className="text-[10px] text-[#64748B] mt-2">
+  1206→                After the migration succeeds, click "Try again" — the table will exist and the API will return an empty list.
+  1207→              </p>
+  1208→            </div>
+  1209→          )}
+  1210→          <button onClick={() => loadEvents()} className="px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold">
+  1211→            Try again
+  1212→          </button>
+  1213→        </div>
+  1214→      )}
+  1215→
+  1216→      {/* Empty */}
+  1217→      {!loading && !error && filtered.length === 0 && (
+  1218→        <EmptyState text={statusFilter === "all" ? "No events submitted yet." : `No ${statusFilter.toLowerCase()} events.`} />
+  1219→      )}
+  1220→
+  1221→      {/* Events list */}
+  1222→      {!loading && !error && filtered.map((e) => {
+  1223→        const badge = statusBadge(e.status);
+  1224→        return (
+  1225→          <AdminCard
+  1226→            key={e.id}
+  1227→            title={e.title}
+  1228→            subtitle={`${new Date(e.date).toLocaleDateString()}${e.startTime ? ` ${e.startTime}` : ""} · ${e.city || "Online"}${e.church ? ` · ${e.church}` : ""}${e.createdByEmail ? ` · by ${e.createdByEmail}` : ""}`}
+  1229→            description={e.description}
+  1230→            image={e.cover_image}
+  1231→            badge={badge.label}
+  1232→            badgeColor={badge.color}
+  1233→            actions={
+  1234→              <div className="flex flex-wrap gap-1.5">
+  1235→                {/* PENDING actions */}
+  1236→                {e.status === "PENDING" && (
+  1237→                  <>
+  1238→                    <button
+  1239→                      onClick={() => handleAction(e.id, "approve")}
+  1240→                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#22C55E]/15 border border-[#22C55E]/30 text-[#22C55E] hover:bg-[#22C55E]/25 text-[11px] font-bold transition-all"
+  1241→                    >
+  1242→                      <Check size={12} /> Approve
+  1243→                    </button>
+  1244→                    <button
+  1245→                      onClick={() => { setRejectingId(e.id); setRejectReason(""); }}
+  1246→                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] hover:bg-[#EF4444]/25 text-[11px] font-bold transition-all"
+  1247→                    >
+  1248→                      <X size={12} /> Reject
+  1249→                    </button>
+  1250→                  </>
+  1251→                )}
+  1252→                {/* PUBLISHED actions */}
+  1253→                {e.status === "PUBLISHED" && (
+  1254→                  <>
+  1255→                    {e.featured ? (
+  1256→                      <button
+  1257→                        onClick={() => handleAction(e.id, "unfeature")}
+  1258→                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#A855F7]/15 border border-[#A855F7]/30 text-[#A855F7] hover:bg-[#A855F7]/25 text-[11px] font-bold transition-all"
+  1259→                      >
+  1260→                        <Star size={12} fill="currentColor" /> Unfeature
+  1261→                      </button>
+  1262→                    ) : (
+  1263→                      <button
+  1264→                        onClick={() => handleAction(e.id, "feature")}
+  1265→                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-[#A855F7] text-[11px] font-bold transition-all"
+  1266→                      >
+  1267→                        <Star size={12} /> Feature
+  1268→                      </button>
+  1269→                    )}
+  1270→                    <button
+  1271→                      onClick={() => handleAction(e.id, "cancel")}
+  1272→                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#64748B]/15 border border-[#64748B]/30 text-[#94A3B8] hover:bg-[#64748B]/25 text-[11px] font-bold transition-all"
+  1273→                    >
+  1274→                      Cancel
+  1275→                    </button>
+  1276→                  </>
+  1277→                )}
+  1278→                {/* REJECTED / CANCELLED actions */}
+  1279→                {(e.status === "REJECTED" || e.status === "CANCELLED") && (
+  1280→                  <button
+  1281→                    onClick={() => handleAction(e.id, "reopen")}
+  1282→                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#F59E0B]/15 border border-[#F59E0B]/30 text-[#F59E0B] hover:bg-[#F59E0B]/25 text-[11px] font-bold transition-all"
+  1283→                  >
+  1284→                    Reopen
+  1285→                  </button>
+  1286→                )}
+  1287→                {/* Delete — always available (permanent) */}
+  1288→                <button
+  1289→                  onClick={() => handleDelete(e.id)}
+  1290→                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] hover:bg-[#EF4444]/25 text-[11px] font-bold transition-all"
+  1291→                >
+  1292→                  <Trash2 size={12} /> Delete
+  1293→                </button>
+  1294→              </div>
+  1295→            }
+  1296→          />
+  1297→        );
+  1298→      })}
+  1299→
+  1300→      {/* Reject modal — collects optional rejection reason */}
+  1301→      <AnimatePresence>
+  1302→        {rejectingId && (
+  1303→          <motion.div
+  1304→            initial={{ opacity: 0 }}
+  1305→            animate={{ opacity: 1 }}
+  1306→            exit={{ opacity: 0 }}
+  1307→            className="fixed inset-0 bg-black/70 backdrop-blur-md z-[60] flex items-center justify-center p-4"
+  1308→            onClick={(e) => e.target === e.currentTarget && setRejectingId(null)}
+  1309→          >
+  1310→            <motion.div
+  1311→              initial={{ scale: 0.95 }}
+  1312→              animate={{ scale: 1 }}
+  1313→              exit={{ scale: 0.95 }}
+  1314→              className="bg-[#1C1929] border border-white/[0.08] rounded-3xl p-6 max-w-md w-full"
+  1315→            >
+  1316→              <h3 className="text-base font-bold text-white mb-2">Reject Event</h3>
+  1317→              <p className="text-xs text-[#A09DB1] mb-3">
+  1318→                The event will be marked as REJECTED and will not appear publicly. The submitter will not be automatically notified.
+  1319→              </p>
+  1320→              <textarea
+  1321→                value={rejectReason}
+  1322→                onChange={(e) => setRejectReason(e.target.value)}
+  1323→                placeholder="Optional: rejection reason (internal note, not shown to user)"
+  1324→                className="neo-input text-sm h-24 resize-none mb-4"
+  1325→              />
+  1326→              <div className="flex gap-2 justify-end">
+  1327→                <button
+  1328→                  onClick={() => setRejectingId(null)}
+  1329→                  className="px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold"
+  1330→                >
+  1331→                  Cancel
+  1332→                </button>
+  1333→                <button
+  1334→                  onClick={() => confirmReject(rejectingId)}
+  1335→                  className="px-4 py-2 rounded-xl bg-[#EF4444] hover:bg-[#DC2626] text-white text-xs font-bold"
+  1336→                >
+  1337→                  Reject Event
+  1338→                </button>
+  1339→              </div>
+  1340→            </motion.div>
+  1341→          </motion.div>
+  1342→        )}
+  1343→      </AnimatePresence>
+  1344→    </div>
+  1345→  );
+  1346→}
+  1347→
+  1348→// ─── MARKETPLACE ─────────────────────────────────────────────────────────
+  1349→
+  1350→function MarketplaceTab() {
+  1351→  const [products, setProducts] = useState<Product[]>(PRODUCTS);
+  1352→
+  1353→  const remove = (id: string) => {
+  1354→    setProducts((ps) => ps.filter((p) => p.id !== id));
+  1355→    toast("Product removed");
+  1356→  };
+  1357→
+  1358→  const toggleStock = (id: string) => {
+  1359→    setProducts((ps) =>
+  1360→      ps.map((p) => (p.id === id ? { ...p, in_stock: !p.in_stock } : p))
+  1361→    );
+  1362→    toast("Stock updated");
+  1363→  };
+  1364→
+  1365→  return (
+  1366→    <div className="space-y-3">
+  1367→      <PreviewModeBanner section="Marketplace" />
+  1368→      <AdminSectionHeader title="All Products" count={products.length} color="#9786E3" />
+  1369→      {products.map((p) => (
+  1370→        <AdminCard
+  1371→          key={p.id}
+  1372→          title={p.name}
+  1373→          subtitle={`₹${p.price} · ${p.vendor} · ${p.city}`}
+  1374→          description={p.description}
+  1375→          image={p.cover_image}
+  1376→          badge={p.in_stock ? "In Stock" : "Out"}
+  1377→          badgeColor={p.in_stock ? "#22C55E" : "#EF4444"}
+  1378→          actions={
+  1379→            <>
+  1380→              <button
+  1381→                onClick={() => toggleStock(p.id)}
+  1382→                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold transition-all"
+  1383→              >
+  1384→                {p.in_stock ? "Mark Out" : "Mark In"}
+  1385→              </button>
+  1386→              <button
+  1387→                onClick={() => remove(p.id)}
+  1388→                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] text-xs font-bold hover:bg-[#EF4444]/25 transition-all"
+  1389→              >
+  1390→                <Trash2 size={12} /> Remove
+  1391→              </button>
+  1392→            </>
+  1393→          }
+  1394→        />
+  1395→      ))}
+  1396→    </div>
+  1397→  );
+  1398→}
+  1399→
+  1400→// ─── PRAYERS ─────────────────────────────────────────────────────────────
+  1401→
+  1402→function PrayersTab() {
+  1403→  const [prayers, setPrayers] = useState<PrayerPost[]>(PRAYERS);
+  1404→
+  1405→  const remove = (id: string) => {
+  1406→    setPrayers((ps) => ps.filter((p) => p.id !== id));
+  1407→    toast("Prayer removed", { description: "Inappropriate content moderated." });
+  1408→  };
+  1409→
+  1410→  return (
+  1411→    <div className="space-y-3">
+  1412→      <PreviewModeBanner section="Prayers" />
+  1413→      <AdminSectionHeader title="Prayer Requests" count={prayers.length} color="#F59E0B" />
+  1414→      <div className="bg-[#F59E0B]/8 border border-[#F59E0B]/20 rounded-xl p-3 mb-3">
+  1415→        <p className="text-[11px] text-[#A09DB1] leading-relaxed">
+  1416→          Review prayer requests for spam, abuse, or inappropriate content. Remove anything that
+  1417→          violates community guidelines. Legitimate prayers stay up to encourage the community.
+  1418→        </p>
+  1419→      </div>
+  1420→      {prayers.map((p) => (
+  1421→        <AdminCard
+  1422→          key={p.id}
+  1423→          title={p.title}
+  1424→          subtitle={`${p.author} · ${p.category} · ${p.pray_count} praying`}
+  1425→          description={p.content}
+  1426→          actions={
+  1427→            <button
+  1428→              onClick={() => remove(p.id)}
+  1429→              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] text-xs font-bold hover:bg-[#EF4444]/25 transition-all"
+  1430→            >
+  1431→              <Trash2 size={12} /> Remove
+  1432→            </button>
+  1433→          }
+  1434→        />
+  1435→      ))}
+  1436→    </div>
+  1437→  );
+  1438→}
+  1439→
+  1440→// ─── COMPETITIONS ────────────────────────────────────────────────────────
+  1441→
+  1442→function CompetitionsTab() {
+  1443→  const [competitions, setCompetitions] = useState(TRIVIA_COMPETITIONS);
+  1444→  const [showCreate, setShowCreate] = useState(false);
+  1445→  const [form, setForm] = useState({
+  1446→    title: "",
+  1447→    description: "",
+  1448→    prize: "",
+  1449→    duration: "7",
+  1450→    organizer: "Koino",
+  1451→  });
+  1452→
+  1453→  const create = (e: React.FormEvent) => {
+  1454→    e.preventDefault();
+  1455→    if (!form.title.trim() || !form.prize.trim()) {
+  1456→      toast.error("Please fill in title and prize");
+  1457→      return;
+  1458→    }
+  1459→    toast.success("Competition created!", {
+  1460→      description: "It's now visible in the Trivia > Compete tab.",
+  1461→    });
+  1462→    setForm({ title: "", description: "", prize: "", duration: "7", organizer: "Koino" });
+  1463→    setShowCreate(false);
+  1464→  };
+  1465→
+  1466→  return (
+  1467→    <div className="space-y-4">
+  1468→      <PreviewModeBanner section="Competitions" />
+  1469→      <div className="flex items-center justify-between">
+  1470→        <AdminSectionHeader title="Trivia Competitions" count={competitions.length} color="#22C55E" />
+  1471→        <button
+  1472→          onClick={() => setShowCreate(!showCreate)}
+  1473→          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-bold transition-all"
+  1474→        >
+  1475→          <Plus size={12} /> Host New
+  1476→        </button>
+  1477→      </div>
+  1478→
+  1479→      <AnimatePresence>
+  1480→        {showCreate && (
+  1481→          <motion.form
+  1482→            initial={{ opacity: 0, height: 0 }}
+  1483→            animate={{ opacity: 1, height: "auto" }}
+  1484→            exit={{ opacity: 0, height: 0 }}
+  1485→            onSubmit={create}
+  1486→            className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4 space-y-3 overflow-hidden"
+  1487→          >
+  1488→            <div>
+  1489→              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+  1490→                Competition Title *
+  1491→              </label>
+  1492→              <input
+  1493→                type="text"
+  1494→                value={form.title}
+  1495→                onChange={(e) => setForm({ ...form, title: e.target.value })}
+  1496→                className="neo-input text-sm"
+  1497→                placeholder="e.g. Christmas Bible Quiz 2025"
+  1498→                required
+  1499→              />
+  1500→            </div>
+  1501→            <div>
+  1502→              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+  1503→                Description
+  1504→              </label>
+  1505→              <textarea
+  1506→                value={form.description}
+  1507→                onChange={(e) => setForm({ ...form, description: e.target.value })}
+  1508→                className="neo-input text-sm h-20 resize-none"
+  1509→                placeholder="What's the competition about? Rules, who can join, etc."
+  1510→              />
+  1511→            </div>
+  1512→            <div className="grid grid-cols-2 gap-3">
+  1513→              <div>
+  1514→                <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+  1515→                  Prize *
+  1516→                </label>
+  1517→                <input
+  1518→                  type="text"
+  1519→                  value={form.prize}
+  1520→                  onChange={(e) => setForm({ ...form, prize: e.target.value })}
+  1521→                  className="neo-input text-sm"
+  1522→                  placeholder="₹10,000 + Trophy"
+  1523→                  required
+  1524→                />
+  1525→              </div>
+  1526→              <div>
+  1527→                <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+  1528→                  Duration (days)
+  1529→                </label>
+  1530→                <input
+  1531→                  type="number"
+  1532→                  value={form.duration}
+  1533→                  onChange={(e) => setForm({ ...form, duration: e.target.value })}
+  1534→                  className="neo-input text-sm"
+  1535→                  min="1"
+  1536→                />
+  1537→              </div>
+  1538→            </div>
+  1539→            <div className="flex gap-2 pt-1">
+  1540→              <button
+  1541→                type="button"
+  1542→                onClick={() => setShowCreate(false)}
+  1543→                className="flex-1 py-2.5 rounded-xl bg-white/[0.04] text-[#94A3B8] hover:text-white border border-white/[0.06] text-sm font-semibold"
+  1544→              >
+  1545→                Cancel
+  1546→              </button>
+  1547→              <button
+  1548→                type="submit"
+  1549→                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white"
+  1550→                style={{ background: "linear-gradient(135deg, #22C55E, #3B82F6)" }}
+  1551→              >
+  1552→                Create Competition
+  1553→              </button>
+  1554→            </div>
+  1555→          </motion.form>
+  1556→        )}
+  1557→      </AnimatePresence>
+  1558→
+  1559→      {/* Existing competitions */}
+  1560→      <div className="space-y-2">
+  1561→        {competitions.map((c) => (
+  1562→          <div key={c.id} className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4">
+  1563→            <div className="flex items-center gap-2 mb-2">
+  1564→              <span
+  1565→                className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
+  1566→                  c.status === "live"
+  1567→                    ? "bg-[#EF4444]/15 text-[#EF4444]"
+  1568→                    : c.status === "upcoming"
+  1569→                    ? "bg-[#38BDF8]/15 text-[#38BDF8]"
+  1570→                    : "bg-white/[0.06] text-[#94A3B8]"
+  1571→                }`}
+  1572→              >
+  1573→                {c.status}
+  1574→              </span>
+  1575→              <span className="text-[10px] text-[#94A3B8]">{c.participants.length} churches</span>
+  1576→            </div>
+  1577→            <h3 className="text-sm font-bold text-white mb-1">{c.title}</h3>
+  1578→            <p className="text-[11px] text-[#A09DB1] line-clamp-2 mb-2">{c.description}</p>
+  1579→            <div className="flex items-center gap-2">
+  1580→              <span className="flex items-center gap-1 text-[10px] text-[#F59E0B] font-bold">
+  1581→                <Gift size={10} /> {c.prize}
+  1582→              </span>
+  1583→            </div>
+  1584→          </div>
+  1585→        ))}
+  1586→      </div>
+  1587→
+  1588→      {/* Gifts management */}
+  1589→      <GiftsManagement />
+  1590→    </div>
+  1591→  );
+  1592→}
+  1593→
+  1594→// ─── GIFTS MANAGEMENT ────────────────────────────────────────────────────
+  1595→
+  1596→function GiftsManagement() {
+  1597→  const [gifts, setGifts] = useState<any[]>([]);
+  1598→  const [loading, setLoading] = useState(true);
+  1599→  const [showAddForm, setShowAddForm] = useState(false);
+  1600→  const [editingId, setEditingId] = useState<string | null>(null);
+  1601→  const [form, setForm] = useState<{
+  1602→    title: string;
+  1603→    description: string;
+  1604→    images: string[];
+  1605→    points_required: string;
+  1606→    tier: "bronze" | "silver" | "gold" | "platinum";
+  1607→    stock: string;
+  1608→    variations: { name: string; options: string[] }[];
+  1609→    attributes: { label: string; value: string }[];
+  1610→  }>({
+  1611→    title: "",
+  1612→    description: "",
+  1613→    images: [],
+  1614→    points_required: "",
+  1615→    tier: "bronze",
+  1616→    stock: "10",
+  1617→    variations: [],
+  1618→    attributes: [],
+  1619→  });
+  1620→
+  1621→  const fetchGifts = useCallback(async () => {
+  1622→    try {
+  1623→      const res = await fetch("/api/admin/gifts");
+  1624→      const data = await res.json();
+  1625→      const mapped = (data.gifts || []).map((g: any) => ({
+  1626→        id: g.id,
+  1627→        title: g.title,
+  1628→        description: g.description,
+  1629→        image_url: g.imageUrl,
+  1630→        points_required: g.pointsRequired,
+  1631→        tier: g.tier,
+  1632→        stock: g.stock,
+  1633→        isAdmin: g.isAdmin,
+  1634→        variations: Array.isArray(g.variations) ? g.variations : [],
+  1635→        attributes: Array.isArray(g.attributes) ? g.attributes : [],
+  1636→      }));
+  1637→      setGifts(mapped);
+  1638→    } catch {
+  1639→      toast.error("Failed to load gifts");
+  1640→    } finally {
+  1641→      setLoading(false);
+  1642→    }
+  1643→  }, []);
+  1644→
+  1645→  useEffect(() => {
+  1646→    fetchGifts();
+  1647→  }, [fetchGifts]);
+  1648→
+  1649→  const resetForm = () => {
+  1650→    setForm({
+  1651→      title: "",
+  1652→      description: "",
+  1653→      images: [],
+  1654→      points_required: "",
+  1655→      tier: "bronze",
+  1656→      stock: "10",
+  1657→      variations: [],
+  1658→      attributes: [],
+  1659→    });
+  1660→    setEditingId(null);
+  1661→    setShowAddForm(false);
+  1662→  };
+  1663→
+  1664→  const handleSubmit = async (e: React.FormEvent) => {
+  1665→    e.preventDefault();
+  1666→    if (!form.title.trim() || !form.points_required || form.images.length === 0) {
+  1667→      toast.error("Please fill in title, points, and add at least 1 image");
+  1668→      return;
+  1669→    }
+  1670→    if (form.variations.some((v) => v.name.trim() && v.options.length === 0)) {
+  1671→      toast.error("Add at least 1 option for each variation name");
+  1672→      return;
+  1673→    }
+  1674→
+  1675→    const giftData = {
+  1676→      title: form.title.trim(),
+  1677→      description: form.description.trim(),
+  1678→      imageUrl: form.images[0],
+  1679→      pointsRequired: Number(form.points_required),
+  1680→      tier: form.tier,
+  1681→      stock: Number(form.stock) || 0,
+  1682→      variations: form.variations.filter((v) => v.name.trim() && v.options.length > 0),
+  1683→      attributes: form.attributes.filter((a) => a.label.trim() && a.value.trim()),
+  1684→    };
+  1685→
+  1686→    try {
+  1687→      if (editingId) {
+  1688→        const res = await fetch("/api/admin/gifts", {
+  1689→          method: "PUT",
+  1690→          headers: { "Content-Type": "application/json" },
+  1691→          body: JSON.stringify({ giftId: editingId, ...giftData }),
+  1692→        });
+  1693→        if (!res.ok) throw new Error("Failed to update");
+  1694→        toast.success("Gift updated!", { description: "Changes are live in Trivia > Rewards." });
+  1695→      } else {
+  1696→        const res = await fetch("/api/admin/gifts", {
+  1697→          method: "POST",
+  1698→          headers: { "Content-Type": "application/json" },
+  1699→          body: JSON.stringify(giftData),
+  1700→        });
+  1701→        if (!res.ok) throw new Error("Failed to add");
+  1702→        toast.success("Gift added!", {
+  1703→          description: "It's now visible in Trivia > Rewards for players to redeem.",
+  1704→        });
+  1705→      }
+  1706→      fetchGifts();
+  1707→      resetForm();
+  1708→    } catch {
+  1709→      toast.error("Failed to save gift");
+  1710→    }
+  1711→  };
+  1712→
+  1713→  const handleEdit = (gift: any) => {
+  1714→    if (!gift.isAdmin) {
+  1715→      toast("Default gifts can't be edited", {
+  1716→        description: "Only gifts you've added from the admin panel can be modified.",
+  1717→      });
+  1718→      return;
+  1719→    }
+  1720→    setEditingId(gift.id);
+  1721→    setForm({
+  1722→      title: gift.title,
+  1723→      description: gift.description,
+  1724→      images: [gift.image_url],
+  1725→      points_required: String(gift.points_required),
+  1726→      tier: gift.tier,
+  1727→      stock: String(gift.stock),
+  1728→      variations: Array.isArray(gift.variations) && gift.variations.length > 0
+  1729→        ? gift.variations.map((v: any) => ({
+  1730→            name: v.name || "",
+  1731→            options: Array.isArray(v.options) ? v.options : [],
+  1732→          }))
+  1733→        : [],
+  1734→      attributes: Array.isArray(gift.attributes) && gift.attributes.length > 0
+  1735→        ? gift.attributes.map((a: any) => ({
+  1736→            label: a.label || "",
+  1737→            value: a.value || "",
+  1738→          }))
+  1739→        : [],
+  1740→    });
+  1741→    setShowAddForm(true);
+  1742→    setTimeout(() => {
+  1743→      document.getElementById("gift-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  1744→    }, 100);
+  1745→  };
+  1746→
+  1747→  const handleRemove = async (id: string) => {
+  1748→    const gift = gifts.find((g) => g.id === id);
+  1749→    if (!gift?.isAdmin) {
+  1750→      toast("Default gifts can't be removed", {
+  1751→        description: "Only gifts you've added from the admin panel can be deleted.",
+  1752→      });
+  1753→      return;
+  1754→    }
+  1755→    try {
+  1756→      const res = await fetch("/api/admin/gifts", {
+  1757→        method: "DELETE",
+  1758→        headers: { "Content-Type": "application/json" },
+  1759→        body: JSON.stringify({ giftId: id }),
+  1760→      });
+  1761→      if (!res.ok) throw new Error("Failed to delete");
+  1762→      toast("Gift removed", { description: "Players can no longer redeem this gift." });
+  1763→      fetchGifts();
+  1764→    } catch {
+  1765→      toast.error("Failed to remove gift");
+  1766→    }
+  1767→  };
+  1768→
+  1769→  const handleStockChange = async (id: string, delta: number) => {
+  1770→    const gift = gifts.find((g) => g.id === id);
+  1771→    if (!gift?.isAdmin) return;
+  1772→    const newStock = Math.max(0, gift.stock + delta);
+  1773→    try {
+  1774→      await fetch("/api/admin/gifts", {
+  1775→        method: "PUT",
+  1776→        headers: { "Content-Type": "application/json" },
+  1777→        body: JSON.stringify({ giftId: id, stock: newStock }),
+  1778→      });
+  1779→      fetchGifts();
+  1780→    } catch {
+  1781→      toast.error("Failed to update stock");
+  1782→    }
+  1783→  };
+  1784→
+  1785→  const tierColors: Record<string, string> = {
+  1786→    bronze: "#CD7F32",
+  1787→    silver: "#C0C0C0",
+  1788→    gold: "#FFD700",
+  1789→    platinum: "#E5E4E2",
+  1790→  };
+  1791→
+  1792→  const adminCount = gifts.filter((g) => g.isAdmin).length;
+  1793→
+  1794→  if (loading) {
+  1795→    return (
+  1796→      <div className="flex items-center justify-center py-8">
+  1797→        <div className="w-8 h-8 rounded-full border-2 border-transparent border-t-[#F59E0B] animate-spin" />
+  1798→      </div>
+  1799→    );
+  1800→  }
+  1801→
+  1802→  return (
+  1803→    <div className="space-y-3">
+  1804→      <div className="flex items-center justify-between">
+  1805→        <AdminSectionHeader title="Reward Gifts" count={gifts.length} color="#F59E0B" />
+  1806→        <button
+  1807→          onClick={() => {
+  1808→            if (showAddForm) {
+  1809→              resetForm();
+  1810→            } else {
+  1811→              setShowAddForm(true);
+  1812→            }
+  1813→          }}
+  1814→          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#F59E0B] hover:bg-[#E59E0B] text-slate-950 text-xs font-bold transition-all"
+  1815→        >
+  1816→          {showAddForm ? <X size={12} /> : <Plus size={12} />}
+  1817→          {showAddForm ? "Cancel" : "Add Gift"}
+  1818→        </button>
+  1819→      </div>
+  1820→
+  1821→      {adminCount > 0 && (
+  1822→        <p className="text-[10px] text-[#64748B] px-1">
+  1823→          {adminCount} admin-added · {gifts.length - adminCount} default gifts
+  1824→        </p>
+  1825→      )}
+  1826→
+  1827→      <AnimatePresence>
+  1828→        {showAddForm && (
+  1829→          <motion.form
+  1830→            id="gift-form"
+  1831→            initial={{ opacity: 0, height: 0 }}
+  1832→            animate={{ opacity: 1, height: "auto" }}
+  1833→            exit={{ opacity: 0, height: 0 }}
+  1834→            onSubmit={handleSubmit}
+  1835→            className="bg-[#1C1929] border border-[#F59E0B]/20 rounded-2xl p-4 space-y-3 overflow-hidden"
+  1836→          >
+  1837→            <div className="flex items-center gap-2 mb-2">
+  1838→              <Gift size={14} className="text-[#F59E0B]" />
+  1839→              <p className="text-[11px] font-bold uppercase tracking-wider text-[#F59E0B]">
+  1840→                {editingId ? "Edit Gift" : "Add New Reward Gift"}
+  1841→              </p>
+  1842→            </div>
+  1843→
+  1844→            <div>
+  1845→              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+  1846→                Gift Title *
+  1847→              </label>
+  1848→              <input
+  1849→                type="text"
+  1850→                value={form.title}
+  1851→                onChange={(e) => setForm({ ...form, title: e.target.value })}
+  1852→                className="neo-input text-sm"
+  1853→                placeholder="e.g. Koino Hoodie"
+  1854→                required
+  1855→              />
+  1856→            </div>
+  1857→
+  1858→            <div>
+  1859→              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+  1860→                Description
+  1861→              </label>
+  1862→              <textarea
+  1863→                value={form.description}
+  1864→                onChange={(e) => setForm({ ...form, description: e.target.value })}
+  1865→                className="neo-input text-sm h-16 resize-none"
+  1866→                placeholder="What's the gift? Sizes, colors, what's included..."
+  1867→              />
+  1868→            </div>
+  1869→
+  1870→            <ImagePicker
+  1871→              images={form.images}
+  1872→              onChange={(images) => setForm({ ...form, images })}
+  1873→              max={3}
+  1874→              label="Gift Photos *"
+  1875→            />
+  1876→
+  1877→            {/* Variations (sizes, colors, etc.) */}
+  1878→            <div className="space-y-2">
+  1879→              <div className="flex items-center justify-between">
+  1880→                <label className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8]">
+  1881→                  <Tag size={11} /> Variations
+  1882→                  <span className="text-[9px] text-[#475569] normal-case tracking-normal">(sizes, colors...)</span>
+  1883→                </label>
+  1884→                <button
+  1885→                  type="button"
+  1886→                  onClick={() =>
+  1887→                    setForm({
+  1888→                      ...form,
+  1889→                      variations: [...form.variations, { name: "", options: [] }],
+  1890→                    })
+  1891→                  }
+  1892→                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#F59E0B]/15 text-[#F59E0B] text-[10px] font-bold hover:bg-[#F59E0B]/25 transition-all"
+  1893→                >
+  1894→                  <Plus size={10} /> Add
+  1895→                </button>
+  1896→              </div>
+  1897→
+  1898→              {form.variations.length === 0 && (
+  1899→                <p className="text-[10px] text-[#475569] px-1 py-1.5 italic">
+  1900→                  No variations. Add a "Size" or "Color" so users can pick when claiming.
+  1901→                </p>
+  1902→              )}
+  1903→
+  1904→              {form.variations.map((v, vIdx) => (
+  1905→                <div
+  1906→                  key={vIdx}
+  1907→                  className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-2.5 space-y-2"
+  1908→                >
+  1909→                  <div className="flex items-center gap-2">
+  1910→                    <input
+  1911→                      type="text"
+  1912→                      value={v.name}
+  1913→                      onChange={(e) => {
+  1914→                        const next = [...form.variations];
+  1915→                        next[vIdx] = { ...next[vIdx], name: e.target.value };
+  1916→                        setForm({ ...form, variations: next });
+  1917→                      }}
+  1918→                      className="neo-input text-xs flex-1"
+  1919→                      placeholder="Variation name (e.g. Size, Color)"
+  1920→                    />
+  1921→                    <button
+  1922→                      type="button"
+  1923→                      onClick={() =>
+  1924→                        setForm({
+  1925→                          ...form,
+  1926→                          variations: form.variations.filter((_, i) => i !== vIdx),
+  1927→                        })
+  1928→                      }
+  1929→                      className="w-7 h-7 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] flex items-center justify-center hover:bg-[#EF4444]/25"
+  1930→                    >
+  1931→                      <Trash2 size={11} />
+  1932→                    </button>
+  1933→                  </div>
+  1934→                  <div className="flex flex-wrap gap-1.5 items-center">
+  1935→                    {v.options.map((opt, oIdx) => (
+  1936→                      <span
+  1937→                        key={oIdx}
+  1938→                        className="flex items-center gap-1 pl-2 pr-1 py-1 rounded-md bg-[#F59E0B]/10 border border-[#F59E0B]/20 text-[10px] font-semibold text-[#F59E0B]"
+  1939→                      >
+  1940→                        {opt}
+  1941→                        <button
+  1942→                          type="button"
+  1943→                          onClick={() => {
+  1944→                            const next = [...form.variations];
+  1945→                            next[vIdx].options = next[vIdx].options.filter((_, i) => i !== oIdx);
+  1946→                            setForm({ ...form, variations: next });
+  1947→                          }}
+  1948→                          className="w-4 h-4 rounded-full bg-[#F59E0B]/20 hover:bg-[#F59E0B]/40 flex items-center justify-center"
+  1949→                        >
+  1950→                          <X size={9} />
+  1951→                        </button>
+  1952→                      </span>
+  1953→                    ))}
+  1954→                    <input
+  1955→                      type="text"
+  1956→                      placeholder="Add option + Enter"
+  1957→                      onKeyDown={(e) => {
+  1958→                        if (e.key === "Enter") {
+  1959→                          e.preventDefault();
+  1960→                          const target = e.target as HTMLInputElement;
+  1961→                          const val = target.value.trim();
+  1962→                          if (!val) return;
+  1963→                          const next = [...form.variations];
+  1964→                          next[vIdx] = {
+  1965→                            ...next[vIdx],
+  1966→                            options: [...next[vIdx].options, val],
+  1967→                          };
+  1968→                          setForm({ ...form, variations: next });
+  1969→                          target.value = "";
+  1970→                        }
+  1971→                      }}
+  1972→                      className="bg-transparent border border-dashed border-white/[0.12] rounded-md px-2 py-1 text-[10px] text-white outline-none focus:border-[#F59E0B]/50 flex-1 min-w-[100px]"
+  1973→                    />
+  1974→                  </div>
+  1975→                </div>
+  1976→              ))}
+  1977→            </div>
+  1978→
+  1979→            {/* Attributes (material, fit, weight, etc.) */}
+  1980→            <div className="space-y-2">
+  1981→              <div className="flex items-center justify-between">
+  1982→                <label className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8]">
+  1983→                  <Palette size={11} /> Attributes
+  1984→                  <span className="text-[9px] text-[#475569] normal-case tracking-normal">(material, weight...)</span>
+  1985→                </label>
+  1986→                <button
+  1987→                  type="button"
+  1988→                  onClick={() =>
+  1989→                    setForm({
+  1990→                      ...form,
+  1991→                      attributes: [...form.attributes, { label: "", value: "" }],
+  1992→                    })
+  1993→                  }
+  1994→                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#9786E3]/15 text-[#9786E3] text-[10px] font-bold hover:bg-[#9786E3]/25 transition-all"
+  1995→                >
+  1996→                  <Plus size={10} /> Add
+  1997→                </button>
+  1998→              </div>
+  1999→
+  2000→              {form.attributes.length === 0 && (
+
+[showing lines 1-2000 of 2782; use offset=2001 with limit to continue reading]
