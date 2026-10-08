@@ -1390,3 +1390,173 @@ Stage Summary:
   exists in production Supabase.
 - TypeScript: `npx tsc --noEmit --project tsconfig.json 2>&1 | grep -E "^src/"`
   returned zero lines.
+
+---
+Task ID: apologetics-editor-ux
+Agent: general-purpose (Apologetics editor UX improvements)
+Task: Sectioned layout + rich text toolbar + apologetics structure helper + preview + unsaved changes guard + save draft/publish split
+
+Work Log:
+- Read the existing `ApologeticsTab.tsx` (999 LOC at baseline) to map every
+  helper, type, and the existing `ApologeticsEditorModal` that needed
+  replacement. Confirmed `KoinoArticle` / `FormState` / `EMPTY_FORM` /
+  `slugify` / `parseStringArray` / `toFormState` / `Field` / `Toggle` /
+  `FilterChip` / `StatusBadge` are defined at module scope and reused
+  untouched.
+- Verified the API contracts in `src/app/api/admin/articles/route.ts` and
+  `src/app/api/admin/articles/[id]/route.ts`: both POST and PATCH return
+  `{ success, article }` with the full serialized article. This is what lets
+  the editor stay open after save and still know the new id/slug/status.
+- Verified `react-markdown@10.1.0` is already in `package.json` and
+  installed in `node_modules` (default export = synchronous `Markdown`
+  component, `Components` map accepts custom renderers per tag). No new
+  packages were installed. `remark-gfm` is NOT installed, so the preview
+  relies on react-markdown's built-in CommonMark syntax (headings, bold,
+  italic, lists, blockquotes, links, images, hr, code) — which is exactly
+  what the toolbar emits.
+- Verified `lucide-react` exposes every icon the toolbar needs:
+  `Heading2`, `Heading3`, `Bold`, `Italic`, `List`, `ListOrdered`, `Quote`,
+  `Link`, `Image`, `Minus`, `BookOpen`, `ChevronDown`, `ChevronRight`.
+  Aliased `Link as LinkIcon` and `Image as ImageIcon` to dodge the global
+  DOM-name collisions.
+- Modified file: `src/components/crosscrafted/admin/ApologeticsTab.tsx`
+  (grew from 999 → 1577 LOC). Edits, in order:
+    1. Imports — added `useRef` to the React import; added
+       `import ReactMarkdown from "react-markdown"`; added 12 new Lucide
+       icons (`Heading2/Heading3/Bold/Italic/List/ListOrdered/Quote/
+       Link as LinkIcon/Image as ImageIcon/Minus/BookOpen/ChevronDown/
+       ChevronRight`) to the existing `lucide-react` import.
+    2. List card subtitle (item #7) — removed the trailing
+       `· AuthorName` from the `/apologetics/{slug}` line and added a new
+       `by {authorName}` span in the meta row between Difficulty and the
+       time-ago span, so the meta reads
+       `category · difficulty · by AuthorName · 2h ago`. Falls through
+       cleanly when `authorName` is empty.
+    3. Parent `handleSaved` — was `closeEditor(); load();`. Now just
+       `load();` so a successful save refreshes the list WITHOUT closing
+       the editor (required by the "Save Draft / Publish keep editor open"
+       spec). `handleDeleted` still calls `closeEditor()` + `load()`
+       because delete must close the modal.
+    4. Replaced the entire `ApologeticsEditorModal` function (was ~480 LOC,
+       one big undivided form) with a sectioned implementation plus three
+       new helper components defined just above it:
+         - `APOLGETICS_SECTION_SNIPPETS` constant — 8 predefined heading
+           snippets (Question/Objection, Short Answer, Main Answer,
+           Evidence, Common Objection, Response, Biblical Foundation,
+           Conclusion) inserted by the structure-helper pills.
+         - `InsertSpec` discriminated-union type — `wrap | block | snippet`
+           modes for the toolbar insert helper.
+         - `Section` component — collapsible card with chevron toggle,
+           `bg-white/[0.02]` + border, default expanded.
+         - `ToolbarButton` component — small icon button with
+           `bg-white/[0.04] hover:bg-white/[0.08] rounded-lg p-2` and
+           `title`/`aria-label` for accessibility.
+         - `ToolbarDivider` — visual gap between toolbar groups.
+         - `MarkdownPreview` component — uses `react-markdown` with a
+           custom `components` map for h1/h2/h3/h4/p/ul/ol/li/blockquote/
+           a/img/hr/strong/em/code/pre. Renders cover image (if any),
+           title as h1, excerpt italic, short answer in a purple
+           callout, content as markdown, bible refs as chips at the
+           bottom. `node` is destructured out of every renderer before
+           spreading props to avoid React "unknown prop" warnings.
+       Inside `ApologeticsEditorModal`:
+         - New state: `activeArticleId` (tracks new id after first POST),
+           `previewMode`, `showDiscardConfirm`.
+         - New refs: `textareaRef` (cursor-aware markdown insertion) and
+           `snapshotRef` (last-saved FormState for the unsaved-changes
+           guard).
+         - `hasUnsavedChanges` = `useMemo(() => JSON.stringify(form) !==
+           JSON.stringify(snapshotRef.current), [form])`.
+         - Initial-load effect snapshots the empty form (for new articles)
+           or the fetched article's FormState so the guard starts false.
+         - `requestClose` (useCallback) wraps `onClose`: if the discard
+           dialog is open, dismiss it; else if `hasUnsavedChanges`, show
+           the dialog; else call `onClose`. Bound to the overlay click,
+           the X button, the Cancel button, and the Escape key listener
+           (which was previously bound directly to `onClose`).
+         - `applyInsert(spec)` helper — handles all three InsertSpec
+           modes, reads `selectionStart/End` from `textareaRef.current`,
+           splices the new value, calls `set("content", newValue)`, then
+           uses `requestAnimationFrame` to restore focus + selection
+           range after React re-renders the controlled textarea.
+         - `save(targetStatus, opts?)` — single save function used by
+           Save Draft / Publish / Unpublish. Captures `wasPublished =
+           currentStatus === "published"` BEFORE the request, then:
+             * Builds the payload with `status: targetStatus` (NOT
+               `form.status`), enforcing Draft/Publish semantics.
+             * POST for new articles, PATCH once `activeArticleId` is set.
+             * On success: `setForm(toFormState(article))`,
+               `snapshotRef.current = updated` (resets guard),
+               `setActiveArticleId/Slug/Status` from the response,
+               `setConfirmDelete(false)`, then the right toast:
+                 - opts.successToast (highest priority)
+                 - opts.wasUnpublish → "Article unpublished (reverted to draft)"
+                 - targetStatus="published" + wasPublished → "Article updated"
+                 - targetStatus="published" + !wasPublished → "Article published"
+                 - targetStatus="draft" → "Draft saved"
+             * Calls `onSaved()` (parent now just refreshes the list).
+             * On failure: `toast.error(real message)`, does NOT touch
+               the snapshot so the close guard still triggers, does NOT
+               close the editor.
+         - Body organized into 5 collapsible `<Section>`s: Article
+           Information (Title/Slug/Category/Subcategory/Difficulty/Cover
+           Image URL/Excerpt/Short Answer), Article Content (Edit/Preview
+           tabs + sticky toolbar + 80-tall font-mono textarea + structure
+           pills), Author (Author Name), SEO (SEO Title/Description/
+           Canonical URL), Publishing (Published toggle/Featured toggle/
+           Bible References).
+         - ARTICLE CONTENT section has an Edit/Preview tab toggle at the
+           top. Preview mode renders `<MarkdownPreview>` (read-only, no
+           save). Tab is labeled "Preview (does not publish)" per spec.
+         - Formatting toolbar: `sticky top-0 z-10 bg-[#1C1929]` with
+           `-mx-4 px-4 sm:-mx-0 sm:px-0` so it spans the section width on
+           mobile. Buttons in a `flex gap-1 overflow-x-auto` row so the
+           whole toolbar scrolls horizontally on narrow viewports. 12
+           buttons total: H2, H3, Bold, Italic, Bullet list, Numbered
+           list, Blockquote, Link, Image, Horizontal separator, Bible
+           verse (visually a BookOpen icon, mechanically same as
+           blockquote). 3 `ToolbarDivider`s separate the groups.
+         - Textarea: `neo-input text-sm h-80 resize-y font-mono`. Hint
+           below: "Markdown supported. Preview tab shows how it renders."
+         - Structure-helper pills: `flex gap-1 overflow-x-auto pb-1`,
+           each pill `text-[10px] font-bold uppercase tracking-wider
+           px-2 py-1 rounded-md bg-[#7C3AED]/10 text-[#A78BFA]
+           hover:bg-[#7C3AED]/20`.
+         - Footer (mobile-first): `flex flex-col sm:flex-row
+           items-stretch sm:items-center gap-2`. Left group
+           (activeArticleId only): "View Public" link (renamed from
+           "Preview" to disambiguate from the in-modal Preview tab),
+           Delete button + two-step confirm dialog. Right group: Cancel
+           (calls `requestClose`), Unpublish (only if
+           `currentStatus === "published"`, calls `save("draft",
+           {wasUnpublish:true})`), Save Draft (calls `save("draft")`),
+           Publish/Update Published Article (calls `save("published")`).
+           All buttons full-width on mobile via `flex-col`.
+         - Discard-changes confirm dialog rendered as a separate fixed
+           overlay (z-[60], above the modal's z-50). Two buttons:
+           "Continue Editing" (dismiss) and "Discard Changes"
+           (dismiss + `onClose()`). Clicking the dialog overlay
+           dismisses the dialog (calls `setShowDiscardConfirm(false)`),
+           not the underlying modal.
+- Ran `npx tsc --noEmit --project tsconfig.json 2>&1 | grep -E "^src/"`
+  → zero lines. Full tsc output shows only the pre-existing errors in
+  `examples/`, `scripts/`, and `skills/` (unchanged from baseline commit
+  `0d42854`).
+- No database migrations, no API route changes, no public page changes,
+  no new npm packages, no auth/admin-security changes.
+
+Stage Summary:
+- Single file modified: `src/components/crosscrafted/admin/ApologeticsTab.tsx`
+  (999 → 1577 LOC).
+- Editor modal fully rebuilt into 5 collapsible sections (Article
+  Information / Article Content / Author / SEO / Publishing) with a
+  sticky markdown formatting toolbar (12 buttons, mobile-horizontally-
+  scrollable), 8 apologetics structure-helper pills, an Edit/Preview tab
+  toggle backed by `react-markdown`, an unsaved-changes guard with a
+  dedicated discard dialog, and a split Save Draft / Publish / Unpublish
+  footer that keeps the editor open after every successful save.
+- List view: subtle improvement — author name moved from the slug line
+  into the meta row as `by AuthorName`, matching the spec's
+  `category · difficulty · by AuthorName · 2h ago` ordering.
+- TypeScript: zero errors in `src/` after `npx tsc --noEmit`. Only the
+  pre-existing errors in `examples/`, `scripts/`, `skills/` remain.
