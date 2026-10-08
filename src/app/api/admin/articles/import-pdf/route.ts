@@ -4,8 +4,11 @@ import { getAuthUser } from "@/lib/auth-server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
 import sharp from "sharp";
+import { createRequire } from "module";
+import { pathToFileURL } from "url";
 
 const db = new PrismaClient();
+const nodeRequire = createRequire(import.meta.url);
 
 // ─── Constants ────────────────────────────────────────────────────────────
 
@@ -129,27 +132,58 @@ function cleanupPdfText(rawPages: string[]): {
   return { title, content, excerpt };
 }
 
-// ─── PDF text extraction ──────────────────────────────────────────────────
-// Uses pdfjs-dist with the worker DISABLED (runs on the main thread).
-// This is the correct approach for server-side Node.js environments
-// (Vercel serverless functions) where:
-//   1. The worker file may not be resolvable on disk (Vercel bundles code)
-//   2. worker_threads may not be available in the serverless runtime
-// Running on the main thread is fine for PDF text extraction — it's fast
-// enough for typical document sizes (under 20 MB).
-async function loadPdf(buffer: Buffer): Promise<{ pages: string[] }> {
-  // Dynamic import so the ESM bundle is only loaded when this endpoint runs.
+// ─── Configure pdfjs-dist worker ──────────────────────────────────────────
+// pdfjs-dist v4.7.76 requires GlobalWorkerOptions.workerSrc to be set.
+// On Node.js (Vercel serverless), we resolve the worker file on disk
+// and convert it to a file:// URL — this is the standard Node.js approach
+// for pdfjs-dist server-side usage.
+//
+// If createRequire.resolve fails (Vercel bundling may move files),
+// we fall back to a dynamic import URL approach.
+let workerConfigured = false;
+async function ensureWorkerConfigured(): Promise<void> {
+  if (workerConfigured) return;
   const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
 
-  // CRITICAL: Disable the worker entirely for server-side use.
-  // pdfjs-dist v4 requires GlobalWorkerOptions.workerSrc to be set,
-  // but on Vercel's serverless runtime the worker file can't be resolved
-  // and worker_threads may not be available. Setting workerSrc to an
-  // empty string + disableWorker forces pdfjs to run on the main thread.
-  //
-  // The "legacy" build of pdfjs-dist includes a fake-worker fallback
-  // that processes the PDF synchronously on the main thread.
-  pdfjsLib.GlobalWorkerOptions.workerSrc = "";
+  // Approach 1: resolve via createRequire + convert to file:// URL.
+  // This works on local dev and on Vercel when node_modules is available.
+  try {
+    const workerPath = nodeRequire.resolve(
+      "pdfjs-dist/legacy/build/pdf.worker.mjs"
+    );
+    const workerUrl = pathToFileURL(workerPath).href;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+    workerConfigured = true;
+    return;
+  } catch {
+    // Fall through to approach 2.
+  }
+
+  // Approach 2: Try using import.meta.resolve (Node 20.6+).
+  try {
+    const workerUrl = import.meta.resolve(
+      "pdfjs-dist/legacy/build/pdf.worker.mjs"
+    );
+    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+    workerConfigured = true;
+    return;
+  } catch {
+    // Fall through to approach 3.
+  }
+
+  // Approach 3: Last resort — set workerSrc to a dummy URL.
+  // pdfjs will try to fetch it, fail, and fall back to a fake worker.
+  // This is not ideal but better than crashing with "No workerSrc specified."
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "data:application/javascript,";
+  workerConfigured = true;
+}
+
+// ─── PDF text extraction ──────────────────────────────────────────────────
+async function loadPdf(buffer: Buffer): Promise<{ pages: string[] }> {
+  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+
+  // Configure the worker (only runs once — cached in module scope).
+  await ensureWorkerConfigured();
 
   // Copy the buffer into a fresh Uint8Array — pdfjs may transfer/detach it.
   const data = new Uint8Array(
@@ -162,9 +196,6 @@ async function loadPdf(buffer: Buffer): Promise<{ pages: string[] }> {
     useWorkerFetch: false,
     isEvalSupported: false,
     verbosity: 0,
-    // Disable the worker — run on main thread. Not in the TS types but
-    // supported at runtime by pdfjs-dist v4.
-    ...({ disableWorker: true } as any),
   });
 
   const pdf = await loadingTask.promise;
@@ -199,25 +230,17 @@ async function loadPdf(buffer: Buffer): Promise<{ pages: string[] }> {
 }
 
 // ─── Cover image: best-effort first-page render ───────────────────────────
-// Returns a PNG Buffer of the first page, or null if rendering fails.
-// This is best-effort — if canvas/sharp aren't available or rendering
-// fails for any reason, the article is still created without a cover.
-// The admin can upload a cover manually via the existing ImageUploader.
 async function tryGenerateCover(buffer: Buffer, userId: string): Promise<string | null> {
   let pdfjsLib: any;
   let createCanvas: any;
 
-  // Step 1: Try to load pdfjs-dist for rendering.
   try {
     pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    pdfjsLib.GlobalWorkerOptions.workerSrc = "";
+    await ensureWorkerConfigured();
   } catch {
-    return null; // pdfjs not available — skip cover
+    return null;
   }
 
-  // Step 2: Try to load the canvas package for off-screen rendering.
-  // canvas requires native cairo/pango libraries which may not be
-  // available on Vercel's serverless runtime.
   try {
     const canvasMod = await import("canvas");
     createCanvas = canvasMod.createCanvas;
@@ -236,7 +259,6 @@ async function tryGenerateCover(buffer: Buffer, userId: string): Promise<string 
       useWorkerFetch: false,
       isEvalSupported: false,
       verbosity: 0,
-      ...({ disableWorker: true } as any),
     });
     const pdf = await loadingTask.promise;
     const page = await pdf.getPage(1);
@@ -251,7 +273,6 @@ async function tryGenerateCover(buffer: Buffer, userId: string): Promise<string 
     await page.render({ canvasContext: ctx, viewport }).promise;
     const pngBuffer = canvas.toBuffer("image/png");
 
-    // Process with sharp + upload to Supabase Storage.
     const processedBuffer = await sharp(pngBuffer)
       .resize(1920, null, { withoutEnlargement: true })
       .webp({ quality: 85 })
@@ -266,23 +287,20 @@ async function tryGenerateCover(buffer: Buffer, userId: string): Promise<string 
         contentType: "image/webp",
         upsert: true,
       });
-    if (uploadError) {
-      return null;
-    }
+    if (uploadError) return null;
+
     const { data: publicUrlData } = supabase.storage
       .from(BUCKET_NAME)
       .getPublicUrl(storagePath);
     const publicUrl = publicUrlData?.publicUrl;
     if (!publicUrl) return null;
 
-    // Clean up.
     page.cleanup();
     await pdf.destroy();
     await loadingTask.destroy();
 
     return `${publicUrl}?v=${timestamp}`;
-  } catch (e) {
-    // Cover generation is best-effort — any failure means no cover.
+  } catch {
     return null;
   }
 }
@@ -321,9 +339,11 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Validate type / extension / size.
-    // Accept both application/pdf and application/octet-stream (some browsers
-    // send the latter for PDFs).
-    const isValidMime = file.type === "application/pdf" || file.type === "application/octet-stream" || file.type === "";
+    // Accept application/pdf, application/octet-stream (some browsers), and empty MIME.
+    const isValidMime =
+      file.type === "application/pdf" ||
+      file.type === "application/octet-stream" ||
+      file.type === "";
     if (!isValidMime) {
       return NextResponse.json(
         { error: `File must be a PDF (got MIME type: ${file.type}).` },
@@ -353,8 +373,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 4. Extract text from all pages.
-    // This is the PRIMARY step — if it fails, we cannot create an article.
+    // 4. Extract text from all pages (PRIMARY step).
     let pages: string[];
     try {
       const extraction = await loadPdf(pdfBuffer);
@@ -363,9 +382,10 @@ export async function POST(req: NextRequest) {
       console.error("[import-pdf] PDF text extraction failed:", e?.message || e);
       return NextResponse.json(
         {
-          error: `Could not extract text from this PDF: ${e?.message || "Unknown error"}. The PDF may be corrupted or encrypted.`,
+          error: "PDF processing failed on the server. Please try again.",
+          detail: e?.message || "Unknown error",
         },
-        { status: 400 }
+        { status: 500 }
       );
     }
 
@@ -387,8 +407,7 @@ export async function POST(req: NextRequest) {
     const bibleRefs = detectBibleRefs(content);
 
     // 7. Best-effort cover image generation.
-    // If this fails (canvas not available on Vercel, rendering error, upload
-    // error, etc.), the article is STILL created — admin uploads a cover
+    // If this fails, the article is STILL created — admin uploads a cover
     // manually via the existing ImageUploader in the editor.
     let coverImageUrl: string | null = null;
     try {
