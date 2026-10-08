@@ -81,42 +81,101 @@ export default async function ApologeticsPage() {
       {/* Featured + Recent Articles */}
       {articles.length > 0 ? (
         <section className="py-8 px-6 max-w-5xl mx-auto">
+          {/* Featured Article — large card with prominent cover image */}
           {featured && (
-            <Link href={`/apologetics/${featured.slug}`} className="block bg-[#1C1929] border border-white/[0.06] rounded-2xl overflow-hidden mb-6 hover:border-white/[0.15] transition-all group">
-              {featured.coverImageUrl && (
-                <div className="relative h-48 bg-[#0f0f1a]">
-                  <img src={featured.coverImageUrl} alt={featured.title} className="w-full h-full object-cover" />
+            <Link href={`/apologetics/${featured.slug}`} className="block bg-[#1C1929] border border-white/[0.06] rounded-2xl overflow-hidden mb-8 hover:border-white/[0.15] transition-all group">
+              {/* Cover image — prominent, full-width, 16:9-ish aspect ratio */}
+              {featured.coverImageUrl ? (
+                <div className="relative aspect-[16/9] bg-[#0f0f1a] overflow-hidden">
+                  <img src={featured.coverImageUrl} alt={featured.title} className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300" />
+                  {/* FEATURED badge overlay */}
+                  <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-[#22C55E]/20 backdrop-blur-sm border border-[#22C55E]/40 text-[#22C55E] text-[10px] font-bold uppercase tracking-wider">
+                    Featured
+                  </div>
+                </div>
+              ) : (
+                <div className="relative aspect-[16/9] bg-gradient-to-br from-[#1C1929] via-[#2B254E] to-[#0f0f1a] overflow-hidden">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <BookOpen size={48} className="text-[#475569]/50" />
+                  </div>
+                  <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-[#22C55E]/20 backdrop-blur-sm border border-[#22C55E]/40 text-[#22C55E] text-[10px] font-bold uppercase tracking-wider">
+                    Featured
+                  </div>
                 </div>
               )}
-              <div className="p-5">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-[#F39B9B]">{featured.category}</span>
-                <h2 className="text-lg font-bold text-white mt-1 mb-2">{featured.title}</h2>
-                {featured.excerpt && <p className="text-xs text-[#A09DB1]">{featured.excerpt}</p>}
-                {featured.authorName && <p className="text-[10px] text-[#64748B] mt-2">by {featured.authorName}</p>}
+              <div className="p-5 sm:p-6">
+                <div className="flex items-center gap-2 mb-2">
+                  {featured.category && (
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-[#F39B9B]">{featured.category}</span>
+                  )}
+                  {featured.difficulty && (
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-[#A78BFA]">{featured.difficulty}</span>
+                  )}
+                </div>
+                <h2 className="text-lg sm:text-xl font-black text-white mb-2 group-hover:text-[#A78BFA] transition-colors">{featured.title}</h2>
+                {featured.excerpt && <p className="text-sm text-[#A09DB1] leading-relaxed line-clamp-2">{featured.excerpt}</p>}
+                <div className="flex items-center gap-2 mt-3 text-[10px] text-[#64748B]">
+                  {featured.authorName && <span>by {featured.authorName}</span>}
+                  {featured.publishedAt && (
+                    <>
+                      <span>·</span>
+                      <span>{new Date(featured.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                    </>
+                  )}
+                </div>
               </div>
             </Link>
           )}
 
+          {/* Non-featured Articles — horizontal card layout on desktop, stacked on mobile */}
           {rest.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-3">
               {rest.map((article) => (
-                <Link key={article.id} href={`/apologetics/${article.slug}`} className="block bg-[#1C1929] border border-white/[0.06] rounded-xl overflow-hidden hover:border-white/[0.15] transition-all">
-                  {article.coverImageUrl ? (
-                    <div className="relative h-32 bg-[#0f0f1a]">
-                      <img src={article.coverImageUrl} alt={article.title} className="w-full h-full object-cover" />
-                    </div>
-                  ) : (
-                    <div className="relative h-32 bg-gradient-to-br from-[#1C1929] to-[#2B254E]">
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <BookOpen size={28} className="text-[#475569]" />
+                <Link
+                  key={article.id}
+                  href={`/apologetics/${article.slug}`}
+                  className="flex flex-col sm:flex-row bg-[#1C1929] border border-white/[0.06] rounded-xl overflow-hidden hover:border-white/[0.15] transition-all group"
+                >
+                  {/* Cover image — left on desktop, top on mobile, 16:9 */}
+                  <div className="sm:w-56 shrink-0">
+                    {article.coverImageUrl ? (
+                      <div className="relative aspect-[16/9] sm:h-full bg-[#0f0f1a] overflow-hidden">
+                        <img
+                          src={article.coverImageUrl}
+                          alt={article.title}
+                          loading="lazy"
+                          className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
+                        />
                       </div>
+                    ) : (
+                      <div className="relative aspect-[16/9] sm:h-full bg-gradient-to-br from-[#1C1929] via-[#2B254E] to-[#0f0f1a] overflow-hidden">
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <BookOpen size={24} className="text-[#475569]/60" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {/* Content — right on desktop, below on mobile */}
+                  <div className="flex-1 p-4 min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      {article.category && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-[#F39B9B]">{article.category}</span>
+                      )}
+                      {article.difficulty && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider text-[#A78BFA]">{article.difficulty}</span>
+                      )}
                     </div>
-                  )}
-                  <div className="p-4">
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-[#94A3B8]">{article.category}</span>
-                    <h3 className="text-sm font-bold text-white mt-1">{article.title}</h3>
+                    <h3 className="text-sm font-bold text-white group-hover:text-[#A78BFA] transition-colors line-clamp-2">{article.title}</h3>
                     {article.excerpt && <p className="text-[11px] text-[#A09DB1] mt-1 line-clamp-2">{article.excerpt}</p>}
-                    {article.authorName && <p className="text-[9px] text-[#64748B] mt-2">by {article.authorName}</p>}
+                    <div className="flex items-center gap-2 mt-2 text-[9px] text-[#64748B]">
+                      {article.authorName && <span>by {article.authorName}</span>}
+                      {article.publishedAt && (
+                        <>
+                          <span>·</span>
+                          <span>{new Date(article.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </Link>
               ))}

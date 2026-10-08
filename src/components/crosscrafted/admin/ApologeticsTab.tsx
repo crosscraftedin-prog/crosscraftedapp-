@@ -358,52 +358,74 @@ export default function ApologeticsTab() {
             <button
               key={a.id}
               onClick={() => openEdit(a.id)}
-              className="w-full text-left bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4 hover:border-white/[0.15] transition-all"
+              className="w-full text-left bg-[#1C1929] border border-white/[0.06] rounded-2xl p-3 hover:border-white/[0.15] transition-all flex gap-3"
             >
-              <div className="flex items-start justify-between gap-2 mb-1">
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-sm font-bold text-white truncate">{a.title}</h3>
-                  <p className="text-[11px] text-[#94A3B8] truncate">
-                    /apologetics/{a.slug}
-                  </p>
+              {/* Cover image thumbnail — 16:9, ~140px wide on desktop */}
+              <div className="w-32 sm:w-36 shrink-0">
+                {a.coverImageUrl ? (
+                  <div className="relative aspect-[16/9] rounded-lg overflow-hidden bg-[#0f0f1a]">
+                    <img
+                      src={a.coverImageUrl}
+                      alt={a.title}
+                      loading="lazy"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="relative aspect-[16/9] rounded-lg overflow-hidden bg-gradient-to-br from-[#1C1929] via-[#2B254E] to-[#0f0f1a]">
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <FileText size={18} className="text-[#475569]/60" />
+                    </div>
+                  </div>
+                )}
+              </div>
+              {/* Content */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-bold text-white truncate">{a.title}</h3>
+                    <p className="text-[11px] text-[#94A3B8] truncate">
+                      /apologetics/{a.slug}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {a.featured && <StatusBadge color="#A855F7" label="Featured" />}
+                    {a.status === "published" ? (
+                      <StatusBadge color="#22C55E" label="Published" />
+                    ) : (
+                      <StatusBadge color="#F59E0B" label="Draft" />
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {a.featured && <StatusBadge color="#A855F7" label="Featured" />}
-                  {a.status === "published" ? (
-                    <StatusBadge color="#22C55E" label="Published" />
+                {a.excerpt && (
+                  <p className="text-[11px] text-[#A09DB1] line-clamp-1 mb-1.5">{a.excerpt}</p>
+                )}
+                <div className="flex items-center gap-2 text-[10px] text-[#64748B]">
+                  {a.category && (
+                    <span className="px-1.5 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] font-bold uppercase tracking-wider">
+                      {a.category}
+                    </span>
+                  )}
+                  {a.difficulty && (
+                    <span className="px-1.5 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[#A78BFA] font-bold uppercase tracking-wider">
+                      {a.difficulty}
+                    </span>
+                  )}
+                  {a.authorName && (
+                    <span className="text-[#94A3B8]">
+                      by {a.authorName}
+                    </span>
+                  )}
+                  {a.status === "published" && a.publishedAt ? (
+                    <span className="flex items-center gap-0.5">
+                      <Eye size={9} /> {formatTimeAgo(a.publishedAt)}
+                    </span>
                   ) : (
-                    <StatusBadge color="#F59E0B" label="Draft" />
+                    <span className="flex items-center gap-0.5">
+                      <Clock size={9} /> {formatTimeAgo(a.updatedAt)}
+                    </span>
                   )}
                 </div>
-              </div>
-              {a.excerpt && (
-                <p className="text-[11px] text-[#A09DB1] line-clamp-1 mb-1.5">{a.excerpt}</p>
-              )}
-              <div className="flex items-center gap-2 text-[10px] text-[#64748B]">
-                {a.category && (
-                  <span className="px-1.5 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] font-bold uppercase tracking-wider">
-                    {a.category}
-                  </span>
-                )}
-                {a.difficulty && (
-                  <span className="px-1.5 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[#A78BFA] font-bold uppercase tracking-wider">
-                    {a.difficulty}
-                  </span>
-                )}
-                {a.authorName && (
-                  <span className="text-[#94A3B8]">
-                    by {a.authorName}
-                  </span>
-                )}
-                {a.status === "published" && a.publishedAt ? (
-                  <span className="flex items-center gap-0.5">
-                    <Eye size={9} /> {formatTimeAgo(a.publishedAt)}
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-0.5">
-                    <Clock size={9} /> {formatTimeAgo(a.updatedAt)}
-                  </span>
-                )}
               </div>
             </button>
           ))}
