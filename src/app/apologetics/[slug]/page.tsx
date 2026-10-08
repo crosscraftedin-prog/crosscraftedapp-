@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import { PrismaClient } from "@prisma/client";
 import PublicPageLayout from "@/components/crosscrafted/PublicPageLayout";
 import MarkdownRenderer from "@/components/crosscrafted/MarkdownRenderer";
+import CopyLinkButton from "@/components/crosscrafted/CopyLinkButton";
 import Link from "next/link";
-import { ArrowLeft, BookOpen, Calendar, Share2 } from "lucide-react";
+import { ArrowLeft, BookOpen, Calendar } from "lucide-react";
 import { notFound } from "next/navigation";
 
 const db = new PrismaClient();
@@ -37,26 +38,11 @@ function safeParseArray<T>(value: string | null | undefined, fallback: T[]): T[]
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  console.log("[apologetics/[slug] generateMetadata] loading slug:", slug);
-
-  let article;
-  try {
-    article = await db.koinoArticle.findUnique({ where: { slug } });
-  } catch (err) {
-    console.error("[apologetics/[slug] generateMetadata] DB query FAILED:", err);
-    // Return minimal metadata so the page can still attempt to render
-    return { title: "Koino" };
-  }
-
-  console.log("[apologetics/[slug] generateMetadata] article found:", article ? article.id : "null");
-
+  const article = await db.koinoArticle.findUnique({ where: { slug } });
   if (!article || article.status !== "published" || article.contentType !== "APOLOGETICS") {
-    console.log("[apologetics/[slug] generateMetadata] returning not-found metadata (status:", article?.status, "contentType:", article?.contentType, ")");
     return { title: "Article Not Found — Koino" };
   }
-
   const canonical = article.canonicalUrl || `https://www.koino.in/apologetics/${article.slug}`;
-  console.log("[apologetics/[slug] generateMetadata] returning full metadata");
   return {
     title: article.seoTitle || `${article.title} — Koino`,
     description: article.seoDescription || article.excerpt || "",
@@ -80,27 +66,21 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function ApologeticsArticlePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  console.log("[apologetics/[slug] page] loading slug:", slug);
 
   const article = await db.koinoArticle.findUnique({
     where: { slug },
   });
 
-  console.log("[apologetics/[slug] page] article found:", article ? { id: article.id, status: article.status, contentType: article.contentType } : "null");
-
   // Article not found, or not published, or not APOLOGETICS → 404
   if (!article || article.status !== "published" || article.contentType !== "APOLOGETICS") notFound();
-
-  console.log("[apologetics/[slug] page] article passed checks, parsing JSON fields...");
 
   // ─── Safe JSON parsing (null-safe + type-safe) ────────────────────
   const bibleRefs: string[] = safeParseArray<string>(article.bibleRefs, []);
   const sources: any[] = safeParseArray<any>(article.sources, []);
   const relatedIds: string[] = safeParseArray<string>(article.relatedIds, []);
 
-  console.log("[apologetics/[slug] page] JSON parsed:", { bibleRefs: bibleRefs.length, sources: sources.length, relatedIds: relatedIds.length });
-
   // Fetch related articles (only published ones) — wrapped in try/catch
+  // so a DB error on the related query doesn't crash the entire page.
   let relatedArticles: any[] = [];
   if (relatedIds.length > 0) {
     try {
@@ -109,11 +89,9 @@ export default async function ApologeticsArticlePage({ params }: { params: Promi
         select: { id: true, title: true, slug: true, category: true, excerpt: true, coverImageUrl: true },
       });
     } catch (error) {
-      console.error("[apologetics/[slug] page] Related articles query error:", error);
+      console.error("[apologetics/[slug]] Related articles query error:", error);
     }
   }
-
-  console.log("[apologetics/[slug] page] about to render JSX...");
 
   // Difficulty badge color
   const difficultyColor: Record<string, string> = {
@@ -243,12 +221,7 @@ export default async function ApologeticsArticlePage({ params }: { params: Promi
 
         {/* Share */}
         <div className="flex items-center gap-2 pt-4 border-t border-white/[0.04]">
-          <button
-            onClick={() => { if (typeof navigator !== "undefined") navigator.clipboard?.writeText(window.location.href); }}
-            className="flex items-center gap-1 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold transition-all"
-          >
-            <Share2 size={12} /> Copy Link
-          </button>
+          <CopyLinkButton />
         </div>
 
         {/* Continue exploring */}
