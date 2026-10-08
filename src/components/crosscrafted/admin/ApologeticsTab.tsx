@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
+import ImageUploader from "@/components/crosscrafted/admin/ImageUploader";
+import InlineImagePopover from "@/components/crosscrafted/admin/InlineImagePopover";
 import {
   FileText,
   Loader2,
@@ -725,6 +727,10 @@ function ApologeticsEditorModal({
   const [activeArticleId, setActiveArticleId] = useState<string | null>(articleId);
   const [previewMode, setPreviewMode] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  // State for the inline image upload popover (opened from the Image toolbar
+  // button). When open, the admin can pick a file, set alt text, and upload —
+  // the resulting ![alt](url) markdown is inserted at the cursor.
+  const [showImagePopover, setShowImagePopover] = useState(false);
 
   // Refs: textarea for cursor-aware markdown insertion, snapshot for the
   // unsaved-changes guard.
@@ -1077,31 +1083,11 @@ function ApologeticsEditorModal({
               </select>
             </Field>
 
-            <Field label="Cover Image URL" hint="Paste a Supabase Storage URL.">
-              <input
-                type="text"
+            <Field label="Cover Image" hint="Upload a JPG, PNG, or WEBP image (max 10 MB).">
+              <ImageUploader
                 value={form.coverImageUrl}
-                onChange={(e) => set("coverImageUrl", e.target.value)}
-                className="neo-input text-sm"
-                placeholder="https://<supabase-storage>/apologetics/cover.jpg"
-                style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+                onChange={(url) => set("coverImageUrl", url)}
               />
-              {form.coverImageUrl && (
-                <div className="mt-2 flex items-center gap-2 p-2 rounded-xl bg-white/[0.04] border border-white/[0.06]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={form.coverImageUrl}
-                    alt="Cover preview"
-                    className="w-16 h-12 object-cover rounded-md bg-[#0f0f1a]"
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).style.display = "none";
-                    }}
-                  />
-                  <span className="text-[10px] text-[#94A3B8] break-all line-clamp-2">
-                    {form.coverImageUrl}
-                  </span>
-                </div>
-              )}
             </Field>
 
             <Field label="Excerpt" hint="Short summary shown on cards.">
@@ -1232,14 +1218,7 @@ function ApologeticsEditorModal({
                     </ToolbarButton>
                     <ToolbarButton
                       title="Image"
-                      onClick={() =>
-                        applyInsert({
-                          mode: "wrap",
-                          prefix: "![",
-                          suffix: "](https://)",
-                          placeholder: "alt text",
-                        })
-                      }
+                      onClick={() => setShowImagePopover(true)}
                     >
                       <ImageIcon size={14} />
                     </ToolbarButton>
@@ -1514,6 +1493,21 @@ function ApologeticsEditorModal({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Inline image upload popover — opened from the Image toolbar button.
+          Renders as a separate overlay (z-[70], above the modal at z-50 and
+          above the discard dialog at z-[60]). On insert, the markdown
+          ![alt](url) is inserted at the current cursor position in the
+          content textarea using applyInsert's "snippet" mode. */}
+      {showImagePopover && (
+        <InlineImagePopover
+          onInsert={(markdown) => {
+            applyInsert({ mode: "snippet", text: markdown });
+            setShowImagePopover(false);
+          }}
+          onClose={() => setShowImagePopover(false)}
+        />
       )}
     </div>
   );

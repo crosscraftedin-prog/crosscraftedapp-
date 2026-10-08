@@ -1682,3 +1682,102 @@ Stage Summary:
   it.
 - No DB migrations, no API route changes, no auth/security changes —
   this task was purely frontend wiring.
+
+---
+
+Task ID: apologetics-image-upload
+Agent: general-purpose (Apologetics image upload system)
+Task: ImageUploader component + InlineImagePopover + wire to ApologeticsTab
+
+Work Log:
+- Read worklog.md for context and confirmed the existing /api/admin/upload
+  endpoint contract (multipart/form-data `file`, returns
+  { success, url, path }).
+- Read ApologeticsTab.tsx end-to-end (1600 lines) to understand the
+  editor modal structure: form state, applyInsert (wrap/block/snippet),
+  textarea ref, unsaved-changes guard, existing Image toolbar button
+  (wrap with `![` / `](https://)` placeholder), and the cover-image URL
+  field with the inline preview.
+- Created src/components/crosscrafted/admin/ImageUploader.tsx:
+    - Props: { value, onChange, label="Cover Image" }.
+    - States: uploading, error, dragOver, inputRef.
+    - Empty state: dashed drop zone (border-white/[0.12], hover
+      border-[#7C3AED]/40) with Upload icon, "Upload Image" text,
+      JPG/PNG/WEBP + 10MB hint, and an explicit "Choose File" button.
+    - Has-image state: full-width max-h-32 object-cover preview, with
+      "Replace Image" and "Remove" buttons underneath (both 44px tall).
+    - Uploading state: spinner + "Uploading…" text, both buttons
+      disabled (pointer-events-none on the drop zone).
+    - Error state: red text below the zone/preview, old image kept.
+    - Remove: calls onChange("") without hitting any delete API
+      (per spec: "safer to leave orphaned than accidentally delete").
+    - Client-side validation mirrors the server: ALLOWED_TYPES
+      [image/jpeg, image/jpg, image/png, image/webp] + 10MB cap.
+    - Drag & drop: onDrop/onDragOver/onDragLeave with highlighted
+      border (border-[#7C3AED] + bg-[#7C3AED]/5) — no new deps.
+    - Mobile: accept="image/jpeg,image/png,image/webp,image/*" so the
+      native iOS/Android picker triggers; all tap targets ≥ 44px.
+    - File input reset to "" after every attempt so the same file can
+      be re-selected after error/remove.
+    - Toast via sonner for every success/validation/error.
+- Created src/components/crosscrafted/admin/InlineImagePopover.tsx:
+    - Props: { onInsert, onClose }.
+    - States: file, alt, uploading, error, dragOver, inputRef,
+      altRef.
+    - Fixed-position centered overlay (z-[70], above modal z-50 and
+      above discard-dialog z-[60]), max-w-sm with p-4 wrapper so it
+      fits on mobile (full-width minus 32px gutter).
+    - Header "Insert Image" + X close button.
+    - Drop zone (or selected-file chip with name + KB size) for
+      picking the image — same validation as ImageUploader.
+    - Alt Text input — pre-filled from sanitized filename
+      (extension stripped, -/_ → spaces, trimmed, clamped to 80
+      chars). Enter key triggers Upload & Insert.
+    - Cancel + Upload & Insert buttons (both 44px tall).
+    - On success: builds `![<escaped alt>](<url>)` markdown, calls
+      onInsert(markdown), toasts success. Parent closes the popover.
+    - On error: shows message inline, keeps popover open, does NOT
+      insert anything.
+    - Escape key + overlay click close the popover. Body scroll lock
+      is intentionally left to the parent modal — only the parent
+      locks scroll.
+    - Alt-text escaping: backslash and `]` are escaped so the
+      markdown never breaks.
+- Modified src/components/crosscrafted/admin/ApologeticsTab.tsx (3
+  surgical changes — nothing else touched):
+    1. Added imports for ImageUploader and InlineImagePopover at the
+       top of the file (after the react-markdown import).
+    2. Replaced the "Cover Image URL" Field (text input + small
+       preview block) with a single <ImageUploader value=
+       {form.coverImageUrl} onChange={(url) => set("coverImageUrl",
+       url)} /> inside Field label="Cover Image". Field hint now
+       reads "Upload a JPG, PNG, or WEBP image (max 10 MB)."
+    3. Replaced the Image toolbar button's onClick (was applyInsert
+       wrap with `![`/`](https://)` placeholder) with
+       setShowImagePopover(true). Added `showImagePopover` state and
+       rendered the InlineImagePopover at the bottom of the editor
+       modal (after the discard-confirm dialog). onInsert calls
+       applyInsert({ mode: "snippet", text: markdown }) — reuses the
+       existing snippet path so cursor position is restored correctly
+       via the same requestAnimationFrame + setSelectionRange logic.
+- Ran `npx tsc --noEmit --project tsconfig.json`. No errors in any
+  src/ file. The only TS errors in the repo are in unrelated
+  examples/ and skills/ folders (socket.io-client, socket.io, z-ai-sdk
+  type mismatch in skills/stock-analysis-skill — none are part of
+  the Next.js app).
+- No database changes, no API changes, no new npm packages, no
+  changes to the Apologetics Q&A system, no changes to public
+  rendering or safeUrl() — all security fixes preserved.
+
+Stage Summary:
+- Apologetics admin now has real image uploads instead of paste-URL
+  text fields. Two reusable client components (ImageUploader +
+  InlineImagePopover) hit the existing POST /api/admin/upload
+  endpoint, validate client-side (MIME + 10MB), show progress + errors
+  inline, and are wired into the article editor modal: ImageUploader
+  replaces the cover-image URL input; InlineImagePopover opens from
+  the toolbar Image button and inserts ![alt](url) markdown at the
+  cursor. Both are mobile-friendly (native picker, 44px tap targets,
+  full-width modal on small screens) and use the existing Koino dark
+  theme + neo-input classes. Remove does NOT delete from Supabase
+  Storage (safer to orphan). TypeScript compiles clean for all src/.
