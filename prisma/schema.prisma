@@ -681,6 +681,74 @@ model Event {
   @@index([createdById])
 }
 
+// ─── CHURCHES ───────────────────────────────────────────────────────────────
+// User-submitted Christian churches for the public Church Directory.
+// Created by any authenticated user with status=PENDING. Admin reviews →
+// PUBLISHED (visible publicly) or REJECTED. Admin can also CANCEL a
+// published church (e.g. for moderation).
+// Public /api/churches ONLY returns status=PUBLISHED.
+// Admin /api/admin/churches returns ALL churches with optional status filter.
+
+model Church {
+  id              String   @id @default(cuid())
+  name            String
+  description     String
+  denomination    String   @default("") // e.g. "Assemblies of God", "Catholic", "Baptist", "Non-denominational"
+
+  // Location
+  country         String   @default("India")
+  state           String?
+  city            String?
+  address         String?
+  postalCode      String?
+  location        String   // human-readable summary, e.g. "MG Road, Bengaluru"
+
+  // Contact
+  pastorName     String?
+  contactName    String?
+  contactEmail   String?
+  contactPhone   String?
+  whatsappNumber String?
+  website         String?
+
+  // Service times — JSON array of { day, time, language }
+  // e.g. [{"day":"Sunday","time":"9:00 AM","language":"English"}]
+  serviceTimes   String   @default("[]")
+
+  // Languages spoken at services — JSON array of strings
+  languages       String   @default("[]")
+
+  // Media
+  coverImage     String?
+  coverGradient  Int      @default(0) // 0-7, CSS gradient fallback when no image
+
+  // ─── MODERATION ───
+  // status workflow: PENDING (default) → PUBLISHED (admin approved) or
+  // REJECTED (admin rejected). PUBLISHED churches can be CANCELLED by admin.
+  // Public /api/churches ONLY returns status=PUBLISHED.
+  status          String   @default("PENDING") // "PENDING" | "PUBLISHED" | "REJECTED" | "CANCELLED"
+  featured        Boolean  @default(false) // admin can feature a church
+  rejectionReason String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+
+  // Ownership — the user who submitted the church
+  createdById     String?
+  createdByEmail  String?
+
+  // Cosmetic — number of followers (display only, not used for auth)
+  followersCount  Int      @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status])
+  @@index([state, city])
+  @@index([denomination])
+  @@index([featured])
+  @@index([createdById])
+}
+
 // ─── PUBLIC WEBSITE CONTENT ────────────────────────────────────────────────
 // Admin-editable content for the public Koino website.
 

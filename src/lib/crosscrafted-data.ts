@@ -20,9 +20,18 @@ export type Church = {
   cover_gradient: number;
   cover_image?: string;
   images?: string[];
-  status: "verified" | "pending";
+  status: "verified" | "pending" | "PENDING" | "PUBLISHED" | "REJECTED" | "CANCELLED";
+  featured?: boolean;
   denomination: string;
   whatsapp_number?: string;
+  // Admin-only fields (populated by /api/admin/churches, never by public /api/churches)
+  rejectionReason?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  createdById?: string | null;
+  createdByEmail?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type EventType = "in-person" | "online" | "hybrid";

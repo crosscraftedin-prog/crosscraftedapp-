@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MapPin,
@@ -17,9 +17,9 @@ import {
   Trash2,
   Phone,
   Heart,
+  Building2,
 } from "lucide-react";
 import {
-  CHURCHES,
   INDIAN_STATES,
   LANGUAGES,
   CHURCH_GRADIENTS,
@@ -43,7 +43,14 @@ type DiscoverTab = "discover" | "my-churches";
 export default function ChurchesView({ initialOpenChurchId, onListChurch }: Props) {
   const t = useTranslation();
   const { isAuthenticated } = useSupabaseUser();
-  const [churches, setChurches] = useState<Church[]>(CHURCHES);
+  // ─── PUBLISHED CHURCHES (loaded from real DB via /api/churches) ───
+  // The CHURCHES mock array is NO LONGER used at runtime — all churches come
+  // from the database. status=PUBLISHED only (server-enforced).
+  // User-submitted churches are saved with status=PENDING and only appear
+  // here after admin approval.
+  const [churches, setChurches] = useState<Church[]>([]);
+  const [churchesLoading, setChurchesLoading] = useState(true);
+  const [churchesError, setChurchesError] = useState<string | null>(null);
   // Per-session follow state. NOTE: For now this is component state —
   // when a ChurchFollow / GroupMember DB model is added, this should
   // be hydrated from /api/churches/follows on mount and persisted via
@@ -55,9 +62,7 @@ export default function ChurchesView({ initialOpenChurchId, onListChurch }: Prop
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [openChurch, setOpenChurch] = useState<Church | null>(
-    CHURCHES.find((c) => c.id === initialOpenChurchId) || null
-  );
+  const [openChurch, setOpenChurch] = useState<Church | null>(null);
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [formData, setFormData] = useState<{
     name: string;
@@ -103,6 +108,28 @@ export default function ChurchesView({ initialOpenChurchId, onListChurch }: Prop
       service_times: prev.service_times.map((s, i) => (i === idx ? { ...s, [field]: value } : s)),
     }));
   };
+
+  // ─── Fetch published churches from the database ───
+  // Public API returns ONLY status=PUBLISHED churches (server-enforced).
+  const loadChurches = async () => {
+    setChurchesLoading(true);
+    setChurchesError(null);
+    try {
+      const res = await fetch("/api/churches", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load churches");
+      setChurches(data.churches || []);
+    } catch (e: any) {
+      setChurchesError(e.message || "Failed to load churches");
+      setChurches([]); // graceful fallback — empty state, not a crash
+    } finally {
+      setChurchesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadChurches();
+  }, []);
 
   const filtered = useMemo(() => {
     return churches.filter((c) => {
@@ -344,6 +371,57 @@ export default function ChurchesView({ initialOpenChurchId, onListChurch }: Prop
 
       {/* Church Cards */}
       <div className="space-y-4">
+        {/* Loading state */}
+        {churchesLoading && (
+          <div className="text-center py-12">
+            <div className="w-8 h-8 mx-auto rounded-full border-2 border-transparent border-t-[#7C3AED] animate-spin mb-3" />
+            <p className="text-xs text-[#94A3B8]">Loading churches…</p>
+          </div>
+        )}
+
+        {/* Error state — graceful, no crash */}
+        {!churchesLoading && churchesError && (
+          <div className="bg-[#EF4444]/8 border border-[#EF4444]/20 rounded-2xl p-5 text-center">
+            <p className="text-sm font-bold text-[#EF4444] mb-1">Failed to load churches</p>
+            <p className="text-xs text-[#A09DB1] mb-3">{churchesError}</p>
+            <button
+              onClick={loadChurches}
+              className="px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold transition-all"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {/* Empty state — no published churches yet */}
+        {!churchesLoading && !churchesError && churches.length === 0 && (
+          <div className="text-center py-12">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#7C3AED]/15 border border-[#7C3AED]/25 mb-3">
+              <Building2 size={24} className="text-[#A78BFA]" />
+            </div>
+            <p className="text-sm font-bold text-white mb-1">No churches listed yet</p>
+            <p className="text-xs text-[#A09DB1] mb-4 max-w-sm mx-auto">
+              Be the first to add your church to the Koino directory. Submitted churches appear here after admin approval.
+            </p>
+            {isAuthenticated && (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="px-5 py-2.5 rounded-xl bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 text-xs font-extrabold uppercase tracking-wider transition-all"
+              >
+                List Your Church
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Filtered empty state — churches exist but none match the filters */}
+        {!churchesLoading && !churchesError && churches.length > 0 && filtered.length === 0 && (
+          <div className="text-center py-10">
+            <p className="text-sm text-[#94A3B8] mb-1">No churches match your filters.</p>
+            <p className="text-xs text-[#64748B]">Try clearing filters or widening your search.</p>
+          </div>
+        )}
+
         {filtered.map((church, i) => {
           const isFollowing = followed.has(church.id);
           return (

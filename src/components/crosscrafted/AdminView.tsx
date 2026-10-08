@@ -688,79 +688,319 @@ function MembersTab() {
 }
 
 // ─── CHURCHES ─────────────────────────────────────────────────────────────
+// REAL DATABASE-BACKED CHURCHES — no longer mock data.
+// User-submitted churches arrive with status=PENDING. Admin can:
+//   Approve (PENDING → PUBLISHED), Reject (PENDING → REJECTED),
+//   Cancel (PUBLISHED → CANCELLED), Reopen (any → PENDING),
+//   Feature/Unfeature, Delete (permanent).
+// Public /api/churches only returns PUBLISHED churches.
+
+type AdminChurch = Omit<Church, "status"> & {
+  status: "PENDING" | "PUBLISHED" | "REJECTED" | "CANCELLED";
+};
 
 function ChurchesTab() {
-  const [churches, setChurches] = useState<Church[]>(CHURCHES);
+  const [churches, setChurches] = useState<AdminChurch[]>([]);
+  const [counts, setCounts] = useState<{ all: number; PENDING: number; PUBLISHED: number; REJECTED: number; CANCELLED: number }>({ all: 0, PENDING: 0, PUBLISHED: 0, REJECTED: 0, CANCELLED: 0 });
+  const [statusFilter, setStatusFilter] = useState<"all" | "PENDING" | "PUBLISHED" | "REJECTED" | "CANCELLED">("all");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
-  const approve = (id: string) => {
-    setChurches((cs) => cs.map((c) => (c.id === id ? { ...c, status: "verified" } : c)));
-    toast.success("Church approved!", { description: "It's now visible in the public directory." });
+  const loadChurches = async (status: "all" | "PENDING" | "PUBLISHED" | "REJECTED" | "CANCELLED" = statusFilter) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const url = status === "all" ? "/api/admin/churches" : `/api/admin/churches?status=${status}`;
+      const res = await fetch(url, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) {
+        const apiError = data?.error || `Failed to load churches (HTTP ${res.status})`;
+        const prismaCode = data?.prismaCode || data?.code;
+        const detail = data?.detail;
+        const fullError = prismaCode
+          ? `${apiError} (Prisma code: ${prismaCode}${detail ? ` — ${detail}` : ""})`
+          : apiError;
+        throw new Error(fullError);
+      }
+      setChurches(data.churches || []);
+      if (data.counts) setCounts(data.counts);
+    } catch (e: any) {
+      setError(e.message || "Failed to load churches");
+      setChurches([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const remove = (id: string) => {
-    setChurches((cs) => cs.filter((c) => c.id !== id));
-    toast("Church removed");
+  useEffect(() => {
+    loadChurches("all");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleAction = async (id: string, action: string, extra?: Record<string, unknown>) => {
+    try {
+      const res = await fetch("/api/admin/churches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action, ...extra }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Failed to ${action} church`);
+      toast.success(`Church ${action}d`, {
+        description: action === "approve" ? "Now visible publicly" : action === "reject" ? "Removed from public directory" : undefined,
+      });
+      await loadChurches();
+    } catch (e: any) {
+      toast.error(e.message || `Failed to ${action} church`);
+    }
   };
 
-  const pending = churches.filter((c) => c.status === "pending");
-  const verified = churches.filter((c) => c.status === "verified");
+  const handleDelete = async (id: string) => {
+    if (!confirm("Permanently delete this church? This cannot be undone. For moderation, prefer Reject or Cancel.")) return;
+    try {
+      const res = await fetch(`/api/admin/churches/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete church");
+      toast.success("Church deleted");
+      await loadChurches();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to delete church");
+    }
+  };
+
+  const confirmReject = async (id: string) => {
+    await handleAction(id, "reject", { rejectionReason: rejectReason || null });
+    setRejectingId(null);
+    setRejectReason("");
+  };
+
+  const filtered = useMemo(() => {
+    if (!searchQuery.trim()) return churches;
+    const q = searchQuery.toLowerCase();
+    return churches.filter((c) =>
+      `${c.name} ${c.description} ${c.city} ${c.state} ${c.denomination} ${c.createdByEmail || ""}`
+        .toLowerCase()
+        .includes(q)
+    );
+  }, [churches, searchQuery]);
+
+  const statusChips: { id: typeof statusFilter; label: string; color: string; count: number }[] = [
+    { id: "all", label: "All", color: "#94A3B8", count: counts.all },
+    { id: "PENDING", label: "Pending", color: "#F59E0B", count: counts.PENDING },
+    { id: "PUBLISHED", label: "Published", color: "#22C55E", count: counts.PUBLISHED },
+    { id: "REJECTED", label: "Rejected", color: "#EF4444", count: counts.REJECTED },
+    { id: "CANCELLED", label: "Cancelled", color: "#64748B", count: counts.CANCELLED },
+  ];
+
+  const statusBadge = (status: string) => {
+    const colors: Record<string, string> = {
+      PENDING: "#F59E0B",
+      PUBLISHED: "#22C55E",
+      REJECTED: "#EF4444",
+      CANCELLED: "#64748B",
+    };
+    return { color: colors[status] || "#94A3B8", label: status };
+  };
 
   return (
-    <div className="space-y-4">
-      <PreviewModeBanner section="Churches" />
-      <AdminSectionHeader title="Pending Approval" count={pending.length} color="#F59E0B" />
-      {pending.length === 0 ? (
-        <EmptyState text="No pending churches. All caught up!" />
-      ) : (
-        <div className="space-y-2">
-          {pending.map((c) => (
-            <AdminCard
-              key={c.id}
-              title={c.name}
-              subtitle={`${c.city}, ${c.state} · ${c.denomination}`}
-              description={c.description}
-              image={c.cover_image}
-              actions={
-                <>
-                  <button
-                    onClick={() => approve(c.id)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#22C55E]/15 border border-[#22C55E]/30 text-[#22C55E] text-xs font-bold hover:bg-[#22C55E]/25 transition-all"
-                  >
-                    <Check size={12} /> Approve
-                  </button>
-                  <button
-                    onClick={() => remove(c.id)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] text-xs font-bold hover:bg-[#EF4444]/25 transition-all"
-                  >
-                    <Trash2 size={12} /> Reject
-                  </button>
-                </>
-              }
-            />
-          ))}
+    <div className="space-y-3">
+      {/* Status filter chips */}
+      <div className="flex gap-1 p-1 bg-white/[0.04] border border-white/[0.06] rounded-xl overflow-x-auto">
+        {statusChips.map((chip) => (
+          <button
+            key={chip.id}
+            onClick={() => {
+              setStatusFilter(chip.id);
+              loadChurches(chip.id);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
+              statusFilter === chip.id
+                ? "bg-[#7C3AED] text-white"
+                : "text-[#94A3B8] hover:text-white"
+            }`}
+          >
+            {chip.label}
+            <span
+              className="px-1.5 py-0.5 rounded-full text-[9px] font-bold"
+              style={{ backgroundColor: `${chip.color}25`, color: chip.color }}
+            >
+              {chip.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Search */}
+      <input
+        type="text"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder="Search by name, city, denomination, submitter email…"
+        className="neo-input text-sm"
+      />
+
+      {/* Loading */}
+      {loading && (
+        <div className="text-center py-8">
+          <div className="w-8 h-8 mx-auto rounded-full border-2 border-transparent border-t-[#7C3AED] animate-spin" />
+          <p className="text-xs text-[#94A3B8] mt-2">Loading churches…</p>
         </div>
       )}
 
-      <AdminSectionHeader title="Verified Churches" count={verified.length} color="#22C55E" />
-      <div className="space-y-2">
-        {verified.map((c) => (
+      {/* Error */}
+      {!loading && error && (
+        <div className="bg-[#EF4444]/8 border border-[#EF4444]/20 rounded-xl p-4">
+          <p className="text-sm font-bold text-[#EF4444] mb-1">Failed to load churches</p>
+          <p className="text-xs text-[#A09DB1] mb-3 leading-relaxed break-words">{error}</p>
+          {/migration|table|relation|P2021|P2022|P1003/i.test(error) && (
+            <div className="bg-[#F59E0B]/8 border border-[#F59E0B]/20 rounded-lg p-3 mt-2 mb-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#F59E0B] mb-1">
+                Action required — apply Prisma migration
+              </p>
+              <p className="text-[11px] text-[#A09DB1] leading-relaxed mb-2">
+                The <code className="text-[#A78BFA]">Church</code> table does not exist in the production database yet.
+                Run this SQL in the Supabase SQL Editor (the migration file is at <code className="text-[#A78BFA]">prisma/migrations/20261008000000_add_churches_table/</code>):
+              </p>
+              <pre className="text-[10px] text-[#22C55E] bg-black/40 rounded-lg p-2 overflow-x-auto">
+{`-- Open Supabase Dashboard → SQL Editor → paste the contents of
+-- prisma/migrations/20261008000000_add_churches_table/migration.sql
+-- and click Run.`}
+              </pre>
+            </div>
+          )}
+          <button onClick={() => loadChurches()} className="px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold">
+            Try again
+          </button>
+        </div>
+      )}
+
+      {/* Empty */}
+      {!loading && !error && filtered.length === 0 && (
+        <EmptyState text={statusFilter === "all" ? "No churches submitted yet." : `No ${statusFilter.toLowerCase()} churches.`} />
+      )}
+
+      {/* Churches list */}
+      {!loading && !error && filtered.map((c) => {
+        const badge = statusBadge(c.status);
+        return (
           <AdminCard
             key={c.id}
             title={c.name}
-            subtitle={`${c.city}, ${c.state} · ${c.followers_count} followers`}
+            subtitle={`${c.city || "—"}, ${c.state || "—"}${c.denomination ? ` · ${c.denomination}` : ""}${c.createdByEmail ? ` · by ${c.createdByEmail}` : ""}`}
             description={c.description}
             image={c.cover_image}
+            badge={badge.label}
+            badgeColor={badge.color}
             actions={
-              <button
-                onClick={() => remove(c.id)}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-[#EF4444] text-xs font-bold transition-all"
-              >
-                <Trash2 size={12} /> Remove
-              </button>
+              <div className="flex flex-wrap gap-1.5">
+                {c.status === "PENDING" && (
+                  <>
+                    <button
+                      onClick={() => handleAction(c.id, "approve")}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#22C55E]/15 border border-[#22C55E]/30 text-[#22C55E] hover:bg-[#22C55E]/25 text-[11px] font-bold transition-all"
+                    >
+                      <Check size={12} /> Approve
+                    </button>
+                    <button
+                      onClick={() => { setRejectingId(c.id); setRejectReason(""); }}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] hover:bg-[#EF4444]/25 text-[11px] font-bold transition-all"
+                    >
+                      <X size={12} /> Reject
+                    </button>
+                  </>
+                )}
+                {c.status === "PUBLISHED" && (
+                  <>
+                    {c.featured ? (
+                      <button
+                        onClick={() => handleAction(c.id, "unfeature")}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#A855F7]/15 border border-[#A855F7]/30 text-[#A855F7] hover:bg-[#A855F7]/25 text-[11px] font-bold transition-all"
+                      >
+                        <Star size={12} fill="currentColor" /> Unfeature
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleAction(c.id, "feature")}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-[#A855F7] text-[11px] font-bold transition-all"
+                      >
+                        <Star size={12} /> Feature
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleAction(c.id, "cancel")}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#64748B]/15 border border-[#64748B]/30 text-[#94A3B8] hover:bg-[#64748B]/25 text-[11px] font-bold transition-all"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                )}
+                {(c.status === "REJECTED" || c.status === "CANCELLED") && (
+                  <button
+                    onClick={() => handleAction(c.id, "reopen")}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#F59E0B]/15 border border-[#F59E0B]/30 text-[#F59E0B] hover:bg-[#F59E0B]/25 text-[11px] font-bold transition-all"
+                  >
+                    Reopen
+                  </button>
+                )}
+                <button
+                  onClick={() => handleDelete(c.id)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#EF4444]/15 border border-[#EF4444]/30 text-[#EF4444] hover:bg-[#EF4444]/25 text-[11px] font-bold transition-all"
+                >
+                  <Trash2 size={12} /> Delete
+                </button>
+              </div>
             }
           />
-        ))}
-      </div>
+        );
+      })}
+
+      {/* Reject modal */}
+      <AnimatePresence>
+        {rejectingId && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-md z-[60] flex items-center justify-center p-4"
+            onClick={(e) => e.target === e.currentTarget && setRejectingId(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              className="bg-[#1C1929] border border-white/[0.08] rounded-3xl p-6 max-w-md w-full"
+            >
+              <h3 className="text-base font-bold text-white mb-2">Reject Church</h3>
+              <p className="text-xs text-[#A09DB1] mb-3">
+                The church will be marked as REJECTED and will not appear publicly. The submitter will not be automatically notified.
+              </p>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Optional: rejection reason (internal note, not shown to submitter)"
+                className="neo-input text-sm h-24 resize-none mb-4"
+              />
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setRejectingId(null)}
+                  className="px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => confirmReject(rejectingId)}
+                  className="px-4 py-2 rounded-xl bg-[#EF4444] hover:bg-[#DC2626] text-white text-xs font-bold"
+                >
+                  Reject Church
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

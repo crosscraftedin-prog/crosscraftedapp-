@@ -15,6 +15,7 @@ import {
   Send,
   Plus,
   Trash2,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { INDIAN_STATES, LANGUAGES, BUSINESS_CATEGORIES, type ServiceTime } from "@/lib/crosscrafted-data";
@@ -26,6 +27,7 @@ type Props = {
 
 export default function ListYourEntity({ variant }: Props) {
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState<{
     name: string;
     description: string;
@@ -90,15 +92,64 @@ export default function ListYourEntity({ variant }: Props) {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
-    toast.success(
-      variant === "church" ? "Church listing submitted!" : "Business listing submitted!",
-      {
-        description: "Our team will review and approve within 48 hours.",
+
+    // ─── CHURCH variant: real DB insert via POST /api/churches ───
+    // Creates a church with status=PENDING. Admin must approve it
+    // before it appears in the public Church Directory.
+    if (variant === "church") {
+      if (!formData.name || !formData.description || !formData.city || !formData.state) {
+        toast.error("Please fill in all required fields.");
+        return;
       }
-    );
+      setSubmitting(true);
+      try {
+        const res = await fetch("/api/churches", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: formData.name,
+            description: formData.description,
+            denomination: formData.denomination,
+            state: formData.state,
+            city: formData.city,
+            location: formData.location,
+            address: formData.location, // reuse location field as address
+            contact_name: formData.contact_name,
+            contact_email: formData.contact_email,
+            contact_phone: formData.contact_phone,
+            whatsapp_number: formData.whatsapp_number,
+            service_times: formData.serviceRows.filter((s) => s.time && s.day),
+            languages: formData.languages,
+            images: formData.images,
+            cover_image: formData.images[0] || null,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to submit church");
+        }
+        // Success — church created with status=PENDING
+        setSubmitted(true);
+        toast.success("Church submitted!", {
+          description: "Our team will review and approve within 48 hours.",
+        });
+      } catch (err: any) {
+        console.error("[ListYourEntity church submit] Error:", err);
+        toast.error(err.message || "Failed to submit church. Please try again.");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // ─── BUSINESS variant: still uses the legacy fake flow ───
+    // (Businesses will be migrated to a real DB pipeline in a separate task.)
+    setSubmitted(true);
+    toast.success("Business listing submitted!", {
+      description: "Our team will review and approve within 48 hours.",
+    });
   };
 
   if (submitted) {
@@ -472,13 +523,17 @@ export default function ListYourEntity({ variant }: Props) {
 
         <button
           type="submit"
-          className="w-full py-3.5 rounded-2xl text-sm font-extrabold uppercase tracking-wider flex items-center justify-center gap-2 transition-all hover:-translate-y-px text-white"
+          disabled={submitting}
+          className="w-full py-3.5 rounded-2xl text-sm font-extrabold uppercase tracking-wider flex items-center justify-center gap-2 transition-all hover:-translate-y-px text-white disabled:opacity-50 disabled:cursor-not-allowed"
           style={{
             background: "linear-gradient(135deg, #22C55E, #3B82F6)",
             boxShadow: "0 4px 16px rgba(34,197,94,0.25)",
           }}
         >
-          <Send size={14} /> Submit Listing
+          {submitting
+            ? <><Loader2 size={14} className="animate-spin" /> Submitting…</>
+            : <><Send size={14} /> Submit Listing</>
+          }
         </button>
       </form>
     </div>
