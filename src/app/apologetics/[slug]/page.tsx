@@ -29,14 +29,25 @@ function safeUrl(url: string | undefined): string | null {
   return null;
 }
 
-// Safe JSON parser — handles null/undefined/invalid gracefully.
+// Safe JSON parser for array fields — handles null/undefined/invalid gracefully.
 // Used for bibleRefs, sources, relatedIds (TEXT columns that store JSON arrays).
 // In production, these columns might be NULL if the table was created before
-// the @default("[]") was added — this prevents JSON.parse(null) crashes.
-function safeParseJson<T>(value: string | null | undefined, fallback: T): T {
+// the @default("[]") was added, or contain invalid/legacy values.
+//
+// This function verifies the parsed value is actually an array — not just that
+// JSON.parse didn't throw. Handles edge cases:
+//   null / undefined → []
+//   "" (empty string) → []
+//   "null" (JSON null) → []  (JSON.parse("null") returns null, which is NOT an array)
+//   '{"foo":"bar"}' (object) → []  (objects are not arrays)
+//   '"hello"' (string) → []  (strings are not arrays)
+//   "[1,2,3]" (valid array) → [1,2,3]
+function safeParseArray<T>(value: string | null | undefined, fallback: T[]): T[] {
   if (!value) return fallback;
   try {
-    return JSON.parse(value) as T;
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed as T[];
+    return fallback;
   } catch {
     return fallback;
   }
@@ -76,30 +87,33 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function ApologeticsArticlePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
 
-  let article: any = null;
-  try {
-    // Fetch the article WITHOUT the author relation include.
-    // The Turn Into Article flow creates articles with authorId=null, and
-    // the include on the Contributor relation can throw if the production
-    // DB schema has any drift. The authorName field is denormalized on
-    // KoinoArticle, so we don't need the relation for display.
-    article = await db.koinoArticle.findUnique({
-      where: { slug },
-    });
-  } catch (error) {
-    console.error("[apologetics/[slug]] DB query error:", error);
-    notFound();
-  }
+  // Fetch the article WITHOUT the author relation include.
+  // The Turn Into Article flow creates articles with authorId=null, and
+  // the include on the Contributor relation can throw if the production
+  // DB schema has any drift. The authorName field is denormalized on
+  // KoinoArticle, so we don't need the relation for display.
+  //
+  // IMPORTANT: We do NOT wrap this in a try/catch that calls notFound().
+  // If the database is down or the query fails for a non-"not found" reason
+  // (connection error, schema mismatch, Prisma error), the exception
+  // should propagate as a server-side error (500) — NOT be silently
+  // converted to a 404. Only a genuine "article doesn't exist" (null
+  // return) should produce a 404.
+  const article = await db.koinoArticle.findUnique({
+    where: { slug },
+  });
 
+  // Article not found, or not published, or not APOLOGETICS → 404
   if (!article || article.status !== "published" || article.contentType !== "APOLOGETICS") notFound();
 
-  // ─── Safe JSON parsing (null-safe) ─────────────────────────────────
+  // ─── Safe JSON parsing (null-safe + type-safe) ────────────────────
   // bibleRefs, sources, relatedIds are TEXT columns with @default("[]").
-  // In production they might be NULL if the column was added without a
-  // default. Use safeParseJson to handle null/undefined/invalid gracefully.
-  const bibleRefs: string[] = safeParseJson(article.bibleRefs, []);
-  const sources: any[] = safeParseJson(article.sources, []);
-  const relatedIds: string[] = safeParseJson(article.relatedIds, []);
+  // In production they might be NULL or contain invalid values.
+  // safeParseArray verifies the parsed value is actually an array —
+  // not just that JSON.parse didn't throw.
+  const bibleRefs: string[] = safeParseArray<string>(article.bibleRefs, []);
+  const sources: any[] = safeParseArray<any>(article.sources, []);
+  const relatedIds: string[] = safeParseArray<string>(article.relatedIds, []);
 
   // Fetch related articles (only published ones) — wrapped in try/catch
   // so a DB error on the related query doesn't crash the entire page.
