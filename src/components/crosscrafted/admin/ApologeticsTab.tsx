@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import ImageUploader from "@/components/crosscrafted/admin/ImageUploader";
 import InlineImagePopover from "@/components/crosscrafted/admin/InlineImagePopover";
+import ImportPdfModal from "@/components/crosscrafted/admin/ImportPdfModal";
 import {
   FileText,
   Loader2,
@@ -32,6 +33,7 @@ import {
   BookOpen,
   ChevronDown,
   ChevronRight,
+  FileUp,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -203,6 +205,7 @@ export default function ApologeticsTab() {
   const [filter, setFilter] = useState<"all" | "draft" | "published" | "featured">("all");
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<{ id: string | null } | null>(null);
+  const [showImportPdf, setShowImportPdf] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -281,13 +284,24 @@ export default function ApologeticsTab() {
         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#7C3AED]/15 text-[#A78BFA]">
           {counts.total}
         </span>
-        <button
-          onClick={openNew}
-          className="ml-auto bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-bold rounded-xl px-3 py-2 flex items-center gap-1.5 transition-all"
-        >
-          <Plus size={12} />
-          Write Article
-        </button>
+        <div className="ml-auto flex items-center gap-1.5">
+          <button
+            onClick={() => setShowImportPdf(true)}
+            className="bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-white text-xs font-bold rounded-xl px-3 py-2 flex items-center gap-1.5 transition-all"
+          >
+            <FileUp size={12} />
+            <span className="hidden sm:inline">Import PDF</span>
+            <span className="sm:hidden">PDF</span>
+          </button>
+          <button
+            onClick={openNew}
+            className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-bold rounded-xl px-3 py-2 flex items-center gap-1.5 transition-all"
+          >
+            <Plus size={12} />
+            <span className="hidden sm:inline">Write Article</span>
+            <span className="sm:hidden">New</span>
+          </button>
+        </div>
       </div>
 
       {/* Status filter chips */}
@@ -439,6 +453,22 @@ export default function ApologeticsTab() {
           onClose={closeEditor}
           onSaved={handleSaved}
           onDeleted={handleDeleted}
+        />
+      )}
+
+      {/* Import PDF modal — admin uploads a PDF, server extracts text + cover
+          image, creates a draft KoinoArticle, then we open the editor for
+          that article so the admin can review + publish. */}
+      {showImportPdf && (
+        <ImportPdfModal
+          onClose={() => setShowImportPdf(false)}
+          onImported={(id) => {
+            setShowImportPdf(false);
+            // Refresh the list so the new draft appears, then open the editor
+            // with the freshly-imported article.
+            void load();
+            openEdit(id);
+          }}
         />
       )}
     </div>

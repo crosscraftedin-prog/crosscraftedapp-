@@ -1781,3 +1781,162 @@ Stage Summary:
   full-width modal on small screens) and use the existing Koino dark
   theme + neo-input classes. Remove does NOT delete from Supabase
   Storage (safer to orphan). TypeScript compiles clean for all src/.
+
+---
+
+Task ID: apologetics-pdf-import
+Agent: general-purpose (PDF Import API + modal + wire to ApologeticsTab)
+Task: Build admin "Import PDF" feature that extracts text from a PDF,
+creates a draft KoinoArticle, and opens it in the existing editor.
+
+Work Log:
+- Read worklog.md for context — confirmed prior apologetics-article-cms
+  and apologetics-image-upload work. Reused patterns from
+  /api/admin/articles/route.ts (requireAdmin helper, slugify +
+  generateUniqueSlug, serializeArticle), /api/profile/upload-avatar +
+  /api/events/upload-image (sharp + Supabase upload pattern, versioned
+  URL with ?v= for cache busting), and InlineImagePopover +
+  ImageUploader (drag/drop + error states + toast feedback).
+- Confirmed `canvas` (2.11.2) was already in node_modules (pulled in as
+  an optionalDependency of pdfjs-dist). Per the task spec — only install
+  if absent — did NOT run `npm install canvas`. Did NOT modify
+  package.json either; canvas will continue to be present on fresh
+  installs via pdfjs-dist's optionalDependencies.
+
+File 1 — Created `src/app/api/admin/articles/import-pdf/route.ts`:
+  - POST handler, admin-only via the same `requireAdmin()` pattern as
+    /api/admin/articles (401 unauth, 403 non-admin). GET returns 405 +
+    JSON body so a misrouted browser request doesn't get an empty 405.
+  - Validation: file present, MIME === "application/pdf", extension
+    ".pdf", size ≤ 20 MB. Each failure returns a 400 JSON body.
+  - PDF buffer read via `Buffer.from(await file.arrayBuffer())`.
+  - `loadPdf(buffer)` dynamically `await import("pdfjs-dist/legacy/build/pdf.mjs")`
+    so the ESM bundle is only loaded at request time (avoids bundling
+    pdfjs into the Next.js server build unnecessarily). Sets
+    `GlobalWorkerOptions.workerSrc` to the absolute path resolved via
+    `createRequire(import.meta.url).resolve("pdfjs-dist/legacy/build/pdf.worker.mjs")`
+    so Node spawns the worker thread from the correct on-disk location.
+    Falls back to the fake worker if resolve fails. Passes a fresh
+    `Uint8Array` copy of the PDF bytes so the original Buffer stays
+    intact for the cover-image render step.
+  - `renderFirstPageToPng(buffer)` also dynamic-imports pdfjs +
+    `canvas.createCanvas`, renders page 1 at 2x scale onto a
+    `node-canvas` Canvas with a white background (so transparent PDFs
+    don't render as black), and returns a PNG Buffer. Wrapped in
+    try/catch — returns null on any failure (encrypted PDFs, malformed
+    PDFs, missing fonts, etc.) so the article is still created without
+    a cover.
+  - `processCoverImage(pngBuffer)` runs the PNG through sharp
+    (resize 1920px wide, preserve aspect ratio, WebP quality 85) —
+    matches the existing /api/events/upload-image pipeline.
+  - `uploadCoverImage(buffer, userId)` uploads to Supabase Storage
+    bucket "believ-comic-artwork" (existing bucket, reused — no new
+    bucket) at `apologetics/covers/{userId}/{timestamp}.webp` with
+    `upsert: true`. Returns the public URL + `?v={timestamp}` cache-
+    busting param, or null on failure.
+  - Text cleanup: join page texts with `\n\n`, strip page-number-only
+    lines + "Page X of Y" running footers, collapse 3+ newlines to 2.
+    Derive title from first non-empty line if it's ≤ 120 chars and
+    doesn't end with `.` or `;` (else fall back to "Imported PDF
+    Article"), then strip that line from the body. Excerpt = first
+    200 chars of body content collapsed to a single line, with `…`
+    appended when truncated.
+  - Bible reference detection: regex matches
+    `(?:[1-3]\s)?(?:Genesis|Exodus|...|Revelation)\s+\d+(?::\d+(?:-\d+)?)?`
+    across all 66 canonical book names (plus "Psalm"/"Psalms"). Captures
+    full references (book + chapter:verse[-verse]) and de-dupes
+    case-insensitively. Stored as a JSON array string on
+    `KoinoArticle.bibleRefs`.
+  - Scanned PDF detection: if the joined+stripped text is < 100 chars,
+    returns `{ error: "...scanned or image-based...", scanned: true }`
+    with status 400 so the modal can show a friendlier message.
+  - Article creation: `db.koinoArticle.create({ data: { ... } })` with
+    contentType="APOLOGETICS", status="draft", difficulty="BEGINNER",
+    slug generated from title + de-duplicated via
+    `generateUniqueSlug()` (same `-2`/`-3` collision logic as the
+    existing articles route). `reviewedBy` = admin userId,
+    `reviewedAt` = now. `seoTitle` = title, `seoDescription` = excerpt.
+    NO new Prisma fields — only existing columns used.
+  - `revalidatePath("/", "layout")` after creation (wrapped in
+    try/catch — no-op on error). The public page filters by
+    status="published" so drafts don't appear until published.
+  - Memory cleanup: `loadingTask.destroy()` after extraction + render,
+    `pdf.destroy()` + `page.cleanup()` after each page is read or
+    rendered.
+  - Response: 201 `{ success: true, articleId, message }`. Message
+    differs depending on whether a cover was generated.
+
+File 2 — Created `src/components/crosscrafted/admin/ImportPdfModal.tsx`:
+  - "use client" component. Props: `{ onClose, onImported }`.
+  - Modal overlay at z-[80] (above the editor modal at z-50, above the
+    inline-image popover at z-[70]). Click outside or Escape closes
+    (disabled while uploading).
+  - Drag & drop OR click-to-select a PDF. Validates client-side:
+    MIME === "application/pdf", extension ".pdf", size ≤ 20 MB. Mirrors
+    the server-side rules.
+  - Selected file chip shows FileText icon + name + size (B/KB/MB).
+  - "Create Article from PDF" button POSTs to
+    `/api/admin/articles/import-pdf` as `multipart/form-data` with
+    `cache: "no-store"`. Shows Loader2 spinner + "Processing PDF…"
+    label + a purple info card explaining the server is extracting
+    text, detecting Bible refs, and rendering the cover.
+  - On success: toast.success + onImported(articleId) — parent closes
+    modal and opens the editor.
+  - On error (including the scanned-PDF case): red AlertCircle error
+    card with the server message. Modal stays open so admin can pick a
+    different PDF and retry.
+  - Body scroll lock while open. 44px tap targets. Mobile-friendly:
+    "Import PDF" label collapses to "PDF" and "Write Article" to "New"
+    on small screens.
+
+File 3 — Modified `src/components/crosscrafted/admin/ApologeticsTab.tsx`:
+  - Added imports: `ImportPdfModal` from
+    `@/components/crosscrafted/admin/ImportPdfModal` and `FileUp` from
+    lucide-react.
+  - Added state: `const [showImportPdf, setShowImportPdf] = useState(false);`
+  - Replaced the single "Write Article" button with a button group:
+    secondary-styled "Import PDF" (white/[0.04] bg, border) + the
+    existing primary "Write Article" (purple bg).
+  - Rendered `{showImportPdf && <ImportPdfModal onClose=... onImported=
+    {(id) => { setShowImportPdf(false); void load(); openEdit(id); }} />}`
+    right after the existing editor modal block. On import: closes the
+    import modal, refreshes the article list (so the new draft
+    appears), and opens the existing editor with the new article.
+  - NO changes to the editor modal, save/publish/delete, article list
+    rendering, filter chips, search, or any other part of the file.
+
+Verification:
+- `npx tsc --noEmit --project tsconfig.json` — zero errors in src/.
+  The only TS errors are pre-existing in unrelated `examples/`,
+  `scripts/`, and `skills/` directories (socket.io-client, socket.io,
+  re module imports, z-ai-sdk type mismatch in image-edit + stock-
+  analysis-skill — same as baseline).
+- `npx eslint` on the three files — 0 errors, 0 new warnings. The 2
+  pre-existing "Unused eslint-disable directive" warnings in
+  ApologeticsTab.tsx (lines 633 + 705, in the article list `<img>`
+  cover thumbnails) are unrelated to this change.
+- No database migrations, no new npm packages, no changes to the
+  existing article editor / article APIs / ImageUploader /
+  InlineImagePopover / public rendering / auth / DNS.
+
+Stage Summary:
+- Admin can now click "Import PDF" in the Apologetics admin tab, pick
+  a PDF (≤ 20 MB), and the server extracts text + renders the first
+  page as a cover image, creates a DRAFT KoinoArticle (contentType=
+  APOLOGETICS, difficulty=BEGINNER, with detected Bible refs as a JSON
+  array), uploads the cover to Supabase Storage at
+  `apologetics/covers/{userId}/{timestamp}.webp`, and immediately
+  opens the existing editor with the new draft so the admin can
+  review, edit, and publish.
+- Scanned / image-only PDFs return a clear `scanned: true` 400 error
+  so the admin knows OCR would be needed.
+- Cover-image rendering is best-effort: any failure (encrypted PDF,
+  missing fonts, etc.) just creates the article without a cover and
+  the admin uploads one manually via the existing ImageUploader.
+- No Prisma schema changes — only existing KoinoArticle columns used.
+- No new storage bucket — reused `believ-comic-artwork`.
+- The existing article editor + article APIs are untouched.
+- TODO (admin browser testing): pick a real PDF (e.g. an apologetics
+  article or research paper), verify text extraction, verify cover
+  image rendered, verify Bible refs detected, verify the editor opens
+  with the new draft, verify Save Draft + Publish work as usual.
