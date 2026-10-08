@@ -1,47 +1,28 @@
 import type { Metadata } from "next";
 import { PrismaClient } from "@prisma/client";
 import PublicPageLayout from "@/components/crosscrafted/PublicPageLayout";
+import MarkdownRenderer from "@/components/crosscrafted/MarkdownRenderer";
 import Link from "next/link";
 import { ArrowLeft, BookOpen, Calendar, Share2 } from "lucide-react";
 import { notFound } from "next/navigation";
-import ReactMarkdown from "react-markdown";
 
 const db = new PrismaClient();
 export const dynamic = "force-dynamic";
 
-// ─── URL sanitizer ─────────────────────────────────────────────────────────
-// Blocks dangerous protocols (javascript:, data:, vbscript:, file:) in
-// markdown links + images. Only allows http:, https:, mailto:, tel:, and
-// relative URLs (starting with / or #). This is defense-in-depth on top of
-// react-markdown's built-in filtering — we never trust author-controlled
-// URLs to be safe.
+// ─── URL sanitizer (kept for the cover image <img> tag) ────────────────────
 function safeUrl(url: string | undefined): string | null {
   if (!url || typeof url !== "string") return null;
   const trimmed = url.trim();
   if (!trimmed) return null;
-  // Relative URLs (anchor links, internal paths) are safe.
   if (trimmed.startsWith("/") || trimmed.startsWith("#")) return trimmed;
-  // Allow only http(s), mailto, tel.
   if (/^https?:\/\//i.test(trimmed) || /^mailto:/i.test(trimmed) || /^tel:/i.test(trimmed)) {
     return trimmed;
   }
-  // Block everything else (javascript:, data:, vbscript:, file:, etc.)
   return null;
 }
 
-// Safe JSON parser for array fields — handles null/undefined/invalid gracefully.
-// Used for bibleRefs, sources, relatedIds (TEXT columns that store JSON arrays).
-// In production, these columns might be NULL if the table was created before
-// the @default("[]") was added, or contain invalid/legacy values.
-//
-// This function verifies the parsed value is actually an array — not just that
-// JSON.parse didn't throw. Handles edge cases:
-//   null / undefined → []
-//   "" (empty string) → []
-//   "null" (JSON null) → []  (JSON.parse("null") returns null, which is NOT an array)
-//   '{"foo":"bar"}' (object) → []  (objects are not arrays)
-//   '"hello"' (string) → []  (strings are not arrays)
-//   "[1,2,3]" (valid array) → [1,2,3]
+// Safe JSON parser for array fields — verifies the parsed value is actually
+// an array (not just that JSON.parse didn't throw).
 function safeParseArray<T>(value: string | null | undefined, fallback: T[]): T[] {
   if (!value) return fallback;
   try {
@@ -191,62 +172,13 @@ export default async function ApologeticsArticlePage({ params }: { params: Promi
           </div>
         )}
 
-        {/* Article body — rendered as markdown */}
+        {/* Article body — rendered as markdown via client component */}
+        {/* react-markdown v10 uses useState/useEffect internally, so it
+            MUST be rendered in a client component. This wrapper is marked
+            "use client" and includes the safeUrl() sanitizer for links
+            and images. */}
         <div className="apologetics-article mb-8">
-          <ReactMarkdown
-            components={{
-              // Headings
-              h1: ({ children }) => <h1 className="text-2xl font-black text-white mt-8 mb-3">{children}</h1>,
-              h2: ({ children }) => <h2 className="text-xl font-extrabold text-white mt-7 mb-3 pb-1 border-b border-white/[0.06]">{children}</h2>,
-              h3: ({ children }) => <h3 className="text-base font-bold text-white mt-5 mb-2">{children}</h3>,
-              h4: ({ children }) => <h4 className="text-sm font-bold text-white mt-4 mb-2">{children}</h4>,
-              // Paragraphs
-              p: ({ children }) => <p className="text-[15px] text-[#A09DB1] leading-[1.75] mb-4">{children}</p>,
-              // Bold + italic
-              strong: ({ children }) => <strong className="font-bold text-white">{children}</strong>,
-              em: ({ children }) => <em className="italic text-[#C4BFD1]">{children}</em>,
-              // Lists
-              ul: ({ children }) => <ul className="list-disc list-outside pl-6 mb-4 space-y-1.5 text-[15px] text-[#A09DB1] leading-[1.75]">{children}</ul>,
-              ol: ({ children }) => <ol className="list-decimal list-outside pl-6 mb-4 space-y-1.5 text-[15px] text-[#A09DB1] leading-[1.75]">{children}</ol>,
-              li: ({ children }) => <li>{children}</li>,
-              // Blockquote — used for Bible verses + key quotes
-              blockquote: ({ children }) => (
-                <blockquote className="border-l-2 border-[#7C3AED] bg-[#7C3AED]/5 pl-4 pr-3 py-2 my-4 rounded-r-lg">
-                  <div className="text-[15px] text-[#C4BFD1] italic leading-[1.75]">{children}</div>
-                </blockquote>
-              ),
-              // Links — sanitized to block javascript:/data:/vbscript: URLs
-              a: ({ href, children }) => {
-                const safeHref = safeUrl(href);
-                if (!safeHref) {
-                  // Dangerous URL — render as plain text, no clickable link
-                  return <span className="text-[#94A3B8]">{children}</span>;
-                }
-                return (
-                  <a href={safeHref} target="_blank" rel="noopener noreferrer" className="text-[#38BDF8] underline decoration-[#38BDF8]/40 underline-offset-2 hover:decoration-[#38BDF8] transition-all">
-                    {children}
-                  </a>
-                );
-              },
-              // Images — sanitized to block javascript:/data: URLs (data: URLs in
-              // <img src> can be used for tracking/fingerprinting; only allow http(s))
-              img: ({ src, alt }) => {
-                const safeSrc = safeUrl(src as string);
-                if (!safeSrc) return null; // dangerous image URL — don't render
-                return (
-                  <img src={safeSrc} alt={alt || ""} className="w-full rounded-xl my-4 max-h-96 object-cover" />
-                );
-              },
-              // Horizontal rule
-              hr: () => <hr className="border-white/[0.08] my-6" />,
-              // Code
-              code: ({ children }) => <code className="bg-white/[0.06] text-[#A78BFA] px-1.5 py-0.5 rounded text-[13px] font-mono">{children}</code>,
-              // Inline code vs block
-              pre: ({ children }) => <pre className="bg-[#0f0f1a] border border-white/[0.06] rounded-xl p-4 overflow-x-auto mb-4 text-[13px]">{children}</pre>,
-            }}
-          >
-            {article.content}
-          </ReactMarkdown>
+          <MarkdownRenderer content={article.content} />
         </div>
 
         {/* Bible References */}
