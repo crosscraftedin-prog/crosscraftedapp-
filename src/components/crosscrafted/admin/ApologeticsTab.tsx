@@ -255,15 +255,12 @@ export default function ApologeticsTab() {
   };
 
   const handleSaved = () => {
-    // Close the editor + refresh the list after a successful save.
-    // The spec requires: "modal closes, article list refreshes" after
-    // both Save Draft and Publish.
-    closeEditor();
+    // Refresh the article list. The modal is already closed by onClose()
+    // called directly from save() — this just refreshes the list.
     load();
   };
 
   const handleDeleted = () => {
-    closeEditor();
     load();
   };
 
@@ -923,13 +920,6 @@ function ApologeticsEditorModal({
       }
       const data = (await res.json()) as { article: KoinoArticle };
       const updated = toFormState(data.article);
-      // Sync form + reset snapshot so the close guard no longer fires.
-      setForm(updated);
-      snapshotRef.current = updated;
-      setActiveArticleId(data.article.id);
-      setCurrentSlug(data.article.slug);
-      setCurrentStatus(data.article.status);
-      setConfirmDelete(false);
 
       // Toast messaging per the spec.
       if (opts?.successToast) {
@@ -942,8 +932,17 @@ function ApologeticsEditorModal({
         toast.success("Draft saved");
       }
 
-      // Refresh the parent list (does NOT close the editor).
+      // Close the editor FIRST, then refresh the list.
+      // We call onClose() directly (not onSaved()) to ensure the modal
+      // unmounts immediately. Then we call onSaved() to refresh the list.
+      // The order matters: onClose() sets editing=null in the parent,
+      // which unmounts this modal. onSaved() then refreshes the article list.
+      // We do NOT update modal state (setForm, setSaving, etc.) after this
+      // point — the modal is closing, so those updates would be on an
+      // unmounted component.
+      onClose();
       onSaved();
+      return; // Skip the finally block — modal is closing
     } catch (e: any) {
       toast.error(e?.message || "Failed to save article");
       // Do NOT update the snapshot — leave hasUnsavedChanges true so the
@@ -965,7 +964,9 @@ function ApologeticsEditorModal({
         throw new Error(data?.error || `HTTP ${res.status}`);
       }
       toast.success("Article deleted");
+      onClose();
       onDeleted();
+      return;
     } catch (e: any) {
       toast.error(e?.message || "Failed to delete article");
     } finally {
