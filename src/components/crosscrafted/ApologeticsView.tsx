@@ -8,18 +8,16 @@ import {
   Share2,
   X,
   Search,
-  Sparkles,
   Eye,
   Plus,
   CheckCircle2,
   HelpCircle,
-  Send,
   BookOpen,
   ShieldCheck,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  APOLOGETICS_QUESTIONS,
   APOLOGETICS_TOPICS,
   CHURCH_GRADIENTS,
   type ApologeticsPost,
@@ -27,6 +25,7 @@ import {
   type ApologeticsAnswer,
 } from "@/lib/crosscrafted-data";
 import { useTranslation } from "@/lib/i18n/LanguageContext";
+import { useSupabaseUser } from "@/lib/supabase/use-user";
 
 // ─── Helper: map admin category label → APOLOGETICS_TOPICS id ──────────────
 // The admin editor uses category labels like "God & Existence", "Jesus Christ",
@@ -48,6 +47,7 @@ function mapCategoryToTopicId(category: string | null | undefined): string {
 
 export default function ApologeticsView() {
   const t = useTranslation();
+  const { isAuthenticated } = useSupabaseUser();
   const [activeTab, setActiveTab] = useState<"articles" | "qa">("articles");
   // ─── PUBLISHED ARTICLES (loaded from real DB via /api/articles) ───
   // The APOLOGETICS_POSTS mock array is NO LONGER used — all articles come
@@ -56,7 +56,18 @@ export default function ApologeticsView() {
   const [posts, setPosts] = useState<ApologeticsPost[]>([]);
   const [postsLoading, setPostsLoading] = useState(true);
   const [postsError, setPostsError] = useState<string | null>(null);
-  const [questions, setQuestions] = useState<ApologeticsQuestion[]>(APOLOGETICS_QUESTIONS);
+
+  // ─── Q&A (loaded from real DB via /api/questions — answered only) ───
+  // Public API returns ONLY status=answered questions. New user submissions
+  // start as status=new and are hidden until an admin answers them
+  // (server-enforced). The `dbQuestions` snapshot is used for the tab badge
+  // count so it doesn't flicker while client-side filtering.
+  const [dbQuestions, setDbQuestions] = useState<ApologeticsQuestion[]>([]);
+  const [questions, setQuestions] = useState<ApologeticsQuestion[]>([]);
+  const [questionsLoading, setQuestionsLoading] = useState(true);
+  const [questionsError, setQuestionsError] = useState<string | null>(null);
+  const [submittingQuestion, setSubmittingQuestion] = useState(false);
+
   const [liked, setLiked] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [filterTopic, setFilterTopic] = useState("");
@@ -64,7 +75,6 @@ export default function ApologeticsView() {
   const [openQuestion, setOpenQuestion] = useState<ApologeticsQuestion | null>(null);
   const [showAskModal, setShowAskModal] = useState(false);
   const [askForm, setAskForm] = useState({ title: "", body: "", topic: "", author: "" });
-  const [answerText, setAnswerText] = useState<Record<string, string>>({});
 
   // ─── Fetch published apologetics articles from the database ───
   // Public API returns ONLY status=published + contentType=APOLOGETICS
@@ -103,6 +113,60 @@ export default function ApologeticsView() {
 
   useEffect(() => {
     loadPosts();
+  }, []);
+
+  // ─── Fetch answered questions from the database ───
+  // Public API returns ONLY status=answered questions. Maps DB fields to the
+  // ApologeticsQuestion shape. The admin's answer (stored in adminNotes) is
+  // rendered as a single accepted answer authored by "Koino".
+  const loadQuestions = async () => {
+    setQuestionsLoading(true);
+    setQuestionsError(null);
+    try {
+      const res = await fetch("/api/questions", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load questions");
+      const mapped: ApologeticsQuestion[] = (data.questions || []).map((q: any) => {
+        const fullQuestion: string = q.question || "";
+        const firstLine = fullQuestion.split("\n")[0]?.trim() || "";
+        const title = (firstLine.slice(0, 100) || fullQuestion.slice(0, 100)) || "Untitled question";
+        const dateStr = (q.createdAt || "").split("T")[0] || new Date().toISOString().split("T")[0];
+        const answers: ApologeticsAnswer[] = q.answer
+          ? [{
+              id: `${q.id}-a1`,
+              author: "Koino",
+              authorRole: "Admin" as const,
+              body: q.answer,
+              date: dateStr,
+              is_accepted: true,
+              likes: 0,
+            }]
+          : [];
+        return {
+          id: q.id,
+          title,
+          body: fullQuestion,
+          author: q.askerName || "Anonymous",
+          topic: q.category || "",
+          date: dateStr,
+          likes: 0,
+          answers,
+          status: q.status === "answered" ? "answered" : "open",
+        };
+      });
+      setDbQuestions(mapped);
+      setQuestions(mapped);
+    } catch (e: any) {
+      setQuestionsError(e.message || "Failed to load questions");
+      setQuestions([]);
+      setDbQuestions([]);
+    } finally {
+      setQuestionsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadQuestions();
   }, []);
 
   const filtered = useMemo(() => {
@@ -144,90 +208,44 @@ export default function ApologeticsView() {
     toast.success("Post link copied!");
   };
 
-  const handleAskQuestion = (e: React.FormEvent) => {
+  const handleAskQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!askForm.title.trim() || !askForm.body.trim()) {
       toast.error("Please enter both a title and question details");
       return;
     }
-    const newQ: ApologeticsQuestion = {
-      id: `qa${Date.now()}`,
-      title: askForm.title.trim(),
-      body: askForm.body.trim(),
-      author: askForm.author.trim() || "Anonymous",
-      topic: askForm.topic || "gods_existence",
-      date: new Date().toISOString().split("T")[0],
-      likes: 0,
-      answers: [],
-      status: "open",
-    };
-    setQuestions([newQ, ...questions]);
-    setAskForm({ title: "", body: "", topic: "", author: "" });
-    setShowAskModal(false);
-    toast.success("Question posted!", {
-      description: "Pastors and church leaders will be notified to answer.",
-    });
-  };
-
-  const handleAnswer = (questionId: string) => {
-    const text = (answerText[questionId] || "").trim();
-    if (!text) {
-      toast.error("Please write your answer");
-      return;
+    // The DB stores a single `question` field — combine title + body so the
+    // admin sees both the headline and the context when answering.
+    const questionText = `${askForm.title.trim()}\n\n${askForm.body.trim()}`;
+    setSubmittingQuestion(true);
+    try {
+      const res = await fetch("/api/questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: questionText,
+          askerName: askForm.author.trim() || undefined,
+          category: askForm.topic || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || `Failed to submit question (HTTP ${res.status})`);
+      }
+      toast.success("Question submitted successfully", {
+        description: "It will appear once answered by our team.",
+      });
+      setAskForm({ title: "", body: "", topic: "", author: "" });
+      setShowAskModal(false);
+      // Refresh — the new question won't appear in the public list (status=new)
+      // but this keeps the list + count in sync.
+      loadQuestions();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to submit question");
+      // Keep modal open + preserve form content so the user can retry.
+    } finally {
+      setSubmittingQuestion(false);
     }
-    const newAnswer: ApologeticsAnswer = {
-      id: `qa${questionId}a${Date.now()}`,
-      author: "You",
-      authorRole: "Member",
-      body: text,
-      date: new Date().toISOString().split("T")[0],
-      is_accepted: false,
-      likes: 0,
-    };
-    setQuestions((qs) =>
-      qs.map((q) =>
-        q.id === questionId
-          ? { ...q, answers: [...q.answers, newAnswer], status: "answered" }
-          : q
-      )
-    );
-    if (openQuestion?.id === questionId) {
-      setOpenQuestion((q) =>
-        q ? { ...q, answers: [...q.answers, newAnswer], status: "answered" } : q
-      );
-    }
-    setAnswerText((prev) => ({ ...prev, [questionId]: "" }));
-    toast.success("Answer posted!", {
-      description: "Thank you for sharing your insight.",
-    });
-  };
-
-  const acceptAnswer = (questionId: string, answerId: string) => {
-    setQuestions((qs) =>
-      qs.map((q) =>
-        q.id === questionId
-          ? {
-              ...q,
-              answers: q.answers.map((a) => ({ ...a, is_accepted: a.id === answerId })),
-              status: "answered",
-            }
-          : q
-      )
-    );
-    if (openQuestion?.id === questionId) {
-      setOpenQuestion((q) =>
-        q
-          ? {
-              ...q,
-              answers: q.answers.map((a) => ({ ...a, is_accepted: a.id === answerId })),
-              status: "answered",
-            }
-          : q
-      );
-    }
-    toast.success("Answer accepted!", {
-      description: "This will be marked as the best answer for the question.",
-    });
   };
 
   return (
@@ -265,11 +283,9 @@ export default function ApologeticsView() {
           }`}
         >
           <HelpCircle size={12} /> Q&amp;A
-          {questions.filter((q) => q.status === "open").length > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full bg-[#F59E0B]/20 text-[#F59E0B] text-[9px] font-bold">
-              {questions.filter((q) => q.status === "open").length}
-            </span>
-          )}
+          <span className="px-1.5 py-0.5 rounded-full bg-[#38BDF8]/15 text-[#38BDF8] text-[9px] font-bold tabular-nums">
+            {questionsLoading ? "…" : dbQuestions.length}
+          </span>
         </button>
       </div>
 
@@ -480,16 +496,69 @@ export default function ApologeticsView() {
                 <div>
                   <p className="text-sm font-bold text-white mb-1">Have a question about faith?</p>
                   <p className="text-[11px] text-[#A09DB1] leading-relaxed">
-                    Ask anything — pastors, church leaders, and verified admins will answer.
-                    Mark the best answer as accepted to help others.
+                    Ask anything — our team reviews every question and posts a thoughtful,
+                    biblically-grounded answer. Answered questions appear below.
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Questions List */}
-            <div className="space-y-3">
-              {filteredQuestions.map((q, i) => {
+            {/* Loading state */}
+            {questionsLoading && (
+              <div className="text-center py-12">
+                <div className="w-8 h-8 mx-auto rounded-full border-2 border-transparent border-t-[#38BDF8] animate-spin mb-3" />
+                <p className="text-xs text-[#94A3B8]">Loading questions…</p>
+              </div>
+            )}
+
+            {/* Error state */}
+            {!questionsLoading && questionsError && (
+              <div className="bg-[#EF4444]/8 border border-[#EF4444]/20 rounded-2xl p-5 text-center">
+                <p className="text-sm font-bold text-[#EF4444] mb-1">Failed to load questions</p>
+                <p className="text-xs text-[#A09DB1] mb-3">{questionsError}</p>
+                <button
+                  onClick={loadQuestions}
+                  className="px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold transition-all"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+
+            {/* Empty state — no answered questions yet */}
+            {!questionsLoading && !questionsError && questions.length === 0 && (
+              <div className="text-center py-12">
+                <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#38BDF8]/10 border border-[#38BDF8]/25 mb-3">
+                  <HelpCircle size={24} className="text-[#38BDF8]" />
+                </div>
+                <p className="text-sm font-bold text-white mb-1">No questions yet</p>
+                <p className="text-xs text-[#A09DB1] max-w-sm mx-auto mb-4">
+                  Be the first to ask! Your question will be reviewed and answered by our team.
+                </p>
+                {isAuthenticated ? (
+                  <button
+                    onClick={() => setShowAskModal(true)}
+                    className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white inline-flex items-center gap-1.5"
+                    style={{ background: "linear-gradient(135deg, #38BDF8, #A855F7)" }}
+                  >
+                    <Plus size={14} /> Ask a Question
+                  </button>
+                ) : (
+                  <a
+                    href="/login"
+                    className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white inline-flex items-center gap-1.5"
+                    style={{ background: "linear-gradient(135deg, #38BDF8, #A855F7)" }}
+                  >
+                    Sign in to ask
+                  </a>
+                )}
+              </div>
+            )}
+
+            {/* Questions List (only when loaded + has items) */}
+            {!questionsLoading && !questionsError && questions.length > 0 && (
+              <div className="space-y-3">
+                {filteredQuestions.map((q, i) => {
                 const topic = APOLOGETICS_TOPICS.find((t) => t.id === q.topic);
                 const hasLiked = liked.has(q.id);
                 return (
@@ -502,12 +571,14 @@ export default function ApologeticsView() {
                     className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4 cursor-pointer hover:border-white/[0.12] transition-all"
                   >
                     <div className="flex items-center gap-2 mb-2">
-                      <span
-                        className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
-                        style={{ backgroundColor: `${topic?.color}20`, color: topic?.color }}
-                      >
-                        {topic?.label}
-                      </span>
+                      {topic && (
+                        <span
+                          className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                          style={{ backgroundColor: `${topic.color}20`, color: topic.color }}
+                        >
+                          {topic.label}
+                        </span>
+                      )}
                       <span
                         className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                           q.status === "answered"
@@ -546,19 +617,14 @@ export default function ApologeticsView() {
                   </motion.div>
                 );
               })}
-            </div>
+              </div>
+            )}
 
-            {filteredQuestions.length === 0 && (
+            {/* No results after filtering */}
+            {!questionsLoading && !questionsError && questions.length > 0 && filteredQuestions.length === 0 && (
               <div className="text-center py-12">
-                <HelpCircle size={32} className="mx-auto text-[#475569] mb-2" />
-                <p className="text-sm text-[#475569] mb-3">No questions found.</p>
-                <button
-                  onClick={() => setShowAskModal(true)}
-                  className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white"
-                  style={{ background: "linear-gradient(135deg, #38BDF8, #A855F7)" }}
-                >
-                  Ask the First Question
-                </button>
+                <Search size={32} className="mx-auto text-[#475569] mb-2" />
+                <p className="text-sm text-[#475569]">No questions match your search.</p>
               </div>
             )}
           </motion.div>
@@ -711,72 +777,58 @@ export default function ApologeticsView() {
                   </div>
                 </div>
 
-                {/* Answers */}
+                {/* Answers — read-only display of the admin's answer */}
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-3">
                     {openQuestion.answers.length} {openQuestion.answers.length === 1 ? "Answer" : "Answers"}
                   </p>
-                  <div className="space-y-3">
-                    {openQuestion.answers.map((a) => (
-                      <div
-                        key={a.id}
-                        className={`rounded-xl p-3 border ${
-                          a.is_accepted
-                            ? "bg-[#22C55E]/8 border-[#22C55E]/30"
-                            : "bg-white/[0.03] border-white/[0.06]"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#A855F7] to-[#38BDF8] flex items-center justify-center text-[10px] font-bold text-white">
-                            {a.author.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                  {openQuestion.answers.length === 0 ? (
+                    <div className="rounded-xl p-4 border border-dashed border-white/[0.08] bg-white/[0.02] text-center">
+                      <p className="text-xs text-[#94A3B8]">
+                        This question hasn't been answered yet.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {openQuestion.answers.map((a) => (
+                        <div
+                          key={a.id}
+                          className={`rounded-xl p-3 border ${
+                            a.is_accepted
+                              ? "bg-[#22C55E]/8 border-[#22C55E]/30"
+                              : "bg-white/[0.03] border-white/[0.06]"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#A855F7] to-[#38BDF8] flex items-center justify-center text-[10px] font-bold text-white">
+                              {a.author.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-[11px] font-bold text-white flex items-center gap-1.5">
+                                {a.author}
+                                {a.is_accepted && (
+                                  <span className="flex items-center gap-0.5 text-[#22C55E] text-[9px] font-bold uppercase">
+                                    <CheckCircle2 size={10} /> Accepted
+                                  </span>
+                                )}
+                              </p>
+                              <p className="text-[9px] text-[#94A3B8]">
+                                {a.authorRole}{a.authorChurch ? ` · ${a.authorChurch}` : ""} · {a.date}
+                              </p>
+                            </div>
                           </div>
-                          <div className="flex-1">
-                            <p className="text-[11px] font-bold text-white flex items-center gap-1.5">
-                              {a.author}
-                              {a.is_accepted && (
-                                <span className="flex items-center gap-0.5 text-[#22C55E] text-[9px] font-bold uppercase">
-                                  <CheckCircle2 size={10} /> Accepted
-                                </span>
-                              )}
-                            </p>
-                            <p className="text-[9px] text-[#94A3B8]">
-                              {a.authorRole}{a.authorChurch ? ` · ${a.authorChurch}` : ""} · {a.date}
-                            </p>
-                          </div>
+                          <p className="text-[12px] text-[#A09DB1] leading-relaxed whitespace-pre-line">{a.body}</p>
                         </div>
-                        <p className="text-[12px] text-[#A09DB1] leading-relaxed">{a.body}</p>
-                        {!a.is_accepted && (
-                          <button
-                            onClick={() => acceptAnswer(openQuestion.id, a.id)}
-                            className="mt-2 text-[10px] font-bold text-[#22C55E] hover:underline"
-                          >
-                            ✓ Mark as accepted
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
 
-                  {/* Answer input */}
-                  <div className="mt-4 pt-3 border-t border-white/[0.06]">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8] mb-2">
-                      Your Answer
-                    </p>
-                    <textarea
-                      value={answerText[openQuestion.id] || ""}
-                      onChange={(e) => setAnswerText((prev) => ({ ...prev, [openQuestion.id]: e.target.value }))}
-                      placeholder="Share your insight with biblical and logical reasoning..."
-                      className="neo-input h-24 resize-none text-sm mb-2"
-                    />
-                    <button
-                      onClick={() => handleAnswer(openQuestion.id)}
-                      className="w-full py-2.5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2"
-                      style={{ background: "linear-gradient(135deg, #38BDF8, #A855F7)" }}
-                    >
-                      <Send size={14} /> Post Answer
-                    </button>
-                    <p className="text-[10px] text-[#64748B] mt-2 text-center">
-                      Note: In production, only verified pastors/admins can post official answers.
+                  {/* Admin-only answer notice — normal users cannot post answers */}
+                  <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-start gap-2">
+                    <ShieldCheck size={14} className="text-[#38BDF8] shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-[#64748B] leading-relaxed">
+                      Official answers are written by the Koino team. Your question is reviewed
+                      before an answer is posted here.
                     </p>
                   </div>
                 </div>
@@ -867,17 +919,25 @@ export default function ApologeticsView() {
                 <div className="flex gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={() => setShowAskModal(false)}
-                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-white/[0.04] text-[#94A3B8] hover:text-white border border-white/[0.06]"
+                    onClick={() => !submittingQuestion && setShowAskModal(false)}
+                    disabled={submittingQuestion}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-white/[0.04] text-[#94A3B8] hover:text-white border border-white/[0.06] disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white"
+                    disabled={submittingQuestion}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     style={{ background: "linear-gradient(135deg, #38BDF8, #A855F7)" }}
                   >
-                    Post Question
+                    {submittingQuestion ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" /> Submitting…
+                      </>
+                    ) : (
+                      "Post Question"
+                    )}
                   </button>
                 </div>
               </form>

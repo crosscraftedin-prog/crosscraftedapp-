@@ -65,6 +65,7 @@ import PartnerInquiriesTab from "@/components/crosscrafted/admin/PartnerInquirie
 import ContributorApplicationsTab from "@/components/crosscrafted/admin/ContributorApplicationsTab";
 import BlogTab from "@/components/crosscrafted/admin/BlogTab";
 import ApologeticsTab from "@/components/crosscrafted/admin/ApologeticsTab";
+import QuestionsTab from "@/components/crosscrafted/admin/QuestionsTab";
 
 type AdminTab =
   | "dashboard"
@@ -104,6 +105,42 @@ const TABS: { id: AdminTab; icon: typeof Shield; labelKey: string }[] = [
   { id: "analytics",    icon: BarChart3,         labelKey: "admin.tab.analytics" },
   { id: "bible-comics", icon: BookOpen,          labelKey: "admin.tab.bibleComics" },
 ];
+
+// ─── Apologetics admin wrapper ─────────────────────────────────────────────
+// Sub-tab switcher between the Apologetics Article CMS (existing) and the
+// Q&A moderation interface (new). The article CMS is unchanged — this wrapper
+// just adds a toggle above it.
+function ApologeticsAdminWrapper() {
+  const [subTab, setSubTab] = useState<"articles" | "qa">("articles");
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-1 p-1 bg-white/[0.04] border border-white/[0.06] rounded-xl w-fit">
+        <button
+          onClick={() => setSubTab("articles")}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+            subTab === "articles"
+              ? "bg-[#7C3AED] text-white"
+              : "text-[#94A3B8] hover:text-white"
+          }`}
+        >
+          <FileText size={12} /> Articles
+        </button>
+        <button
+          onClick={() => setSubTab("qa")}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+            subTab === "qa"
+              ? "bg-[#7C3AED] text-white"
+              : "text-[#94A3B8] hover:text-white"
+          }`}
+        >
+          <HelpCircle size={12} /> Q&amp;A
+        </button>
+      </div>
+      {subTab === "articles" && <ApologeticsTab />}
+      {subTab === "qa" && <QuestionsTab />}
+    </div>
+  );
+}
 
 export default function AdminView() {
   const { user, isAuthenticated, isAdmin, loading } = useSupabaseUser();
@@ -232,7 +269,7 @@ export default function AdminView() {
           {activeTab === "events" && <EventsTab />}
           {activeTab === "marketplace" && <MarketplaceTab />}
           {activeTab === "prayers" && <PrayersTab />}
-          {activeTab === "apologetics" && <ApologeticsTab />}
+          {activeTab === "apologetics" && <ApologeticsAdminWrapper />}
           {activeTab === "competitions" && <CompetitionsTab />}
           {activeTab === "announcements" && <AnnouncementsTab />}
           {activeTab === "redemptions" && <RedemptionsTab />}

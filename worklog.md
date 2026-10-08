@@ -1560,3 +1560,125 @@ Stage Summary:
   `category · difficulty · by AuthorName · 2h ago` ordering.
 - TypeScript: zero errors in `src/` after `npx tsc --noEmit`. Only the
   pre-existing errors in `examples/`, `scripts/`, `skills/` remain.
+
+---
+Task ID: apologetics-qa-fix
+Agent: general-purpose (Apologetics Q&A DB integration + Admin Q&A tab)
+Task: Wire Q&A to real DB + build admin Q&A management interface
+
+Work Log:
+- Read the 5 API routes (/api/questions GET/POST, /api/admin/questions GET/POST,
+  /api/admin/questions/[id] DELETE) to confirm exact request/response shapes.
+- Read ApologeticsView.tsx (890 lines) to understand the existing Q&A UI:
+  it was wired to the APOLOGETICS_QUESTIONS mock array + a fake local-state
+  handleAskQuestion / handleAnswer / acceptAnswer. The article half was
+  already DB-backed via /api/articles — only the Q&A half was mock.
+- Read admin/ApologeticsTab.tsx for the dark-theme styling pattern
+  (FilterChip, StatusBadge, Field, modal `fixed inset-0 z-50 flex
+  items-end sm:items-center`, `bg-[#1C1929]`, `neo-input`, `bg-[#7C3AED]`
+  primary actions) so the new admin Q&A tab matches.
+- Read AdminView.tsx to find the exact insertion point for the new
+  sub-tab wrapper (activeTab === "apologetics" renders <ApologeticsTab />).
+
+File 1 — Modified `src/components/crosscrafted/ApologeticsView.tsx`:
+  - Removed the `APOLOGETICS_QUESTIONS` import (kept types + APOLOGETICS_TOPICS
+    + CHURCH_GRADIENTS). Removed unused `Send` icon, dropped pre-existing
+    unused `Sparkles` import, added `Loader2` + `useSupabaseUser` imports.
+  - Replaced the `questions` state seed (was `APOLOGETICS_QUESTIONS`) with
+    an empty `useState<ApologeticsQuestion[]>([])`. Added `dbQuestions`,
+    `questionsLoading`, `questionsError`, and `submittingQuestion` state.
+  - Added `loadQuestions()` — fetches GET /api/questions with
+    `cache: "no-store"`, maps each DB question into the local
+    ApologeticsQuestion shape (title = first line ≤100 chars, body = full
+    question text, answer wrapped as a single `is_accepted` Admin answer
+    authored by "Koino"). Sets both `dbQuestions` (for the badge count)
+    and `questions` (for the filtered list). Called on mount.
+  - Replaced `handleAskQuestion` — now POSTs to /api/questions with
+    `{ question: title + "\n\n" + body, askerName, category }`. On success:
+    toast "Question submitted successfully" + description "It will appear
+    once answered by our team.", clears the form, closes the modal, and
+    refreshes the list. On error: toasts the actual server message and
+    keeps the modal open with the form preserved for retry. Submit button
+    shows a spinner + "Submitting…" while in-flight.
+  - Removed `handleAnswer`, `acceptAnswer`, and the `answerText` state
+    entirely — normal users can no longer post answers (server-enforced).
+  - Updated the Q&A tab badge to read from `dbQuestions.length` (shows
+    `…` while loading). Replaced the old "open" status badge color with
+    a neutral answered-count badge.
+  - Added Q&A loading / error / empty / no-results states. Empty state
+    shows "Ask a Question" button when authenticated, otherwise a
+    "Sign in to ask" link.
+  - Rewrote the question detail modal's Answers section: kept the read-only
+    display of the admin's accepted answer, added a no-answers placeholder,
+    and removed the "Your Answer" textarea + Post Answer button +
+    acceptAnswer link. Replaced the note with a ShieldCheck notice
+    explaining official answers are written by the Koino team.
+
+File 2 — Created `src/components/crosscrafted/admin/QuestionsTab.tsx` (~600 lines):
+  - New admin Q&A management component, same dark theme + class names as
+    ApologeticsTab.tsx. Loads GET /api/admin/questions with
+    `cache: "no-store"`.
+  - Filter chips: All / New / Answered / Archived with live counts pulled
+    from the API `counts` object. Horizontally scrollable on mobile.
+  - Client-side search across question text, asker name, and asker email.
+  - Question cards show the derived title (line-clamp-2), full question
+    body (line-clamp-2), category label, status badge, "by {asker}",
+    relative timestamp, and an "Answered" / "No answer" indicator.
+  - Detail modal (QuestionDetailModal) shows the full question, asker
+    name + email + date + category, current answer (read-only), an
+    answer textarea (admin writes/edits), and action buttons:
+    Save Answer (POST action=answer), Close (POST action=close),
+    Reopen (POST action=reopen), Delete (inline confirm → DELETE
+    /api/admin/questions/[id]). All buttons show spinner states and
+    toast feedback. Modal stays open after a moderation action so the
+    admin can iterate (e.g. answer → reopen → answer again); the list
+    refreshes in the background.
+  - Create modal (CreateQAModal) — question textarea (required),
+    answer textarea (optional — if empty, status=new; if provided,
+    status=answered), category select using APOLOGETICS_TOPICS,
+    asker name (defaults to "Koino"). POSTs to /api/admin/questions
+    with the `{ question, answer, category, askerName }` admin-create
+    payload. On success: toast "Q&A created successfully", close modal,
+    refresh list. On error: keeps modal open with form preserved.
+
+File 3 — Modified `src/components/crosscrafted/AdminView.tsx`:
+  - Added `import QuestionsTab from "@/components/crosscrafted/admin/QuestionsTab";`
+    next to the existing ApologeticsTab import.
+  - Added an `ApologeticsAdminWrapper` component (between the TABS const
+    and the default export) that renders a small `[ Articles | Q&A ]`
+    sub-tab switcher (`bg-[#7C3AED]` for the active button) above either
+    `<ApologeticsTab />` or `<QuestionsTab />`. The ApologeticsTab
+    component itself is untouched.
+  - Replaced `{activeTab === "apologetics" && <ApologeticsTab />}`
+    with `{activeTab === "apologetics" && <ApologeticsAdminWrapper />}`.
+    `useState` was already imported. `HelpCircle` and `FileText` icons
+    were already imported.
+
+TypeScript: `npx tsc --noEmit --project tsconfig.json` passes with
+zero errors in the three modified files (the only remaining errors are
+pre-existing in unrelated `examples/`, `scripts/`, and `skills/`
+directories — socket.io-client / socket.io / re module imports and an
+image-edit type mismatch — none of which this task touched).
+
+ESLint: 0 errors, 0 new warnings in the three modified files. The 2
+pre-existing warnings in AdminView.tsx at lines 776 and 1104 are
+"Unused eslint-disable directive" notes in the unrelated ChurchesTab
+and EventsTab code, not from this change.
+
+Stage Summary:
+- Public Q&A tab is now fully DB-backed: answered questions load from
+  GET /api/questions; new submissions POST to /api/questions with
+  status=new (server-enforced) so they only appear after an admin
+  answers them.
+- Normal users can no longer post or accept answers — that capability
+  is removed from the UI and was already blocked server-side.
+- Admins get a new Q&A management tab accessible via the Apologetics
+  admin section's `[ Articles | Q&A ]` toggle. They can review every
+  question regardless of status, write/save answers, close/reopen,
+  permanently delete (with confirm), and pre-populate the Q&A by
+  creating new entries directly.
+- The Apologetics Article CMS (admin/ApologeticsTab.tsx) is untouched
+  and remains exactly as it was — the wrapper just adds a toggle above
+  it.
+- No DB migrations, no API route changes, no auth/security changes —
+  this task was purely frontend wiring.
