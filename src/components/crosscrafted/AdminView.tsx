@@ -505,8 +505,6 @@ function MembersTab() {
 
   return (
     <div className="space-y-4">
-      <PreviewModeBanner section="Members" />
-
       {/* Stats */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -700,8 +698,8 @@ function MembersTab() {
                         <button
                           key={s}
                           onClick={() => updateMember({ accountStatus: s })}
-                          disabled={saving || memberDetail.accountStatus === s}
-                          className={`flex-1 py-2 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${memberDetail.accountStatus === s ? "bg-[#7C3AED] text-white" : "bg-white/[0.04] text-[#94A3B8] hover:text-white"}`}
+                          disabled={saving}
+                          className={`flex-1 py-2 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${memberDetail.accountStatus === s ? "bg-[#7C3AED] text-white" : "bg-white/[0.04] text-[#94A3B8] hover:text-white hover:bg-white/[0.08]"}`}
                         >
                           {s}
                         </button>

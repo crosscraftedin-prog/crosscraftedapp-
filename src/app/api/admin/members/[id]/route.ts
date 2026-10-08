@@ -120,9 +120,14 @@ export async function PATCH(
       where: { id },
       data,
       select: {
-        id: true, email: true, name: true, username: true, image: true,
-        verified: true, verifiedAt: true, contributorType: true, permissions: true,
+        id: true, email: true, name: true, username: true, image: true, role: true,
+        dateOfBirth: true, gender: true, state: true, city: true,
+        mobileNumber: true, mobileVerified: true, faithStatus: true, faithJourney: true,
+        profileCompleted: true, signupMethod: true, createdAt: true, updatedAt: true,
         accountStatus: true, moderationReason: true,
+        verified: true, verifiedAt: true, verifiedBy: true,
+        contributorType: true, permissions: true,
+        totalPoints: true,
       },
     });
 
