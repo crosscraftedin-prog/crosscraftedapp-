@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
     const where = status && validStatuses.includes(status) ? { status } : {};
 
     let questions: any[] = [];
-    let counts = { all: 0, new: 0, answered: 0, archived: 0 };
+    let counts = { all: 0, new: 0, in_review: 0, answered: 0, turned_into_article: 0, archived: 0 };
 
     try {
       questions = await db.userQuestion.findMany({
@@ -70,7 +70,9 @@ export async function GET(req: NextRequest) {
       counts = {
         all: await db.userQuestion.count(),
         new: await db.userQuestion.count({ where: { status: "new" } }),
+        in_review: await db.userQuestion.count({ where: { status: "in_review" } }),
         answered: await db.userQuestion.count({ where: { status: "answered" } }),
+        turned_into_article: await db.userQuestion.count({ where: { status: "turned_into_article" } }),
         archived: await db.userQuestion.count({ where: { status: "archived" } }),
       };
     } catch (dbError: any) {
@@ -113,7 +115,7 @@ export async function GET(req: NextRequest) {
       detail: error?.message || String(error),
       code: error?.code,
       questions: [],
-      counts: { all: 0, new: 0, answered: 0, archived: 0 },
+      counts: { all: 0, new: 0, in_review: 0, answered: 0, turned_into_article: 0, archived: 0 },
     }, { status: 500 });
   }
 }
@@ -186,7 +188,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing id or action" }, { status: 400 });
     }
 
-    const validActions = ["answer", "close", "reopen", "review"];
+    const validActions = ["answer", "close", "reopen", "review", "turn_into_article"];
     if (!validActions.includes(action)) {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
@@ -196,6 +198,80 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Question not found" }, { status: 404 });
     }
 
+    // ─── Turn Into Article ──────────────────────────────────────────
+    // Creates a new KoinoArticle with contentType=APOLOGETICS, status=draft,
+    // using the question as the title + starting content. Links the
+    // UserQuestion.articleId to the new article + sets status=turned_into_article.
+    // The article is NOT automatically published — admin must review/edit/publish.
+    if (action === "turn_into_article") {
+      // If already turned into an article, return the existing articleId
+      if (existing.articleId) {
+        return NextResponse.json({
+          success: true,
+          articleId: existing.articleId,
+          message: "This question was already turned into an article.",
+        });
+      }
+
+      // Generate a unique slug from the question text (first 80 chars)
+      const slugBase = (existing.question.slice(0, 80) || "apologetics-question")
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, "")
+        .replace(/[\s_-]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 80) || "apologetics-question";
+
+      // De-duplicate slug
+      let slug = slugBase;
+      let n = 2;
+      while (n < 22) {
+        const clash = await db.koinoArticle.findUnique({
+          where: { slug },
+          select: { id: true },
+        });
+        if (!clash) break;
+        slug = `${slugBase}-${n}`;
+        n += 1;
+      }
+
+      // Create the article — DRAFT, not published
+      const article = await db.koinoArticle.create({
+        data: {
+          title: existing.question.slice(0, 300) || "Apologetics Question",
+          slug,
+          contentType: "APOLOGETICS",
+          category: existing.category,
+          excerpt: `A reader asked: "${existing.question.slice(0, 200)}..."`,
+          content: `## Question\n\n${existing.question}\n\n## Answer\n\n_Write your answer here..._`,
+          authorName: "Koino",
+          status: "draft", // CRITICAL: not auto-published
+          reviewedBy: auth.user.id,
+          reviewedAt: new Date(),
+        },
+      });
+
+      // Link the question to the article + update status
+      await db.userQuestion.update({
+        where: { id },
+        data: {
+          status: "turned_into_article",
+          articleId: article.id,
+        },
+      });
+
+      console.log(`[api/admin/questions POST] Question ${id} → Article ${article.id} (draft, by ${auth.user.email})`);
+
+      try { revalidatePath("/", "layout"); } catch {}
+
+      return NextResponse.json({
+        success: true,
+        articleId: article.id,
+        articleSlug: article.slug,
+        message: "Question turned into a draft article. Edit and publish it from the Articles tab.",
+      });
+    }
+
+    // ─── Other moderation actions (answer/close/reopen/review) ──────
     let newStatus = existing.status;
     let newAdminNotes = existing.adminNotes;
 

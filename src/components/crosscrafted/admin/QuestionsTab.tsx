@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   AlertCircle,
   MessageCircle,
+  FileText,
 } from "lucide-react";
 import { APOLOGETICS_TOPICS } from "@/lib/crosscrafted-data";
 
@@ -39,11 +40,13 @@ type AdminQuestion = {
 type Counts = {
   all: number;
   new: number;
+  in_review: number;
   answered: number;
+  turned_into_article: number;
   archived: number;
 };
 
-type StatusFilter = "all" | "new" | "answered" | "archived";
+type StatusFilter = "all" | "new" | "in_review" | "answered" | "turned_into_article" | "archived";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -104,7 +107,7 @@ function topicLabel(categoryId: string): string | null {
 
 export default function QuestionsTab() {
   const [questions, setQuestions] = useState<AdminQuestion[]>([]);
-  const [counts, setCounts] = useState<Counts>({ all: 0, new: 0, answered: 0, archived: 0 });
+  const [counts, setCounts] = useState<Counts>({ all: 0, new: 0, in_review: 0, answered: 0, turned_into_article: 0, archived: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>("all");
@@ -209,11 +212,25 @@ export default function QuestionsTab() {
           color="#F59E0B"
         />
         <FilterChip
+          active={filter === "in_review"}
+          onClick={() => setFilter("in_review")}
+          label="In Review"
+          count={counts.in_review}
+          color="#3B82F6"
+        />
+        <FilterChip
           active={filter === "answered"}
           onClick={() => setFilter("answered")}
           label="Answered"
           count={counts.answered}
           color="#22C55E"
+        />
+        <FilterChip
+          active={filter === "turned_into_article"}
+          onClick={() => setFilter("turned_into_article")}
+          label="Turned Into Article"
+          count={counts.turned_into_article}
+          color="#A855F7"
         />
         <FilterChip
           active={filter === "archived"}
@@ -429,6 +446,7 @@ function QuestionDetailModal({
   const [saving, setSaving] = useState(false);
   const [closing, setClosing] = useState(false);
   const [reopening, setReopening] = useState(false);
+  const [turning, setTurning] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -512,6 +530,35 @@ function QuestionDetailModal({
       toast.error(e?.message || "Failed to reopen question");
     } finally {
       setReopening(false);
+    }
+  };
+
+  // ─── Turn Into Article ───
+  // Creates a KoinoArticle (contentType=APOLOGETICS, status=draft) from the
+  // question, links UserQuestion.articleId, sets status=turned_into_article.
+  // The article is NOT auto-published — admin edits + publishes from Articles tab.
+  const handleTurnIntoArticle = async () => {
+    if (!confirm("Turn this question into a draft Apologetics article? You'll be able to edit and publish it from the Articles tab.")) return;
+    setTurning(true);
+    try {
+      const res = await fetch("/api/admin/questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: question.id, action: "turn_into_article" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+      toast.success("Turned into a draft article!", {
+        description: "Edit and publish it from the Articles tab.",
+      });
+      onMutated();
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to turn question into article");
+    } finally {
+      setTurning(false);
     }
   };
 
@@ -677,6 +724,34 @@ function QuestionDetailModal({
                 )}
                 Reopen
               </button>
+            )}
+
+            {/* Turn Into Article — only show if not already turned into an article */}
+            {!question.articleId && question.status !== "turned_into_article" && (
+              <button
+                onClick={handleTurnIntoArticle}
+                disabled={turning || saving || deleting}
+                className="bg-[#A855F7]/10 hover:bg-[#A855F7]/20 border border-[#A855F7]/30 text-[#A855F7] text-xs font-bold rounded-xl px-3 py-2 flex items-center gap-1.5 transition-all disabled:opacity-50"
+              >
+                {turning ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <FileText size={12} />
+                )}
+                Turn Into Article
+              </button>
+            )}
+
+            {/* If already turned into an article, show a link to it */}
+            {question.articleId && (
+              <a
+                href={`/apologetics`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-[#A855F7]/10 border border-[#A855F7]/30 text-[#A855F7] text-xs font-bold rounded-xl px-3 py-2 flex items-center gap-1.5 transition-all"
+              >
+                <FileText size={12} /> Article Created
+              </a>
             )}
 
             <div className="ml-auto">
