@@ -3,14 +3,9 @@ import { PrismaClient } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth-server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
-import { createRequire } from "module";
 import sharp from "sharp";
 
 const db = new PrismaClient();
-
-// createRequire lets us use require.resolve inside an ESM module so we can
-// point pdfjs-dist's worker at the correct absolute path on disk.
-const nodeRequire = createRequire(import.meta.url);
 
 // ─── Constants ────────────────────────────────────────────────────────────
 
@@ -18,8 +13,6 @@ const MAX_PDF_SIZE = 20 * 1024 * 1024; // 20 MB
 const BUCKET_NAME = "believ-comic-artwork";
 
 // ─── Admin auth helper ────────────────────────────────────────────────────
-// Mirrors the pattern in /api/admin/articles/route.ts. Returns 401 (not
-// signed in) vs 403 (signed in but not admin) so the client can distinguish.
 async function requireAdmin(): Promise<
   | { user: NonNullable<Awaited<ReturnType<typeof getAuthUser>>>; response: null }
   | { user: null; response: NextResponse }
@@ -42,10 +35,6 @@ async function requireAdmin(): Promise<
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
-// Slugify a title into a URL-safe slug. Lowercase, hyphen-separated, ASCII.
-// Inlined (not imported from /api/admin/articles/route.ts) because Next.js
-// route files are endpoints, not regular modules — importing from them is
-// fragile under Turbopack.
 function slugify(input: string): string {
   return input
     .toString()
@@ -57,8 +46,6 @@ function slugify(input: string): string {
     .slice(0, 80);
 }
 
-// Generate a unique slug for a KoinoArticle. If the base slug is taken,
-// append `-2`, `-3`, etc. Scoped to KoinoArticle (not BlogPost).
 async function generateUniqueSlug(base: string): Promise<string> {
   const root = base || "article";
   let candidate = root;
@@ -76,13 +63,6 @@ async function generateUniqueSlug(base: string): Promise<string> {
 }
 
 // ─── Bible reference detection ────────────────────────────────────────────
-// Matches patterns like:
-//   John 3:16
-//   1 Cor 15:3-4
-//   Romans 1:20
-//   1 John 4:8
-//   Genesis 1:1
-// Captures the full reference (book + chapter:verse[-verse]) and de-dupes.
 const BIBLE_BOOKS = [
   "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy",
   "Joshua", "Judges", "Ruth", "Samuel", "Kings", "Chronicles", "Ezra",
@@ -96,8 +76,6 @@ const BIBLE_BOOKS = [
   "Revelation",
 ];
 
-// Build a regex that matches:
-//   (optional 1/2/3 prefix + space) + (book name) + (space) + (chapter[:verse[-verse]])
 const BIBLE_REF_REGEX = new RegExp(
   `\\b(?:[1-3]\\s)?(?:${BIBLE_BOOKS.join("|")})\\s+\\d+(?::\\d+(?:-\\d+)?)?`,
   "gi"
@@ -105,7 +83,6 @@ const BIBLE_REF_REGEX = new RegExp(
 
 function detectBibleRefs(text: string): string[] {
   const matches = text.match(BIBLE_REF_REGEX) || [];
-  // Normalize whitespace (collapse "1  Cor" → "1 Cor") and de-dupe case-insensitively.
   const seen = new Set<string>();
   const result: string[] = [];
   for (const raw of matches) {
@@ -120,98 +97,74 @@ function detectBibleRefs(text: string): string[] {
 }
 
 // ─── PDF text cleanup ─────────────────────────────────────────────────────
-// Join page texts, strip page numbers + obvious running headers/footers,
-// collapse excessive blank lines, derive a title from the first non-empty
-// line, and generate an excerpt from the first 200 chars of body content.
 function cleanupPdfText(rawPages: string[]): {
   title: string;
   content: string;
   excerpt: string;
 } {
-  // Join all pages with a blank line separator.
   const joined = rawPages.join("\n\n");
-
-  // Split into lines and filter out noise.
   const lines = joined.split(/\r?\n/);
   const cleanedLines: string[] = [];
   for (const line of lines) {
     const trimmed = line.trim();
-    // Skip lines that are just a number (page numbers).
     if (/^\d{1,4}$/.test(trimmed)) continue;
-    // Skip lines that look like "Page X of Y" running footers.
     if (/^page\s+\d+\s+(of\s+\d+)?$/i.test(trimmed)) continue;
     cleanedLines.push(line);
   }
-
-  // Re-join, then collapse 3+ consecutive newlines into 2 (one blank line).
   let content = cleanedLines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-
-  // Derive a title from the first non-empty line.
   let title = "";
   const firstLineMatch = content.match(/^\s*([^\n]+)/);
   if (firstLineMatch) {
     const firstLine = firstLineMatch[1].trim();
-    // Heuristic: if the first line is short (≤ 120 chars) and doesn't end with
-    // a period, treat it as a title. Otherwise derive a fallback title.
     if (firstLine.length > 0 && firstLine.length <= 120 && !/[.;]$/.test(firstLine)) {
       title = firstLine;
-      // Remove the title line from the content so the body starts cleanly.
       content = content.slice(firstLineMatch[0].length).replace(/^\n+/, "").trim();
     }
   }
   if (!title) {
     title = "Imported PDF Article";
   }
-
-  // Generate an excerpt from the first 200 chars of body content (after the
-  // title is removed). Strip newlines for a single-line excerpt.
   const flat = content.replace(/\s+/g, " ").trim();
   const excerpt = flat.slice(0, 200).trim() + (flat.length > 200 ? "…" : "");
-
   return { title, content, excerpt };
 }
 
 // ─── PDF text extraction ──────────────────────────────────────────────────
-
-type PdfExtractionResult = {
-  pages: string[];
-  loadingTask: { destroy: () => Promise<void> };
-};
-
-// Dynamically import pdfjs-dist so its ESM bundle is only loaded when this
-// endpoint is actually called (keeps the Next.js server bundle small and
-// avoids any build-time ESM/CJS interop issues).
-async function loadPdf(buffer: Buffer): Promise<PdfExtractionResult> {
+// Uses pdfjs-dist with the worker DISABLED (runs on the main thread).
+// This is the correct approach for server-side Node.js environments
+// (Vercel serverless functions) where:
+//   1. The worker file may not be resolvable on disk (Vercel bundles code)
+//   2. worker_threads may not be available in the serverless runtime
+// Running on the main thread is fine for PDF text extraction — it's fast
+// enough for typical document sizes (under 20 MB).
+async function loadPdf(buffer: Buffer): Promise<{ pages: string[] }> {
+  // Dynamic import so the ESM bundle is only loaded when this endpoint runs.
   const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
 
-  // Point pdfjs at its worker file. On Node.js the worker is spawned via
-  // worker_threads using this path. createRequire gives us the absolute
-  // path on disk regardless of how Next.js bundled the route.
-  try {
-    const workerPath = nodeRequire.resolve(
-      "pdfjs-dist/legacy/build/pdf.worker.mjs"
-    );
-    pdfjsLib.GlobalWorkerOptions.workerSrc = workerPath;
-  } catch {
-    // If the worker file can't be resolved for some reason, leave the
-    // default — pdfjs will fall back to a fake worker on the main thread.
-  }
+  // CRITICAL: Disable the worker entirely for server-side use.
+  // pdfjs-dist v4 requires GlobalWorkerOptions.workerSrc to be set,
+  // but on Vercel's serverless runtime the worker file can't be resolved
+  // and worker_threads may not be available. Setting workerSrc to an
+  // empty string + disableWorker forces pdfjs to run on the main thread.
+  //
+  // The "legacy" build of pdfjs-dist includes a fake-worker fallback
+  // that processes the PDF synchronously on the main thread.
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "";
 
-  // getDocument transfers the typed array to the worker. Pass a fresh copy
-  // so the original Buffer stays intact for the cover-image render step.
+  // Copy the buffer into a fresh Uint8Array — pdfjs may transfer/detach it.
   const data = new Uint8Array(
     buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
   );
+
   const loadingTask = pdfjsLib.getDocument({
     data,
-    // Disable system fonts + worker fetch — these would try to use the
-    // browser Fetch API which doesn't exist on Node.js.
     useSystemFonts: false,
     useWorkerFetch: false,
-    // Don't try to evaluate PostScript calculator functions — safer on Node.
     isEvalSupported: false,
-    // Quieten the chatty pdfjs console output.
     verbosity: 0,
+    // Disable the worker — run on main thread. Not in the TS types but
+    // supported at runtime by pdfjs-dist v4.
+    ...({ disableWorker: true } as any),
   });
 
   const pdf = await loadingTask.promise;
@@ -219,8 +172,6 @@ async function loadPdf(buffer: Buffer): Promise<PdfExtractionResult> {
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const textContent = await page.getTextContent();
-    // Reconstruct text preserving line breaks where pdfjs signals them.
-    // Items with a `hasEOL` flag mark the end of a line.
     let line = "";
     const pageLines: string[] = [];
     for (const item of textContent.items as any[]) {
@@ -233,32 +184,49 @@ async function loadPdf(buffer: Buffer): Promise<PdfExtractionResult> {
     }
     if (line) pageLines.push(line);
     pages.push(pageLines.join("\n"));
-    // Clean up the page to free memory.
     page.cleanup();
   }
 
-  return { pages, loadingTask };
+  // Clean up.
+  try {
+    await pdf.destroy();
+    await loadingTask.destroy();
+  } catch {
+    // ignore cleanup errors
+  }
+
+  return { pages };
 }
 
-// ─── Cover image: render first PDF page to a PNG buffer ────────────────────
+// ─── Cover image: best-effort first-page render ───────────────────────────
+// Returns a PNG Buffer of the first page, or null if rendering fails.
+// This is best-effort — if canvas/sharp aren't available or rendering
+// fails for any reason, the article is still created without a cover.
+// The admin can upload a cover manually via the existing ImageUploader.
+async function tryGenerateCover(buffer: Buffer, userId: string): Promise<string | null> {
+  let pdfjsLib: any;
+  let createCanvas: any;
 
-// Returns a PNG image Buffer of the first page rendered at 2x scale, or null
-// if rendering fails for any reason. The caller will further process this
-// with sharp (resize + WebP) before uploading to Supabase Storage.
-async function renderFirstPageToPng(buffer: Buffer): Promise<Buffer | null> {
+  // Step 1: Try to load pdfjs-dist for rendering.
   try {
-    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    const { createCanvas } = await import("canvas");
+    pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "";
+  } catch {
+    return null; // pdfjs not available — skip cover
+  }
 
-    try {
-      const workerPath = nodeRequire.resolve(
-        "pdfjs-dist/legacy/build/pdf.worker.mjs"
-      );
-      pdfjsLib.GlobalWorkerOptions.workerSrc = workerPath;
-    } catch {
-      // ignore — fake worker fallback
-    }
+  // Step 2: Try to load the canvas package for off-screen rendering.
+  // canvas requires native cairo/pango libraries which may not be
+  // available on Vercel's serverless runtime.
+  try {
+    const canvasMod = await import("canvas");
+    createCanvas = canvasMod.createCanvas;
+  } catch {
+    // canvas not available (likely Vercel production) — skip cover
+    return null;
+  }
 
+  try {
     const data = new Uint8Array(
       buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
     );
@@ -268,130 +236,66 @@ async function renderFirstPageToPng(buffer: Buffer): Promise<Buffer | null> {
       useWorkerFetch: false,
       isEvalSupported: false,
       verbosity: 0,
+      ...({ disableWorker: true } as any),
     });
     const pdf = await loadingTask.promise;
     const page = await pdf.getPage(1);
-
-    // 2x scale gives a high-res render suitable for a 1920px-wide cover.
     const viewport = page.getViewport({ scale: 2 });
     const canvas = createCanvas(
       Math.ceil(viewport.width),
       Math.ceil(viewport.height)
     );
     const ctx = canvas.getContext("2d");
-
-    // White background so transparent PDFs (rare but possible) don't render
-    // as black on the cover.
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    await page.render({
-      canvasContext: ctx as any,
-      viewport,
-    }).promise;
-
+    await page.render({ canvasContext: ctx, viewport }).promise;
     const pngBuffer = canvas.toBuffer("image/png");
+
+    // Process with sharp + upload to Supabase Storage.
+    const processedBuffer = await sharp(pngBuffer)
+      .resize(1920, null, { withoutEnlargement: true })
+      .webp({ quality: 85 })
+      .toBuffer();
+
+    const timestamp = Date.now();
+    const storagePath = `apologetics/covers/${userId}/${timestamp}.webp`;
+    const supabase = createServiceClient();
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(storagePath, processedBuffer, {
+        contentType: "image/webp",
+        upsert: true,
+      });
+    if (uploadError) {
+      return null;
+    }
+    const { data: publicUrlData } = supabase.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(storagePath);
+    const publicUrl = publicUrlData?.publicUrl;
+    if (!publicUrl) return null;
 
     // Clean up.
     page.cleanup();
     await pdf.destroy();
     await loadingTask.destroy();
 
-    return pngBuffer;
-  } catch (e) {
-    // Rendering can fail for many reasons (encrypted PDFs, malformed PDFs,
-    // missing fonts, etc.). Return null so the caller can still create the
-    // article without a cover image.
-    console.error("[import-pdf] renderFirstPageToPng failed:", e);
-    return null;
-  }
-}
-
-// Process a PNG image buffer into a 1920px-wide WebP for use as a cover.
-// Returns the processed buffer.
-async function processCoverImage(pngBuffer: Buffer): Promise<Buffer> {
-  return sharp(pngBuffer)
-    .resize(1920, null, { withoutEnlargement: true })
-    .webp({ quality: 85 })
-    .toBuffer();
-}
-
-// Upload a processed image buffer to Supabase Storage. Returns the public
-// URL (with cache-busting ?v=) or null if the upload failed.
-async function uploadCoverImage(
-  imageBuffer: Buffer,
-  userId: string
-): Promise<string | null> {
-  try {
-    const timestamp = Date.now();
-    const storagePath = `apologetics/covers/${userId}/${timestamp}.webp`;
-
-    const supabase = createServiceClient();
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(storagePath, imageBuffer, {
-        contentType: "image/webp",
-        upsert: true,
-      });
-
-    if (uploadError) {
-      console.error("[import-pdf] Supabase upload error:", uploadError.message);
-      return null;
-    }
-
-    const { data: publicUrlData } = supabase.storage
-      .from(BUCKET_NAME)
-      .getPublicUrl(storagePath);
-
-    const publicUrl = publicUrlData?.publicUrl;
-    if (!publicUrl) return null;
     return `${publicUrl}?v=${timestamp}`;
   } catch (e) {
-    console.error("[import-pdf] uploadCoverImage failed:", e);
+    // Cover generation is best-effort — any failure means no cover.
     return null;
   }
 }
 
 // ─── POST /api/admin/articles/import-pdf ──────────────────────────────────
 
-/**
- * POST /api/admin/articles/import-pdf
- *
- * Admin-only. Accepts multipart/form-data with a `file` field containing a
- * PDF. Extracts text from every page, derives a title + excerpt, detects
- * Bible references, renders the first page to an image for the cover, then
- * creates a KoinoArticle (contentType="APOLOGETICS", status="draft").
- *
- * Validation:
- *   - file field is required (400 if missing)
- *   - MIME type must be application/pdf (400 otherwise)
- *   - extension must be .pdf (400 otherwise)
- *   - size ≤ 20 MB (400 otherwise)
- *
- * Returns:
- *   - 201: { success: true, articleId, message }
- *   - 400 (scanned PDF): { error: "...scanned/image-based…", scanned: true }
- *   - 400/401/403/500: { error: "..." }
- */
 export async function POST(req: NextRequest) {
-  // 1. Admin auth.
   const auth = await requireAdmin();
   if (auth.response) return auth.response;
   const { user } = auth;
 
-  // 2. Supabase Storage must be configured for cover-image upload.
-  if (
-    !process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY === "placeholder-service-role-key"
-  ) {
-    return NextResponse.json(
-      { error: "Supabase Storage is not configured. Set SUPABASE_SERVICE_ROLE_KEY." },
-      { status: 500 }
-    );
-  }
-
   try {
-    // 3. Parse multipart form data.
+    // 1. Parse multipart form data.
     let formData: FormData;
     try {
       formData = await req.formData();
@@ -416,10 +320,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 4. Validate type / extension / size.
-    if (file.type !== "application/pdf") {
+    // 2. Validate type / extension / size.
+    // Accept both application/pdf and application/octet-stream (some browsers
+    // send the latter for PDFs).
+    const isValidMime = file.type === "application/pdf" || file.type === "application/octet-stream" || file.type === "";
+    if (!isValidMime) {
       return NextResponse.json(
-        { error: "File must be a PDF (MIME type application/pdf)." },
+        { error: `File must be a PDF (got MIME type: ${file.type}).` },
         { status: 400 }
       );
     }
@@ -436,36 +343,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 5. Read PDF into a Buffer.
+    // 3. Read PDF into a Buffer.
     const pdfBuffer = Buffer.from(await file.arrayBuffer());
 
-    // 6. Extract text from all pages.
-    let extraction: PdfExtractionResult;
+    if (pdfBuffer.length === 0) {
+      return NextResponse.json(
+        { error: "PDF buffer is empty — the file may not have uploaded correctly." },
+        { status: 400 }
+      );
+    }
+
+    // 4. Extract text from all pages.
+    // This is the PRIMARY step — if it fails, we cannot create an article.
+    let pages: string[];
     try {
-      extraction = await loadPdf(pdfBuffer);
+      const extraction = await loadPdf(pdfBuffer);
+      pages = extraction.pages;
     } catch (e: any) {
-      console.error("[import-pdf] loadPdf failed:", e);
+      console.error("[import-pdf] PDF text extraction failed:", e?.message || e);
       return NextResponse.json(
         {
-          error:
-            "Could not read this PDF. It may be corrupted, encrypted, or in an unsupported format.",
+          error: `Could not extract text from this PDF: ${e?.message || "Unknown error"}. The PDF may be corrupted or encrypted.`,
         },
         { status: 400 }
       );
     }
 
-    const { pages, loadingTask } = extraction;
-
-    // 7. Check for scanned / image-only PDFs. If the total extracted text
-    //    is very short, it's almost certainly a scanned PDF — surface a
-    //    clear error so the admin knows OCR would be needed.
+    // 5. Check for scanned / image-only PDFs.
     const totalText = pages.join(" ").replace(/\s+/g, " ").trim();
     if (totalText.length < 100) {
-      try {
-        await loadingTask.destroy();
-      } catch {
-        // ignore
-      }
       return NextResponse.json(
         {
           error:
@@ -476,41 +382,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 8. Clean up text + derive title / excerpt / Bible refs.
+    // 6. Clean up text + derive title / excerpt / Bible refs.
     const { title, content, excerpt } = cleanupPdfText(pages);
     const bibleRefs = detectBibleRefs(content);
 
-    // 9. Try to render the first page → cover image. If rendering or upload
-    //    fails, we still create the article — admin can upload a cover
-    //    manually via the existing ImageUploader in the editor.
+    // 7. Best-effort cover image generation.
+    // If this fails (canvas not available on Vercel, rendering error, upload
+    // error, etc.), the article is STILL created — admin uploads a cover
+    // manually via the existing ImageUploader in the editor.
     let coverImageUrl: string | null = null;
-    const pngBuffer = await renderFirstPageToPng(pdfBuffer);
-    if (pngBuffer) {
-      try {
-        const processedBuffer = await processCoverImage(pngBuffer);
-        coverImageUrl = await uploadCoverImage(processedBuffer, user.id);
-      } catch (e) {
-        console.error("[import-pdf] cover image processing failed:", e);
-        // Continue without a cover.
-      }
-    }
-
-    // 10. Clean up the pdfjs loading task.
     try {
-      await loadingTask.destroy();
+      coverImageUrl = await tryGenerateCover(pdfBuffer, user.id);
     } catch {
-      // ignore
+      // Cover generation is best-effort — ignore any failure.
     }
 
-    // 11. Generate a unique slug from the title.
+    // 8. Generate a unique slug from the title.
     const baseSlug = slugify(title) || "imported-pdf-article";
     const slug = await generateUniqueSlug(baseSlug);
 
-    // 12. Author name — fall back to "Koino" if the admin has no name set.
+    // 9. Author name.
     const authorName = user.name?.trim() || "Koino";
 
-    // 13. Create the KoinoArticle as a DRAFT. Admin reviews/edits/publishes
-    //     via the existing editor.
+    // 10. Create the KoinoArticle as a DRAFT.
     const created = await db.koinoArticle.create({
       data: {
         title,
@@ -530,10 +424,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 14. Invalidate the public apologetics page cache so the new draft
-    //     doesn't appear until the admin publishes it (the public page
-    //     filters by status="published", so this is a no-op until then,
-    //     but we revalidate anyway in case the listing page changes).
+    // 11. Revalidate.
     try {
       revalidatePath("/", "layout");
     } catch {
@@ -544,9 +435,10 @@ export async function POST(req: NextRequest) {
       {
         success: true,
         articleId: created.id,
+        coverGenerated: !!coverImageUrl,
         message: coverImageUrl
-          ? "PDF imported successfully. Review the draft and publish when ready."
-          : "PDF imported successfully, but no cover image could be generated. Upload one manually in the editor.",
+          ? "PDF imported successfully with cover image. Review the draft and publish when ready."
+          : "PDF imported successfully. No cover image was generated — upload one manually in the editor.",
       },
       { status: 201 }
     );
@@ -559,9 +451,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET — return 405 so the route doesn't accidentally serve a 404 / empty body
-// if someone hits it in a browser. Mirrors the /api/admin/comics/upload
-// pattern.
 export async function GET() {
   return NextResponse.json(
     { success: false, error: "Method not allowed — use POST" },
