@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { getAuthUser } from "@/lib/auth-server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { revalidatePath } from "next/cache";
+import { extractPdfText } from "@/lib/pdf/extract-pdf-text";
 
 const db = new PrismaClient();
 
 const MAX_PDF_SIZE = 20 * 1024 * 1024; // 20 MB
-const BUCKET_NAME = "believ-comic-artwork";
 
 export const runtime = "nodejs";
 
@@ -103,24 +102,13 @@ function cleanupPdfText(rawText: string): {
   return { title, content, excerpt };
 }
 
-// ─── PDF text extraction using pdf-parse ──────────────────────────────────
-// Uses pdf-parse v2.4.5 which handles its own internal PDF.js worker
-// configuration — no manual workerSrc/workerPort setup needed.
-async function extractPdfText(buffer: Buffer): Promise<string> {
-  const { PDFParse } = await import("pdf-parse");
-  const parser = new PDFParse({ data: buffer });
-  try {
-    const result = await parser.getText();
-    // pdf-parse v2 returns an object with `text` (full text) and optionally `pages`
-    // If pages array is available, join with page separators for better structure
-    if (result.pages && Array.isArray(result.pages) && result.pages.length > 0) {
-      return result.pages
-        .map((p: any) => typeof p === "string" ? p : (p.text || ""))
-        .join("\n\n");
-    }
-    return result.text || "";
-  } finally {
-    try { await parser.destroy(); } catch {}
+// ─── Stage logger ─────────────────────────────────────────────────────────
+// Emits a single line per stage so Vercel logs are easy to grep.
+function logStage(stage: string, extra?: Record<string, unknown>) {
+  if (extra && Object.keys(extra).length > 0) {
+    console.log(`[PDF IMPORT] ${stage}`, extra);
+  } else {
+    console.log(`[PDF IMPORT] ${stage}`);
   }
 }
 
@@ -164,13 +152,17 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Extract text using pdf-parse (PRIMARY step).
-    // pdf-parse v2.4.5 handles its own PDF.js worker configuration internally.
-    // No manual workerSrc/workerPort/data-URL setup needed.
+    //    The helper module guarantees import order:
+    //      1. pdf-parse/worker  (installs globalThis.DOMMatrix / Path2D / ImageData)
+    //      2. pdf-parse         (evaluates PDFParse safely)
+    //      3. new PDFParse({ data, CanvasFactory })
     let rawText: string;
     try {
-      rawText = await extractPdfText(pdfBuffer);
+      const extracted = await extractPdfText(pdfBuffer, logStage);
+      rawText = extracted.text;
     } catch (e: any) {
-      console.error("[PDF IMPORT] stage=TEXT_EXTRACTION", {
+      console.error("[PDF IMPORT] FAILURE", {
+        stage: "TEXT_EXTRACTION",
         name: e instanceof Error ? e.name : typeof e,
         message: e instanceof Error ? e.message : String(e),
       });
@@ -191,9 +183,8 @@ export async function POST(req: NextRequest) {
     const bibleRefs = detectBibleRefs(content);
 
     // 7. Cover image: best-effort, does NOT block article creation.
-    // Cover generation from PDF first-page rendering is skipped on Vercel
-    // (canvas native addon not available). Admin uploads cover manually
-    // via the existing ImageUploader in the article editor.
+    //    Cover generation from PDF first-page rendering is disabled on Vercel.
+    //    Admin uploads cover manually via the existing ImageUploader in the article editor.
     const coverImageUrl: string | null = null;
 
     // 8. Generate a unique slug from the title.
@@ -204,6 +195,7 @@ export async function POST(req: NextRequest) {
     const authorName = user.name?.trim() || "Koino";
 
     // 10. Create the KoinoArticle as a DRAFT.
+    logStage("creating article");
     const created = await db.koinoArticle.create({
       data: {
         title,
@@ -222,6 +214,7 @@ export async function POST(req: NextRequest) {
         seoDescription: excerpt || null,
       },
     });
+    logStage("article created", { articleId: created.id, slug: created.slug });
 
     // 11. Revalidate.
     try { revalidatePath("/", "layout"); } catch {}
@@ -233,7 +226,8 @@ export async function POST(req: NextRequest) {
       message: "PDF imported successfully. Upload a cover image manually in the editor if needed.",
     }, { status: 201 });
   } catch (e: any) {
-    console.error("[PDF IMPORT] stage=UNKNOWN", {
+    console.error("[PDF IMPORT] FAILURE", {
+      stage: "UNKNOWN",
       name: e instanceof Error ? e.name : typeof e,
       message: e instanceof Error ? e.message : String(e),
     });
