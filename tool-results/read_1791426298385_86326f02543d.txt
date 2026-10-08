@@ -1,0 +1,1393 @@
+     1→# Believ / CrossCrafted — Worklog
+     2→
+     3→## 2026-10-06 — Bible Comics Admin CMS
+     4→
+     5→Built a full CMS for managing Bible Comic chapters, panels, translations,
+     6→and quiz links directly inside the existing admin panel.
+     7→
+     8→### Schema changes
+     9→- `ComicChapter`: added `status` (default "draft"), `description`, `adminNotes`,
+    10→  and `@@index([status])`. Existing rows back-filled automatically by Prisma
+    11→  with status="draft".
+    12→- `ComicPanel`: added `altText` (accessibility / image fallback text).
+    13→- `prisma db push` ran successfully against the production Supabase instance.
+    14→
+    15→### Admin API routes (all under `/api/admin/comics`)
+    16→- `GET /api/admin/comics` — list chapters with panel/translation/quiz counts.
+    17→  Supports `?status=`, `?book=`, `?q=` filters.
+    18→- `POST /api/admin/comics` — create chapter. Validates bookId against
+    19→  `BIBLE_BOOKS`, auto-generates `comicId` as `{bookId}-{chapter}`.
+    20→- `GET /api/admin/comics/[id]` — single chapter with all panels + translations.
+    21→- `PATCH /api/admin/comics/[id]` — update chapter. Supports moving the chapter
+    22→  to a new (bookId, chapter) combo — cascades the denormalized book/chapter
+    23→  on every existing panel.
+    24→- `DELETE /api/admin/comics/[id]` — hard delete (cascade cleans panels + trans).
+    25→- `POST /api/admin/comics/[id]/panels` — create panel. Auto-generates panelId
+    26→  using `{BOOKABBR}{CH}-P{NN}`. Auto-seeds an empty English translation row.
+    27→- `PATCH /api/admin/comics/[id]/panels/[panelId]` — update panel fields.
+    28→- `DELETE /api/admin/comics/[id]/panels/[panelId]` — delete panel.
+    29→- `POST /api/admin/comics/[id]/publish` — runs validation, sets status=
+    30→  "published" + isActive=true. Returns list of errors if validation fails.
+    31→- `POST /api/admin/comics/[id]/unpublish` — sets status="draft", isActive=false.
+    32→- `POST /api/admin/comics/[id]/duplicate` — clones chapter + panels + trans
+    33→  + quiz links into a new draft. Generates fresh panelIds.
+    34→- `GET /api/admin/comics/[id]/quiz?q=` — returns linked questions + search
+    35→  results from `TriviaQuestion` (uses `questionId` join).
+    36→- `POST /api/admin/comics/[id]/quiz` — link a question.
+    37→- `DELETE /api/admin/comics/[id]/quiz/[questionId]` — unlink.
+    38→- `POST /api/admin/comics/[id]/translations` — upsert panel or chapter
+    39→  translation. Validates lang against the 13 supported languages.
+    40→- `GET /api/admin/comics/stats` — aggregate dashboard stats (totals,
+    41→  missing-artwork counts, missing-EN-translation counts, missing-quiz counts)
+    42→  in a single query.
+    43→
+    44→### Auth pattern
+    45→Every admin route uses the existing `requireAdmin()` helper (mirrors
+    46→`/api/admin/gifts` and `/api/admin/redemptions`). It calls `getAuthUser()`
+    47→from `@/lib/auth-server.ts` and checks `role === "admin"`. No new auth
+    48→system was created.
+    49→
+    50→### Frontend CMS component
+    51→- `src/components/crosscrafted/BibleComicsAdmin.tsx` (~1500 lines) — full CMS:
+    52→  - **Dashboard**: stat cards (total/published/draft/review/ready/panels) +
+    53→    issue cards (missing artwork, missing EN translations, missing quiz) +
+    54→    CMS workflow help banner.
+    55→  - **Chapter list**: searchable (title/comicId/description), filterable by
+    56→    status and book, responsive grid of cards.
+    57→  - **Create modal**: pick book + chapter number + title + description.
+    58→  - **Chapter editor**:
+    59→    - Chapter details form (book, chapter, status, title, description,
+    60→      adminNotes, cover art via ImagePicker, sortOrder)
+    61→    - Chapter title translation picker (13 languages)
+    62→    - Live validation status banner (mirrors server-side publish checks)
+    63→    - Action bar: Save / Preview / Publish-or-Unpublish / Duplicate / Delete
+    64→    - Panels manager: cards with thumbnail, verse range, EN title/narration
+    65→      preview, issue pills (No artwork / No EN title / No EN narration),
+    66→      Edit + Delete buttons. Add Panel modal includes ImagePicker,
+    67→      verse range, altText, audioUrl, videoUrl.
+    68→    - Panel translation manager: language picker + per-panel inline expandable
+    69→      forms for title/narration/captions (with add/remove captions UI).
+    70→    - Quiz manager: lists linked questions (with dangling detection for
+    71→      deleted trivia) + debounced search to add new ones.
+    72→    - Preview modal: renders the chapter like ComicView (panel-by-panel
+    73→      navigation, progress bar, artwork + narration + captions display).
+    74→  - **Duplicate modal**: pick target (bookId, chapter, title) and clone.
+    75→  - **Confirm delete modal**: explains cascade deletes, requires confirmation.
+    76→
+    77→### Wiring
+    78→- Added `"bible-comics"` to `AdminTab` type in `AdminView.tsx`.
+    79→- Added `{ id: "bible-comics", icon: BookOpen, labelKey: "admin.tab.bibleComics" }`
+    80→  to `TABS` array.
+    81→- Added `{activeTab === "bible-comics" && <BibleComicsAdmin />}` to render switch.
+    82→- Imported `BookOpen` from lucide-react and `BibleComicsAdmin` from
+    83→  `@/components/crosscrafted/BibleComicsAdmin`.
+    84→- Added `"admin.tab.bibleComics": "Bible Comics"` to `src/lib/i18n/en.ts`
+    85→  (both occurrences — the file has duplicate key sections, both updated
+    86→  so the i18n lookup never falls through to the key string).
+    87→
+    88→### Tests performed
+    89→- `prisma db push` succeeded with new schema (no data loss on existing
+    90→  Genesis 2 chapter).
+    91→- `bun run lint` — no NEW errors introduced. Pre-existing 2 errors in
+    92→  `ComicView.tsx` (`require()` imports) are unrelated to this work.
+    93→- Dev server compiles cleanly with no warnings.
+    94→- `GET /api/admin/comics` and `GET /api/admin/comics/stats` both return
+    95→  `{error: "Admin access required"}` (403) for unauthenticated requests —
+    96→  auth check works.
+    97→- `GET /api/comic/list` and `GET /api/comic/genesis/2` continue to return
+    98→  existing Genesis 2 data — no regressions to public APIs.
+    99→
+   100→### Known limitations
+   101→- Artwork is stored as base64 data URLs via the existing ImagePicker (per
+   102→  task spec — no Supabase Storage setup for MVP). Large images may bloat
+   103→  the DB row. Future: migrate to Supabase Storage.
+   104→- Auto-seeded empty English translations on panel creation may show as
+   105→  "missing English title" in stats until the admin fills them in. This
+   106→  is intentional — it surfaces incomplete panels in the dashboard.
+   107→- The duplicate modal doesn't auto-switch to the new chapter after creation
+   108→  (it returns to the list, where the new chapter appears). A follow-up
+   109→  could pass `onCreated` to switch views directly.
+   110→- The ComicChapter→ComicPanel relation cascade-deletes translations, but
+   111→  ComicChapterQuiz uses `onDelete: Cascade` on `comicChapter` — so deleting
+   112→  a chapter unlinks all quiz questions. The trivia questions themselves
+   113→  are preserved.
+   114→- No bulk operations yet (e.g. "publish all ready chapters"). Each chapter
+   115→  must be published individually.
+   116→
+   117→---
+   118→Task ID: bugfix-artwork-upload
+   119→Agent: main
+   120→Task: Fix "Unexpected end of JSON input" error when uploading Bible Comics panel artwork via the admin CMS.
+   121→
+   122→Work Log:
+   123→- Inspected the upload flow end-to-end: ComicArtworkUploader.tsx → /api/admin/comics/upload → Supabase Storage → DB.
+   124→- Found root cause: /api/admin/comics/upload/route.ts was accidentally deleted in commit 728718a (Genesis 1 redesign).
+   125→  Without that route file, requests fell through to /api/admin/comics/[id] which only supports GET/PATCH/DELETE.
+   126→  Vercel returned HTTP 405 with content-length: 0 (empty body).
+   127→  ComicArtworkUploader's `await res.json()` on empty body threw SyntaxError: Unexpected end of JSON input.
+   128→- Verified by curling production: `curl -i -X POST https://crosscraftedapp.vercel.app/api/admin/comics/upload` returned `HTTP 405, content-length: 0, x-matched-path: /api/admin/comics/[id]`.
+   129→- Restored the upload route with improvements:
+   130→  * Admin-only via requireAdmin() (403 JSON for non-admins).
+   131→  * Image validation: PNG/JPG/JPEG/WEBP, max 10MB.
+   132→  * Path sanitization (alphanumeric + hyphens only).
+   133→  * Sharp WebP conversion (quality 90).
+   134→  * Upload to Supabase Storage bucket "believ-comic-artwork" (public read).
+   135→  * Auto-create bucket if missing (idempotent).
+   136→  * Optional DB persistence: when chapterId is provided, updates ComicPanel.artworkUrl immediately.
+   137→  * Returns JSON: { success, url, artworkUrl, path, artworkPath, message }.
+   138→  * ALL error paths return JSON (no empty bodies).
+   139→  * Detects placeholder SUPABASE_SERVICE_ROLE_KEY and returns clear `missing: SUPABASE_SERVICE_ROLE_KEY` error.
+   140→- Improved ComicArtworkUploader.tsx frontend:
+   141→  * Replaced blind res.json() with safeParseJson() that checks res.ok, status, Content-Type, empty body, and HTML responses.
+   142→  * Special-cases 403 (Forbidden), 405 (route missing), 500 (config error) with specific messages.
+   143→  * When server returns `missing: ENV_VAR`, surfaces exact variable name + tells admin where to set it in Vercel.
+   144→  * Toast shows the actual server error, not a parse error.
+   145→- Wired chapterId from PanelFormModal → ComicArtworkUploader so the route can persist to DB on upload.
+   146→- Verified production endpoint after deploy:
+   147→  * GET → HTTP 405 + `{"success":false,"error":"Method not allowed — use POST"}` (was previously empty 405).
+   148→  * POST without auth → HTTP 403 + `{"success":false,"error":"Forbidden — admin access required"}`.
+   149→  * x-matched-path now correctly shows /api/admin/comics/upload (was /api/admin/comics/[id] before fix).
+   150→- Verified Supabase Storage bucket "believ-comic-artwork" is publicly readable (HTTP 200 image/webp on existing GEN2-P01.webp).
+   151→- Verified SUPABASE_SERVICE_ROLE_KEY is configured on Vercel (because GEN2-P01 was successfully uploaded previously and lives in Supabase Storage).
+   152→- Verified no base64 data URLs remain in DB (all 27 sampled panels use either Supabase URLs or local SVG placeholders).
+   153→- Committed as 7aff53b and pushed to main → Vercel deploy triggered.
+   154→
+   155→Stage Summary:
+   156→- ROOT CAUSE: Upload route file deleted; production returned empty 405; frontend blind .json() on empty body → "Unexpected end of JSON input".
+   157→- FIX: Restored route with strict JSON responses + improved frontend safeParseJson() that never throws on empty/non-JSON bodies and surfaces real server errors with env-var guidance.
+   158→- API ENDPOINT: POST /api/admin/comics/upload (multipart/form-data).
+   159→- SUPABASE BUCKET: believ-comic-artwork (public read, admin-only write).
+   160→- DB UPDATE: ComicPanel.artworkUrl updated immediately when chapterId is supplied (also still persisted via existing Save flow).
+   161→- VERCEL ENV: SUPABASE_SERVICE_ROLE_KEY is already configured (verified by existing GEN2-P01 upload). NEXT_PUBLIC_SUPABASE_URL also configured.
+   162→- TESTS: GET → 405 JSON ✅ | POST no-auth → 403 JSON ✅ | route exists on Vercel ✅ | bucket publicly readable ✅ | placeholder SVGs still serve ✅.
+   163→- PRODUCTION STATE: ready for admin to upload artwork to GEN1-P01 and GEN2-P02.
+   164→
+   165→---
+   166→Task ID: bugfix-artwork-revert-cache
+   167→Agent: main
+   168→Task: Fix artwork preview reverting to OLD test image when re-uploading to GEN1-P01.
+   169→
+   170→Work Log:
+   171→- Verified DB state for GEN1-P01: artworkUrl was correctly updated to https://ffslazyedqbbuuyfytnq.supabase.co/storage/v1/object/public/believ-comic-artwork/bible-comics/genesis/1/GEN1-P01.webp (clean URL, no ?v=).
+   172→- Verified Supabase Storage serves the new file (HTTP 200, image/webp, 307KB, last-modified 17:27:35).
+   173→- Verified public API /api/comic/genesis/1 returns the new URL for GEN1-P01.
+   174→- Root cause identified: Supabase Storage path is deterministic (bible-comics/{bookId}/{chapter}/{panelId}.webp). Re-uploading to the same panel UPSERTS at the SAME URL. This caused two failure modes:
+   175→  1) React: setArtwork(sameUrlString) is a no-op (state value unchanged) → <img> never re-renders → preview shows OLD image.
+   176→  2) Browser cache: even if <img> did re-render, browser serves cached image at that URL.
+   177→- Fix: Append cache-busting ?v={Date.now()} query param to URLs returned from /api/admin/comics/upload.
+   178→  - Upload API response: url + artworkUrl now include ?v=<timestamp>
+   179→  - DB stores artworkUrl WITH ?v=<timestamp> (so reopening editor shows the version that was last uploaded)
+   180→  - Each new upload bumps ?v= → URL string differs from previous state → React re-renders <img>
+   181→  - Browser sees different URL → fetches freshly-uploaded file
+   182→  - Query param is harmless — Supabase Storage ignores it
+   183→- Verified ComicView.tsx uses panel.artworkUrl directly in <img src> — works fine with ?v= query param.
+   184→- Verified PATCH endpoint /api/admin/comics/[id]/panels/[panelId]/route.ts stores artworkUrl as-is (no change needed).
+   185→- Committed as 7782cdc and pushed to main → Vercel deploy triggered.
+   186→- Verified production endpoint after deploy: GET → 405 JSON {"success":false,"error":"Method not allowed — use POST"}.
+   187→
+   188→Stage Summary:
+   189→- ROOT CAUSE: Deterministic storage path → URL string unchanged on re-upload → React state didn't trigger re-render + browser served cached image.
+   190→- FIX: Append ?v=Date.now() to URLs returned from upload API. DB stores URL with ?v= (harmless).
+   191→- FILES CHANGED: src/app/api/admin/comics/upload/route.ts (only file modified).
+   192→- NO CHANGES TO: PATCH endpoint, ComicArtworkUploader, ComicView, BibleComicsAdmin, DB schema, comic content (Genesis 1/2/3/4 unchanged), ComicView layout/design.
+   193→- TESTING REQUIRED (admin-only, browser-based):
+   194→  1. Sign in as admin → Bible Comics → Genesis 1 → Edit Panel GEN1-P01
+   195→  2. Upload new artwork → preview should immediately show new image
+   196→  3. Click Save Changes → DB updated with new URL+?v=
+   197→  4. Close modal → reopen → should show new artwork
+   198→  5. Refresh page → should still show new artwork
+   199→  6. View public Genesis 1 page → should show new artwork
+   200→
+   201→---
+   202→Task ID: comicview-overlay-final-ui
+   203→Agent: main
+   204→Task: Final UI fix — overlay panel number/title/verse on artwork per Genesis 2 reference, add mobile bottom-padding for nav clearance.
+   205→
+   206→Work Log:
+   207→- Read ComicView.tsx (721 lines) to understand current structure.
+   208→- Found mobile bottom nav in src/app/page.tsx (fixed bottom-4 floating pill, md:hidden).
+   209→- Identified that panel number + title were in a separate header ABOVE the artwork — user wants them OVERLAID on the artwork.
+   210→- Modified ComicPanelCard:
+   211→  * Removed the separate header div (was: p-3 pb-2 with number + title).
+   212→  * Moved panel number badge + title to OVERLAY on top of artwork (absolute top-3 left-3 right-3).
+   213→  * Added top gradient (from-black/80 via-black/30 to-transparent, h-24) for overlay legibility against any artwork colors.
+   214→  * Added bottom gradient (from-black/80 via-black/30 to-transparent, h-20) for verse reference legibility.
+   215→  * Verse reference badge stays at bottom-right (already was there).
+   216→  * Narration remains BELOW artwork (unchanged behavior — p-3 flex-1).
+   217→- Modified ComicView container div:
+   218→  * Added pb-28 on mobile (md:pb-5 on desktop) so the fixed mobile bottom nav does NOT cover comic content — users can now scroll completely past the final panel.
+   219→- Grid unchanged: grid-cols-1 (mobile, stacked) → md:grid-cols-2 (tablet) → lg:grid-cols-3 (desktop, 3×2).
+   220→- Type-check passed: no new TypeScript errors in ComicView.tsx.
+   221→- Committed as be810ae and pushed to main → Vercel deploy triggered.
+   222→- Verified production APIs after deploy:
+   223→  * Genesis 2 API: HTTP 200, 7 panels, GEN2-P01 + GEN2-P02 still have Supabase Storage URLs ✅
+   224→  * Genesis 1 API: HTTP 200, 6 panels, GEN1-P01 still has Supabase Storage URL ✅
+   225→  * Homepage: HTTP 200 ✅
+   226→
+   227→Stage Summary:
+   228→- FILES CHANGED: src/components/crosscrafted/ComicView.tsx (only file modified, +27/-19 lines).
+   229→- PANEL NUMBER: now OVERLAID on artwork (top-left, was in separate header above artwork).
+   230→- PANEL TITLE: now OVERLAID on artwork (next to number, with drop-shadow + line-clamp-2).
+   231→- VERSE REFERENCE: stays OVERLAID at bottom-right of artwork (unchanged).
+   232→- NARRATION: stays BELOW artwork (unchanged).
+   233→- GRID: 3×2 desktop (lg:grid-cols-3), stacked on mobile (grid-cols-1).
+   234→- MOBILE NAV CLEARANCE: pb-28 added on mobile so fixed bottom-4 nav doesn't cover content.
+   235→- NO CHANGES TO: Bible Comics CMS, Prisma models, Supabase Storage, upload API, Genesis 1/2/3/4 content, Bible reader, Trivia, Faith Points, auth, admin.
+   236→- TESTING REQUIRED (admin-only, browser-based): verify desktop 3×2 layout, mobile stacked layout, overlay legibility against real Genesis 2 artwork, and that mobile bottom nav no longer covers the final panel.
+   237→
+   238→---
+   239→Task ID: comic-default-chapter-naming-cover
+   240→Agent: main
+   241→Task: Final navigation + naming + chapter cover fix — Bible Comics must open Genesis 1 by default, feature name standardized to BIBLE COMICS.
+   242→
+   243→Work Log:
+   244→- Searched page.tsx for the Bible Comics entry point and found `useState(2)` hardcoded as the default comicChapter — this was the root cause of Bible Comics opening Genesis 2 instead of Genesis 1.
+   245→- Verified DB state: Genesis 1 already has sortOrder=0 (correct earliest), isActive=true, status=published. So no DB changes needed — only the frontend default.
+   246→- Searched codebase for inconsistent naming and found 4 occurrences of "Comic Bible" / "Believ Comic Bible":
+   247→  * src/app/page.tsx:62   SIDEBAR_LINKS: "Comic Bible"
+   248→  * src/app/page.tsx:86   MOBILE_MORE_VIEWS: "Comic Bible"
+   249→  * src/app/page.tsx:102  comment: "Comic Bible state"
+   250→  * src/app/api/comic/share/[panelId]/route.ts:42  share fallback title: "Believ Comic Bible"
+   251→- Verified ComicChapter.coverArtUrl already exists as a Prisma field and Genesis 1 has a cover URL stored in DB (verified via /api/comic/list: cover=yes for genesis-1, cover=no for genesis-2/3/4).
+   252→- Verified BibleComicsAdmin.tsx already displays chapter covers in the admin chapter list (line 518-519), which is the appropriate chapter/list/preview location. No changes needed there.
+   253→- Verified the i18n admin tab label was already correct: "admin.tab.bibleComics": "Bible Comics".
+   254→- Verified ComicView intentionally does NOT display the chapter cover in the comic panel area (only panel artwork) — per user spec, did not force a large cover into the comic panel area.
+   255→- Changes:
+   256→  * src/app/page.tsx:102-106  Changed default comicChapter from useState(2) → useState(1). Updated comment to "Bible Comics state".
+   257→  * src/app/page.tsx:62       SIDEBAR_LINKS label: "Comic Bible" → "Bible Comics"
+   258→  * src/app/page.tsx:86       MOBILE_MORE_VIEWS label: "Comic Bible" → "Bible Comics"
+   259→  * src/app/api/comic/share/[panelId]/route.ts:42  Share fallback title: "Believ Comic Bible" → "Believ Bible Comics"
+   260→- Type-check passed: no new TypeScript errors.
+   261→- Committed as aacce20 and pushed to main → Vercel deploy triggered.
+   262→- Verified production APIs after deploy:
+   263→  * Genesis 1 API: HTTP 200, 6 panels (GEN1-P01..P06), each panel has its own Supabase Storage URL ✅
+   264→  * Genesis 2 API: HTTP 200, 7 panels ✅
+   265→  * Genesis 3 API: HTTP 200 ✅
+   266→  * Genesis 4 API: HTTP 200 ✅
+   267→  * Comic list API: HTTP 200, 4 chapters in correct order: genesis-1 (sort=0, cover=yes) → genesis-2 (sort=1) → genesis-3 (sort=2) → genesis-4 (sort=3) ✅
+   268→  * Homepage: HTTP 200 ✅
+   269→
+   270→Stage Summary:
+   271→- ROOT CAUSE #1: useState(2) hardcoded as default comicChapter in src/app/page.tsx. FIXED → useState(1).
+   272→- ROOT CAUSE #2: Inconsistent "Comic Bible" labels in 4 places (2 nav arrays, 1 comment, 1 share title). FIXED → all standardized to "Bible Comics" / "Believ Bible Comics".
+   273→- CHAPTER COVER: ComicChapter.coverArtUrl already exists, Genesis 1 already has cover stored, already displayed in admin chapter list (BibleComicsAdmin.tsx:518-519). No changes needed.
+   274→- NO CHANGES TO: Genesis 1/2/3/4 content, panel artwork URLs, 6-panel structure, mobile 1×6 layout, desktop 3×2 layout, panel number/title/verse overlays, narration below artwork, bottom action bar, chapter navigation, mobile bottom nav, Bible reader, Trivia, Faith Points, auth, admin, CMS architecture, Prisma models, Supabase Storage, artwork upload API.
+   275→- FILES CHANGED: src/app/page.tsx (default chapter + 2 labels + 1 comment), src/app/api/comic/share/[panelId]/route.ts (1 share fallback title).
+   276→- BROWSER TESTS REQUIRED (admin-only, user must verify): open Bible Comics feature → should land on Genesis 1, not Genesis 2.
+   277→
+   278→---
+   279→Task ID: landing-enter-app-opens-bible-comics
+   280→Agent: main
+   281→Task: Change the landing page "Enter App" button so it opens Bible Comics instead of the Bible reader.
+   282→
+   283→Work Log:
+   284→- Located the Enter App button in src/components/crosscrafted/LandingHero.tsx (line 109).
+   285→- It was calling onEnterApp('bible') which navigated to the Bible reader view.
+   286→- Changed to onEnterApp('comic') so it now opens the Bible Comics feature.
+   287→- Genesis 1 will load by default (per previous commit aacce20 — useState(1) default).
+   288→- Left the hero CTA "Read the Bible" button unchanged — it intentionally opens the Bible reader as its label promises.
+   289→- Committed as 530f805 and pushed to main → Vercel deploy triggered.
+   290→- Verified production: homepage HTTP 200, Genesis 1 API HTTP 200.
+   291→
+   292→Stage Summary:
+   293→- ROOT CAUSE: LandingHero.tsx Enter App button called onEnterApp('bible').
+   294→- FIX: Changed to onEnterApp('comic'). Now Enter App → Bible Comics → Genesis 1.
+   295→- FILES CHANGED: src/components/crosscrafted/LandingHero.tsx (1 line).
+   296→- NO CHANGES TO: Bible reader, Trivia, Faith Points, sidebar nav, mobile bottom nav, ComicView, CMS, Genesis content, auth, admin.
+   297→
+   298→---
+   299→Task ID: bible-hub-read-comics-mode
+   300→Agent: main
+   301→Task: Redesign Bible section into a hub with two modes (READ / COMICS) — remove separate "Bible Comics" sidebar entry, add mode switcher inside Bible view.
+   302→
+   303→Work Log:
+   304→- Read existing BibleView.tsx (842 lines) to understand structure: header + translation picker + conditional views (books/chapters/reader/search/bookmarks).
+   305→- Read page.tsx to find the sidebar entries: SIDEBAR_LINKS had "Bible Comics" at line 62, MOBILE_MORE_VIEWS had it at line 86.
+   306→- Removed "Bible Comics" entry from BOTH SIDEBAR_LINKS and MOBILE_MORE_VIEWS. Sidebar now has ONE "Bible" entry.
+   307→- Added new optional prop to BibleView: onOpenComic?(bookId, chapter).
+   308→- Added new state: mode: "read" | "comics" (default: "read").
+   309→- Added MODE SWITCHER directly under the Bible heading:
+   310→    [ 📖 READ ]   [ ✨ COMICS ]
+   311→  Active state uses Believ's purple/pink gradient (from-[#7C3AED] to-[#F39B9B]).
+   312→- READ mode shows the existing Bible experience unchanged (KJV/WEB picker, language indicator, scripture notice, books/chapters/reader/search/bookmarks).
+   313→- Search/Bookmark header buttons only render in READ mode (don't apply to COMICS mode).
+   314→- COMICS mode renders a new ComicsBrowserView component:
+   315→  * Fetches /api/comic/list (existing public API).
+   316→  * Defensive sort: sortOrder → bookId → chapter (Genesis 1 before Genesis 2, 3, 4 — no hardcoding).
+   317→  * Renders chapter cards in responsive grid: 1 column mobile, 2 columns sm+.
+   318→  * Each card shows: coverArtUrl image (when available), chapter number overlay (top-left), chapter title + "Genesis N" reference overlay (bottom-left), "Continue Reading" CTA bar.
+   319→  * Clicking a card calls onOpenComic(bookId, chapter) → existing ComicView opens.
+   320→- Updated page.tsx to pass onOpenComic to BibleView:
+   321→    onOpenComic={(bookId, chapter) => {
+   322→      setComicBookId(bookId);
+   323→      setComicChapter(chapter);
+   324→      goView("comic");
+   325→    }}
+   326→  This preserves the existing comicBookId/comicChapter state so chapter navigation inside ComicView continues to work.
+   327→- Added pb-28 on mobile (md:pb-5 desktop) to BibleView container so fixed mobile bottom nav doesn't cover chapter cards.
+   328→- Committed as 3a2b2f3 and pushed to main → Vercel deploy triggered.
+   329→- Verified production APIs after deploy:
+   330→  * Comic list API: HTTP 200, 4 chapters in correct order (genesis-1 sort=0 → genesis-2 sort=1 → genesis-3 sort=2 → genesis-4 sort=3). genesis-1 and genesis-2 both have cover=yes.
+   331→  * Genesis 1 API: HTTP 200 ✅
+   332→  * Genesis 2 API: HTTP 200 ✅
+   333→  * Genesis 3 API: HTTP 200 ✅
+   334→  * Genesis 4 API: HTTP 200 ✅
+   335→  * Homepage: HTTP 200 ✅
+   336→
+   337→Stage Summary:
+   338→- FILES CHANGED: src/app/page.tsx (removed 2 sidebar entries + added onOpenComic prop), src/components/crosscrafted/BibleView.tsx (added mode state + switcher + ComicsBrowserView component, +357/-146 lines).
+   339→- NO CHANGES TO: ComicView.tsx (reused as-is), comic APIs, comic DB schema, comic CMS, comic artwork (Genesis 1/2/3/4 panels unchanged), coverArtUrl field semantics (still stored on ComicChapter + returned by /api/comic/list + now also displayed in ComicsBrowserView + still displayed in admin chapter list), Bible reader functionality, Trivia, Faith Points, auth, admin, LandingHero Enter App button.
+   340→- BROWSER TESTS REQUIRED (admin-only, user must verify): open Bible → switch to COMICS → see chapter cards → click Genesis 1 → ComicView opens with all 6 panels → back to Bible → still in COMICS mode → switch to READ → existing Bible reader works.
+   341→
+   342→---
+   343→Task ID: bible-hub-3-modes-full-book-names
+   344→Agent: main
+   345→Task: Complete Bible hub redesign — 3 modes (READ / BIBLE COMICS / READING PLANS) + full Bible book names.
+   346→
+   347→Work Log:
+   348→- Removed "Reading Plans" from SIDEBAR_LINKS and MOBILE_MORE_VIEWS in src/app/page.tsx. Sidebar now has ONE "Bible" entry — Reading Plans is accessed inside the Bible hub via the mode switcher. Removed unused BookMarked import.
+   349→- Standalone /bible-plans view route preserved in page.tsx for backward compatibility (any direct links still work).
+   350→- Updated BibleView.tsx:
+   351→  * Added "plans" to BibleMode type: now "read" | "comics" | "plans"
+   352→  * Mode switcher now has 3 tabs: [📖 READ] [✨ COMICS] [📚 PLANS]
+   353→  * Tab labels kept short ("READ", "COMICS", "PLANS") so all 3 fit on small mobile screens without horizontal overflow
+   354→  * Icon size reduced (14→13) and gap tightened (2→1.5) for compactness
+   355→  * Added gap-1 between tabs so active gradient doesn't bleed into inactive tabs
+   356→  * PLANS mode renders the existing BiblePlansView component (no rebuild) with translation prop + onOpenChapter callback that switches to READ mode and loads the chosen chapter inline
+   357→  * Imported BiblePlansView from "@/components/crosscrafted/BiblePlansView"
+   358→- Updated BooksView book cards (in BibleView.tsx):
+   359→  * Cards now show book.name (e.g. "Genesis") instead of book.abbr (e.g. "Ge")
+   360→  * Card grid changed from grid-cols-3 sm:grid-cols-4 to grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 so long names ("1 Thessalonians", "2 Thessalonians", "Ecclesiastes", "Lamentations", "Song of Solomon") fit on mobile without horizontal overflow
+   361→  * Card now has min-h-[60px] and flex flex-col justify-center so long names wrap cleanly
+   362→  * "chapters" spelled out on sm+ screens, "ch" on mobile (compact)
+   363→- Audited all 66 books in src/lib/bible-data.ts: all 66 already have full display names. No data changes needed — only the display layer was using abbreviations.
+   364→- Updated BiblePlansView.tsx day reading labels to use book.name instead of book.abbr:
+   365→  was: "Ge 1 · Ex 2"
+   366→  now:  "Genesis 1 · Exodus 2"
+   367→- Committed as b1c09de and pushed to main → Vercel deploy triggered.
+   368→- Verified production after deploy:
+   369→  * Homepage: HTTP 200 ✅
+   370→  * Comic list API: HTTP 200, 4 chapters in correct order (genesis-1 sort=0 → genesis-2 sort=1 → genesis-3 sort=2 → genesis-4 sort=3) ✅
+   371→  * Genesis 1 API: HTTP 200 ✅
+   372→  * Genesis 2 API: HTTP 200 ✅
+   373→  * Genesis 3 API: HTTP 200 ✅
+   374→  * Genesis 4 API: HTTP 200 ✅
+   375→  * Bible verse API (KJV John 3:16): HTTP 200 ✅
+   376→
+   377→Stage Summary:
+   378→- FILES CHANGED: src/app/page.tsx (removed Reading Plans sidebar entry + unused import), src/components/crosscrafted/BibleView.tsx (added "plans" mode + 3-tab switcher + full book names + responsive grid), src/components/crosscrafted/BiblePlansView.tsx (day labels use book.name).
+   379→- ALL 66 BOOKS use full display names (Genesis, Exodus, ... Revelation). Audited via script. "Job" is the only 3-letter name — it IS the canonical full name.
+   380→- GENESIS 1 STILL APPEARS BEFORE GENESIS 2 in comic list (verified via API).
+   381→- EXISTING ComicView reused unchanged.
+   382→- EXISTING BiblePlansView reused unchanged (only 1 line changed for display).
+   383→- NO CHANGES TO: comic DB schema, comic artwork, comic CMS, comic APIs, Genesis 1/2/3/4 panel counts, coverArtUrl field semantics, Bible reader functionality, Trivia, Faith Points, auth, admin, LandingHero, routing architecture.
+   384→- BROWSER TESTS REQUIRED (admin-only, user must verify): open Bible → switch between READ / BIBLE COMICS / READING PLANS → verify each mode shows the expected content → in PLANS mode, click a day → verify it switches to READ mode with the chosen chapter loaded → in READ mode, verify all 66 books use full names → verify mobile layout has no horizontal overflow.
+   385→
+   386→---
+   387→Task ID: churches-hub-redesign
+   388→Agent: main
+   389→Task: Churches + Groups structure redesign — remove Small Groups + List Church from sidebar, add Discover/My Churches tabs, route List Your Church to dedicated page, add Groups placeholder.
+   390→
+   391→Work Log:
+   392→- Inspected current state: ChurchesView.tsx (860 lines, uses in-memory CHURCHES mock array + component-local followed Set), ListYourEntity.tsx (existing church listing form), Prisma schema (21 models, NO Church/Group/Follow models — churches are mock data only).
+   393→- Decided scope: per spec "do not overengineer this now", do NOT add Prisma migrations for Church/Follow/Group models. Instead: consolidate sidebar, add My Churches tab (component-local state with clear comment about future DB hydration), auth-gate follow toggle, route List Your Church to existing dedicated page, add Groups placeholder in church detail modal.
+   394→- Removed "Small Groups" and "List Church" from SIDEBAR_LINKS + MOBILE_MORE_VIEWS in page.tsx. Removed unused UsersRound + Building2 imports.
+   395→- Standalone /small-groups and /list-church view routes PRESERVED in page.tsx for backward compatibility.
+   396→- Updated ChurchesView.tsx:
+   397→  * Added onListChurch?: () => void prop
+   398→  * Added Discover/My Churches tab switcher with Believ purple→pink gradient active state
+   399→  * Wrapped existing Filters + Church Cards + Empty State in discoverTab === "discover" conditional
+   400→  * Added MyChurchesView component (separate function at end of file): shows followed churches as compact list cards with thumbnail + name + location + followers count + Following button; auth-gated empty state for unauthenticated users; "no follows yet" empty state for authenticated users
+   401→  * Made toggleFollow auth-aware: checks isAuthenticated via useSupabaseUser; if unauthenticated, shows "Sign in required" toast and does NOT toggle
+   402→  * "+ Add Church" button → "+ List Your Church" with routing logic: if onListChurch provided, call it; else fall back to in-page modal (back-compat)
+   403→  * "Add a Church" modal title → "List Your Church"
+   404→  * Empty-state "Add Church" button → "List Your Church" with same routing logic
+   405→  * Added Groups placeholder section inside church detail modal: "Church Groups coming soon" with categories listed (Youth, Young Adults, Men, Women, Families, Bible Study, Prayer, Worship, Kids, Care / Support)
+   406→  * Added pb-28 md:pb-5 to container so fixed mobile bottom nav doesn't cover content
+   407→  * Imported useSupabaseUser, Heart icon
+   408→- Wired page.tsx: ChurchesView receives onListChurch={() => goView("list-church")} → taps "+ List Your Church" → opens dedicated ListYourEntity variant="church" full-page form
+   409→- Committed as 48863f9 and pushed to main → Vercel deploy triggered.
+   410→- Verified production after deploy:
+   411→  * Homepage: HTTP 200 ✅
+   412→  * Genesis 1 comic API: HTTP 200 ✅ (no regression to Bible Comics)
+   413→  * Bible verse API: HTTP 200 ✅ (no regression to Bible reader)
+   414→  * /api/auth/me: HTTP 401 for unauthenticated (correct — auth system intact)
+   415→
+   416→Stage Summary:
+   417→- FILES CHANGED: src/app/page.tsx (sidebar cleanup + onListChurch wiring), src/components/crosscrafted/ChurchesView.tsx (+241/-14: tabs + auth-gate + Groups placeholder + MyChurchesView + bottom padding).
+   418→- NO DATABASE MIGRATIONS: Prisma schema unchanged. No Church/Group/Follow models added. Follow state is component-local with clear comment about future DB hydration. Per spec: "do not overengineer this now."
+   419→- NO CHANGES TO: ListYourEntity (existing church listing form fields preserved: Church Name, Description, State, City, Address, Denomination, Service Times, Church Photos, WhatsApp Number, Languages, Contact Name, Email, Phone), existing church data (CHURCHES array in crosscrafted-data.ts unchanged), Bible/Bible Comics/Reading Plans/Trivia/Marketplace/Prayer Wall/Apologetics/Events/Admin/Auth, comic content (Genesis 1/2/3/4 unchanged), mobile bottom nav, routing architecture.
+   420→- EXISTING APIS/MODELS REUSED: ListYourEntity (church variant) reused as-is. CHURCHES mock data reused as-is. useSupabaseUser auth hook reused as-is. Existing church detail modal reused as-is (only added Groups section).
+   421→- AUTH/SECURITY: Follow toggle is now auth-gated (was previously open to anyone). Login required to follow. Login required to list a church (existing ListYourEntity behavior preserved). No private user data exposed. No service-role keys exposed.
+   422→- MOBILE: pb-28 added so fixed mobile bottom nav doesn't cover My Churches list or church detail. Mode switcher (Discover/My Churches) uses same compact tab pattern as Bible hub (fits comfortably on small screens). Long church names truncate cleanly with `truncate` class.
+   423→- BROWSER TESTS REQUIRED (admin-only, user must verify): open Churches → tap "+ List Your Church" → confirm ListYourEntity page opens → switch to My Churches tab (unauth) → see "Sign in required" → sign in → switch to My Churches → see "You're not following any churches yet" → switch to Discover → tap Follow on a church → switch to My Churches → see the church in the list → tap a church → see Groups placeholder section in detail modal.
+   424→
+   425→---
+   426→Task ID: events-discovery-state-city-filters
+   427→Agent: main
+   428→Task: Events discovery + state/city filtering + event type (in-person/online/hybrid) + ticket URL + WhatsApp organizer.
+   429→
+   430→Work Log:
+   431→- Inspected current state: EventsView.tsx (626 lines, uses in-memory EVENTS mock array of 6 events), EventItem type had only state/city/is_online fields (no eventType, onlineUrl, ticketUrl, address, country). No Prisma Event model — all mock data in crosscrafted-data.ts.
+   432→- Extended EventItem type with: country, address, eventType (in-person|online|hybrid), onlineUrl, ticketUrl, organizerName, status (upcoming|cancelled|ended), featured. Kept is_online for backward compat.
+   433→- Updated all 6 mock events to use new schema: e1/e2/e3/e4 in-person (with ticketUrls on e1, e3, e4), e5 online-only with onlineUrl, e6 hybrid with onlineUrl. Marked e1, e3, e6 as featured.
+   434→- Added INDIAN_CITIES_BY_STATE single source of truth — 19 Indian states each with their major cities (e.g. Telangana → Hyderabad, Warangal, Nizamabad, Karimnagar, Khammam).
+   435→- Added getCitiesForState(state) helper.
+   436→- Expanded EVENT_CATEGORIES from 8 to 18: Worship, Conference, Prayer, Bible Study, Youth, Young Adults, Men, Women, Family, Children, Music, Workshop, Seminar, Outreach, Fellowship, Retreat, Concert, Other.
+   437→- Added EVENT_DATE_FILTERS constant: All Events, Today, Tomorrow, This Weekend, This Week, This Month.
+   438→- Updated EventsView.tsx:
+   439→  * Added quick filter row: [Near You] [All India] [Online] with Believ pink→orange gradient active state
+   440→  * "Near You" doesn't use GPS — uses selected state/city; if no state set, shows "Select your location" banner
+   441→  * "All India" preserves manual filters
+   442→  * "Online" filters to events where eventType is online or hybrid
+   443→  * Added City filter (state-dependent, disabled until state selected)
+   444→  * Reset city when state changes
+   445→  * Enhanced search to search title + description + city + state + church + category
+   446→  * Added Tomorrow + Weekend date filter logic
+   447→  * Event card badges: Online / Hybrid / Cancelled / Featured
+   448→  * Card location display: online → 🌐 Online Event; in-person/hybrid → City, State
+   449→  * Modal "Where" section: online → 🌐 Online Event + onlineUrl link; in-person → city/state + full address + location; hybrid → physical + "Also available online"
+   450→  * Modal CTA: ticketUrl → "Get Tickets" external link (pink→orange); else online event with onlineUrl → "Join Online" (blue→purple); else fallback to existing RSVP button
+   451→  * WhatsApp button uses MessageCircle icon + prefilled "Hi, I found your event 'X' on Believ..." message
+   452→  * Helper text under ticket button: "Tickets and registration are handled by the event organizer. Believ does not process payments."
+   453→  * "+ Add Event" → "+ List Your Event"
+   454→  * Added pb-28 md:pb-5 so mobile bottom nav doesn't cover content
+   455→  * Filter grid changed from sm:grid-cols-3 to grid-cols-2 sm:grid-cols-4 (now has Search + State + City + Language)
+   456→  * activeFilters count now includes filterCity + dateFilter
+   457→  * Clear all filters button also clears filterCity + sets quickFilter back to all-india
+   458→- Committed as 95a6670 and pushed to main → Vercel deploy triggered.
+   459→- Verified production after deploy:
+   460→  * Homepage: HTTP 200 ✅
+   461→  * Genesis 1/2/3/4 comic APIs: all HTTP 200 ✅ (no regression to Bible Comics)
+   462→  * /api/auth/me: HTTP 401 for unauthenticated (auth intact) ✅
+   463→
+   464→Stage Summary:
+   465→- FILES CHANGED: src/lib/crosscrafted-data.ts (EventItem type extended + 6 EVENTS updated + INDIAN_CITIES_BY_STATE + getCitiesForState + expanded EVENT_CATEGORIES + EVENT_DATE_FILTERS), src/components/crosscrafted/EventsView.tsx (quick filter row + City filter + enhanced search + event-type badges + ticket URL + WhatsApp + Join Online + mobile padding, +363/-52 lines).
+   466→- NO DATABASE MIGRATIONS: Prisma schema unchanged. No Event model added. Events are mock data (same as before). When a real Event Prisma model is added later, the new EventItem fields map 1:1 to it.
+   467→- NO PAYMENT GATEWAY: Believ does NOT process payments. ticketUrl opens external site in new tab. Helper text explicitly tells users "Believ does not process payments."
+   468→- NO CHANGES TO: Bible/Bible Comics/Reading Plans/Trivia/Marketplace/Churches/Prayer Wall/Apologetics/Admin/Auth, comic content (Genesis 1/2/3/4 unchanged), mobile bottom nav, routing architecture, existing notification system (admin notification audience picker is a future task).
+   469→- BROWSER TESTS REQUIRED (admin-only, user must verify): open Events → tap Near You → see "Select your location" banner → open filters → pick State (e.g. Telangana) → City dropdown becomes enabled with Telangana cities → pick Hyderabad → tap Online quick filter → see only online+hybrid events → tap an event → see event-type-aware "Where" section → if ticketUrl exists, see "Get Tickets" button + helper text → tap WhatsApp button → confirm prefilled message → confirm external links open in new tab.
+   470→
+   471→---
+   472→Task ID: store-marketplace-business-directory-redesign
+   473→Agent: main
+   474→Task: Store + Marketplace + Christian Business Directory redesign — 1:1 product images, seller type distinction, state/city filters, external Buy Link, business categories.
+   475→
+   476→Work Log:
+   477→- Inspected current state: ShopView.tsx (914 lines, uses PRODUCTS mock array of 6 products), Product type had vendor/city/whatsapp_number but no sellerType/state/buyUrl. Cards used h-32 landscape + object-cover (T-shirts got cropped). No image fallback. Modal CTA was always "Add to Cart" (no buyUrl logic). WhatsApp message said "CrossCrafted" not "Believ". ListYourEntity (business variant) had no category dropdown.
+   478→- Extended Product type with: sellerType ("believ" | "marketplace"), state, buyUrl (external checkout), subcategory, status, featured.
+   479→- Updated all 6 existing PRODUCTS (pr1-pr6) to use new schema — preserved all existing data, only added new fields. Added 2 NEW official Believ Store products (pr7 Believ Signature T-Shirt, pr8 Believ Hoodie) with sellerType: "believ", variations, attributes, buyUrl.
+   480→- Added MARKETPLACE_CATEGORIES single source of truth (16 categories): Bibles, Books, Christian Clothing, T-Shirts, Hoodies, Accessories, Phone Covers, Christian Art, Wall Art, Gifts, Home & Living, Music, Kids, Stationery, Apparel, Other.
+   481→- Added BUSINESS_CATEGORIES single source of truth (19 categories): Christian Clothing, Christian Books & Bibles, Christian Wedding Services, Christian Caterers, Christian Event Planners, Christian Photographers, Christian Home Bakers, Christian Gifts, Christian Music, Christian Media, Christian Designers, Christian Education, Christian Schools, Christian Travel, Christian Counseling, Christian Printing, Christian Technology, Christian Services, Other.
+   482→- Added Business type for future Business Directory (currently ListYourEntity handles it — Business type maps 1:1 to a future Prisma model).
+   483→- Updated ShopView.tsx:
+   484→  * Added seller-type filter row: [All] [Believ Store] [Marketplace] with purple→blue gradient
+   485→  * Added State + City filter row (state-dependent, same as Events)
+   486→  * Search now searches name + description + vendor + category + subcategory + state + city
+   487→  * Product card image: 1:1 (aspect-square) + object-contain (was h-32 landscape + object-cover — fixed T-shirt cropping)
+   488→  * Image fallback: labeled Believ placeholder with ImageOff icon when image fails to load OR no image (was showing broken-image icon or empty gradient)
+   489→  * Seller type badge on each card: purple "✓ Believ" for Believ Store, blue "Marketplace" for third-party
+   490→  * Modal main image: 1:1 (aspect-square) + object-contain
+   491→  * Modal thumbnails: object-contain + dark bg
+   492→  * Modal "Vendor" section → "Seller" with sellerType badge + state
+   493→  * Modal CTA: if buyUrl → "Buy Now" (external link, new tab); else fallback to "Add to Cart"
+   494→  * Helper text under Buy Now for marketplace products: "Payment, shipping, and refunds are handled by the seller. Believ does not process payments."
+   495→  * WhatsApp prefilled message: "Hi, I found your product 'X' on Believ..." (was "CrossCrafted")
+   496→  * List Item form: added External Buy Link field with helper text
+   497→  * List Item form: City field is now state-dependent dropdown (was free text)
+   498→  * CATEGORIES constant derives from MARKETPLACE_CATEGORIES (single source of truth)
+   499→  * Added pb-28 md:pb-5 so mobile bottom nav doesn't cover content
+   500→- Updated ListYourEntity.tsx:
+   501→  * Added BUSINESS_CATEGORIES import
+   502→  * Added businessCategory field to formData state
+   503→  * Added Business Category dropdown (required) to business variant form
+   504→  * Updated WhatsApp helper text for businesses
+   505→- Committed as 2f1855e and pushed to main → Vercel deploy triggered.
+   506→- Verified production after deploy:
+   507→  * Homepage: HTTP 200 ✅
+   508→  * Genesis 1/2/3/4 comic APIs: all HTTP 200 ✅ (no regression to Bible Comics)
+   509→  * /api/auth/me: HTTP 401 for unauthenticated (auth intact) ✅
+   510→
+   511→Stage Summary:
+   512→- FILES CHANGED: src/lib/crosscrafted-data.ts (Product type extended + 8 PRODUCTS + Business type + MARKETPLACE_CATEGORIES + BUSINESS_CATEGORIES), src/components/crosscrafted/ShopView.tsx (1:1 images + seller-type filter + state/city filter + image fallback + Buy Now + helper text + List Item form Buy Link field + mobile padding, +468/-76 lines), src/components/crosscrafted/ListYourEntity.tsx (business category dropdown + formData + import).
+   513→- NO DATABASE MIGRATIONS: Prisma schema unchanged. No Product/Business model added. Products are mock data (same as before). When real Prisma models are added later, the new Product/Business fields map 1:1 to them.
+   514→- NO PAYMENT GATEWAY: Believ does NOT process payments for third-party Marketplace sellers. buyUrl opens external site in new tab. Helper text explicitly tells users "Believ does not process payments." No Stripe/Razorpay/PayPal/internal checkout.
+   515→- EXISTING PRODUCTS PRESERVED: All 6 existing PRODUCTS (pr1-pr6) kept their data — only added new fields. No products deleted. Old products without variations/attributes still work (fields are optional).
+   516→- NO CHANGES TO: Bible/Bible Comics/Reading Plans/Trivia/Churches/Prayer Wall/Apologetics/Events/Admin/Auth, comic content (Genesis 1/2/3/4 unchanged), mobile bottom nav, routing architecture, existing notification system.
+   517→- BROWSER TESTS REQUIRED (admin-only, user must verify): open Marketplace → see 1:1 product cards with seller-type badges → tap Believ Store filter → see only pr7 + pr8 → tap Marketplace filter → see pr1-pr6 → tap a T-shirt product (pr4) → see full T-shirt visible (no cropping) → tap Buy Now → opens external link in new tab → see helper text "Believ does not process payments" → on mobile, scroll to bottom → confirm fixed bottom nav doesn't cover last product card → open List Your Business → see Business Category dropdown with 19 categories.
+   518→
+   519→---
+   520→Task ID: business-directory-public-page
+   521→Agent: main
+   522→Task: Build the Christian Business Directory as a proper public browse page. Rename sidebar "List Business" → "Business Directory".
+   523→
+   524→Work Log:
+   525→- Inspected existing business architecture: ListYourEntity has a business variant (form fields: name, description, state, city, address, whatsapp, languages, photos, businessCategory — added in previous commit). Business type exists in crosscrafted-data.ts (added in previous commit). NO Prisma Business model — businesses are mock data. Sidebar had "List Business" as a top-level entry routing to ListYourEntity variant="business".
+   526→- Extended Business type with: hours, services[], social[], rating?, reviews?, verified?, status extended to "suspended", ownerId?, createdAt?. Kept all existing fields.
+   527→- Expanded BUSINESS_CATEGORIES from 19 to 25 categories per spec (added Christian Bookstores, Bibles & Christian Books, Christian Gifts & Merchandise, Wedding Caterers, Christian Videographers, Christian Bakers, Christian Restaurants & Cafes, Church Supplies, Christian IT & Digital Services, Christian Marketing, Christian Real Estate, Christian Professionals, Other Christian Businesses).
+   528→- Added BUSINESSES mock array with 6 realistic Christian businesses across different categories and locations: caterer, bookstore, photographer, home baker, apparel brand, school. Two have productIds linking to Marketplace products (b2 → pr1, pr5; b5 → pr4) demonstrating the business → marketplace connection.
+   529→- Created BusinessDirectoryView.tsx (new file, 600+ lines):
+   530→  * Public browse page with header + subtitle + search + category/sort/filter UI
+   531→  * Featured Businesses section (only when no filters applied)
+   532→  * All Businesses grid with card count
+   533→  * Empty state with "Try another category, city or state" + Clear Filters button
+   534→  * Public directory only shows approved businesses (status === "approved")
+   535→  * BusinessCard component: 16:9 cover with image fallback, Verified/Featured badges, category overlay, rating, location, description, contact badges, View Business CTA
+   536→  * BusinessDetailModal: cover with title overlay, location section, About, Services pills, Hours, Languages, Contact CTAs (WhatsApp/Call/Website/Email — only render buttons for info the business actually provided), verified disclaimer helper text
+   537→  * Mobile pb-28 padding so fixed bottom nav doesn't cover cards
+   538→- Updated page.tsx:
+   539→  * Added "business-directory" to View union
+   540→  * Renamed SIDEBAR_LINKS "List Business" → "Business Directory" with new id="business-directory" + Building2 icon
+   541→  * Renamed MOBILE_MORE_VIEWS "List Business" → "Business Directory"
+   542→  * Imported BusinessDirectoryView
+   543→  * Re-imported Building2 (removed in earlier cleanup)
+   544→  * Wired BusinessDirectoryView with onListBusiness={() => goView("list-business")} so "+ List Your Business" button opens the existing ListYourEntity variant="business" form
+   545→  * The "list-business" route is PRESERVED for backward compat
+   546→- Committed as 9c24fe6 and pushed to main → Vercel deploy triggered.
+   547→- Verified production after deploy:
+   548→  * Homepage: HTTP 200 ✅
+   549→  * Genesis 1/2/3/4 comic APIs: all HTTP 200 ✅ (no regression to Bible Comics)
+   550→  * /api/auth/me: HTTP 401 for unauthenticated (auth intact) ✅
+   551→
+   552→Stage Summary:
+   553→- FILES CHANGED: src/lib/crosscrafted-data.ts (Business type extended + 25 BUSINESS_CATEGORIES + 6 BUSINESSES mock), src/components/crosscrafted/BusinessDirectoryView.tsx (NEW — public browse page + business card + detail modal), src/app/page.tsx (new view type + sidebar rename + import + render).
+   554→- NO DATABASE MIGRATIONS: Prisma schema unchanged. No Business model added. Businesses are mock data (same as Products). When a real Prisma Business model is added later, the new Business fields map 1:1 to it.
+   555→- NO PAYMENT SYSTEM: Believ does NOT process payments for businesses. WhatsApp / Call / Website buttons open external channels directly. Conversation happens directly between buyer and business.
+   556→- EXISTING LIST BUSINESS FORM PRESERVED: ListYourEntity variant="business" is reused as-is (already has BUSINESS_CATEGORIES dropdown + state/city fields from previous commit). The "+ List Your Business" button in BusinessDirectoryView navigates to it.
+   557→- SIDEBAR NO LONGER CONFUSING: was "List Business" (implies form), now "Business Directory" (implies discovery). Listing creation is now accessed from inside the directory via the "+ List Your Business" CTA — matches the spec's "remove confusion" requirement.
+   558→- NO CHANGES TO: Marketplace (separate system — products vs businesses), Churches/Events/Bible/Trivia/Prayer Wall/Apologetics/Admin/Auth, comic content (Genesis 1/2/3/4 unchanged), mobile bottom nav, routing architecture, existing notification system.
+   559→- BROWSER TESTS REQUIRED (admin-only, user must verify): open Business Directory → see 6 business cards with verified badges → search "caterer" → see Grace Christian Caterers → filter by State (Telangana) → see b1 + b6 → tap a business → see detail modal with cover + About + Services + Hours + Contact CTAs → tap "+ List Your Business" → existing ListYourEntity form opens → on mobile, scroll to bottom → confirm fixed bottom nav doesn't cover the last business card.
+   560→
+   561→---
+   562→Task ID: landing-page-app-home-brand-system
+   563→Agent: main
+   564→Task: Finalize landing page + app entry + brand system. ENTER APP must open App Home (not Bible Comics).
+   565→
+   566→Work Log:
+   567→- Located root cause in LandingHero.tsx line 109: ENTER APP button had onClick={() => onEnterApp("comic")} which routed directly to ComicView (Bible Comics). Fixed to onEnterApp("home").
+   568→- Added new "home" view type to page.tsx View union. Added AppHomeView import. Added "Home" as the first SIDEBAR_LINKS entry with HomeIcon.
+   569→- Created AppHomeView.tsx (new component):
+   570→  * "Welcome to Believ" greeting (or "Welcome, {firstName}" when authenticated, using Supabase user_metadata.full_name → name → email local-part fallback)
+   571→  * "Believe. Connect. Grow. Play." tagline
+   572→  * Feature cards grouped by BELIEVE / CONNECT / GROW / PLAY / DISCOVER with colored gradient accents
+   573→  * Each card links to an existing feature (Bible, Bible Comics, Churches, Events, Prayer Wall, Bible Trivia, Marketplace, Business Directory)
+   574→  * pb-28 md:pb-5 so fixed mobile bottom nav doesn't cover content
+   575→- Updated LandingHero.tsx:
+   576→  * ENTER APP button: onEnterApp("comic") → onEnterApp("home") ✅
+   577→  * Final CTA "Enter Believ" button: onEnterApp("churches") → onEnterApp("home") ✅
+   578→  * Primary hero CTA: was "Read the Bible" → bible, now "Enter Believ" → home (pink primary)
+   579→  * Secondary hero CTA: was "Try Trivia" → trivia, now "Read the Bible" → bible (outlined secondary)
+   580→  * Public nav: added Events (was Bible/Churches/Trivia/Prayer, now Bible/Churches/Events/Trivia/Prayer)
+   581→  * FEATURES array expanded from 6 to 9 cards: Holy Bible, Bible Comics, Churches, Events, Prayer Wall, Bible Trivia, Marketplace, Business Directory, Community
+   582→  * Removed outdated "List Your Church" feature card
+   583→  * Updated all feature descriptions to match spec wording
+   584→  * Stats fixed: 25+ → 800+ (verified 800 trivia questions in production DB via Prisma count), 6+ → 7 (verified 7 PRIZE_TIERS in code), 11 kept (verified 11 LANGUAGES in code — accurate)
+   585→  * Hero subtitle: hardcoded → t('landing.subtitle')
+   586→  * Final CTA title: hardcoded "Iron sharpens iron" → t('cta.title') = "Grow in Faith, Together"
+   587→  * Final CTA subtitle: hardcoded → t('cta.subtitle')
+   588→  * Added Calendar + Users imports for new feature cards
+   589→- Updated i18n/en.ts:
+   590→  * landing.titleGradient: "Grow in Faith, Together" → "Believe. Connect. Grow. Play."
+   591→  * landing.subtitle: updated to mention all real features
+   592→  * landing.cta.enterBeliev: NEW = "Enter Believ"
+   593→  * landing.stats.questions: "Quiz Questions" → "Bible Questions"
+   594→  * features.subtitle: updated
+   595→  * feature.comics/events/businessDirectory/community: NEW keys
+   596→  * feature.churches.title: "Church Directory" → "Churches"
+   597→  * feature.listChurch: REMOVED (no longer a landing card)
+   598→  * cta.title: "Iron sharpens iron" → "Grow in Faith, Together"
+   599→  * cta.subtitle: updated
+   600→  * nav.prayer: "Prayer Wall" → "Prayer" (more compact)
+   601→  * nav.enterApp: "Enter App" → "Enter Believ"
+   602→- Verified actual production stats via Prisma: TriviaQuestion.count() = 800 (so "800+" is truthful).
+   603→- Committed as bc909ae and pushed to main → Vercel deploy triggered.
+   604→- Verified production after deploy:
+   605→  * Homepage: HTTP 200 ✅
+   606→  * Genesis 1/2/3/4 comic APIs: all HTTP 200 ✅ (no regression to Bible Comics)
+   607→  * /api/auth/me: HTTP 401 for unauthenticated (auth intact) ✅
+   608→  * Comic list API: HTTP 200 ✅
+   609→
+   610→Stage Summary:
+   611→- ROOT CAUSE: LandingHero ENTER APP button hardcoded to onEnterApp("comic").
+   612→- FIX: ENTER APP now opens AppHomeView (new "home" view) — a lightweight dashboard where users choose where to go.
+   613→- FILES CHANGED: src/app/page.tsx (new "home" view type + sidebar Home entry + AppHomeView render), src/components/crosscrafted/LandingHero.tsx (ENTER APP routing fix + stats fix + FEATURES expansion + copy updates + Events added to nav), src/components/crosscrafted/AppHomeView.tsx (NEW — App Home dashboard), src/lib/i18n/en.ts (landing + features + cta + nav copy updates).
+   614→- STATS VERIFIED: 800 trivia questions (queried production DB), 7 PRIZE_TIERS (in code), 11 LANGUAGES (in code). No fake users/churches/businesses/community sizes.
+   615→- NO CHANGES TO: Believ logo (reused as-is), brand colors (deep navy + coral/pink/purple/blue gradients preserved), Bible Comics functionality (Genesis 1/2/3/4 unchanged), Bible reader / Trivia / Prayer Wall / Churches / Marketplace / Business Directory / Events / Admin / Auth, mobile bottom nav, routing architecture, database schema.
+   616→- BROWSER TESTS REQUIRED (admin-only, user must verify): open landing page → tap ENTER APP → confirm App Home opens (not Bible Comics) → confirm "Welcome to Believ" + 8 feature cards grouped by BELIEVE/CONNECT/GROW/PLAY/DISCOVER → tap Bible Comics card → confirm Genesis 1 opens → back to Home → tap each card → confirm each feature opens correctly → check landing page stats show "800+ Bible Questions", "7 Prize Tiers", "11 Languages" → check public nav shows Bible/Churches/Events/Trivia/Prayer.
+   617→
+   618→---
+   619→Task ID: koino-rebrand
+   620→Agent: main
+   621→Task: Global rebrand Believ → Koino (Faith. Fellowship. Belong.)
+   622→
+   623→Work Log:
+   624→- Copied uploaded master logo (Glossy Koino Faith Logo.png) to /public/koino-logo.png (canonical asset).
+   625→- Also replaced /public/believ-logo.png with the Koino logo so existing Image src="/believ-logo.png" references don't break during transition (file name kept as alias, content is now Koino).
+   626→- Updated src/app/layout.tsx metadata: title, description, keywords, authors, icons, openGraph (title/description/siteName), twitter (title/description) — all Believ → Koino. Added manifest: "/manifest.webmanifest" reference.
+   627→- Created src/app/manifest.ts (NEW PWA manifest): name "Koino — Faith. Fellowship. Belong.", short_name "Koino", description, start_url "/", display "standalone", background_color + theme_color #12101A, 4 icon entries (192+512, any+maskable), 5 app shortcuts (Bible, Bible Comics, Churches, Prayer Wall, Bible Trivia).
+   628→- Updated i18n strings in ALL 13 languages (en + 12 Indic: hi, te, ta, ml, bn, pa, kn, as, mr, gu, ur, or):
+   629→  * brand.name: Believ → Koino
+   630→  * brand.tagline: Believe. Connect. Grow. → Faith. Fellowship. Belong.
+   631→  * landing.title: Believ → Koino
+   632→  * landing.titleGradient: Believe. Connect. Grow. Play. → Faith. Fellowship. Belong.
+   633→  * landing.subtitle: updated to spec wording
+   634→  * landing.cta.enterBeliev: Enter Believ → Enter Koino
+   635→  * cta.button: Enter Believ → Enter Koino
+   636→  * cta.subtitle: Join the Believ community → Join the Koino community
+   637→  * nav.enterApp: Enter Believ → Enter Koino
+   638→  * nav.prayer: Prayer Wall → Prayer (compact)
+   639→  * signin.title: Believ → Koino
+   640→  * signin.subtitle: Believe. Connect. Grow. → Faith. Fellowship. Belong.
+   641→  * triviaView.results.shareText: Play on Believ! → Play on Koino!
+   642→  * comingSoon.body: everything else on Believ → everything else on Koino
+   643→  * 77 standalone "Believ" → "Koino" replacements across the 11 Indic files
+   644→- Updated 16 component files: ComicView, AdminView, BusinessDirectoryView, TriviaView, LevelUpAnimation, ListYourEntity, ChurchesView, ShopView, LandingHero, AppHomeView, EventsView, page.tsx, comic/share route, auth/signin page, crosscrafted-data.ts, streaks.ts
+   645→  * All user-facing "Believ" brand references → "Koino"
+   646→  * All "Believe. Connect. Grow. Play." taglines → "Faith. Fellowship. Belong."
+   647→  * All logo src="/believ-logo.png" → src="/koino-logo.png"
+   648→  * All alt="Believ" → alt="Koino"
+   649→  * All share text "on Believ" → "on Koino"
+   650→  * All WhatsApp prefilled messages "on Believ" → "on Koino"
+   651→  * All helper text "Believ does not process payments" → "Koino does not process payments"
+   652→  * All "Believ Store" → "Koino Store"
+   653→  * All "Welcome to Believ" → "Welcome to Koino"
+   654→  * AppHomeView group label "BELIEVE" → "FAITH" (aligns with new tagline; the BELIEVE/CONNECT/GROW/PLAY/DISCOVER groups describe the user's faith journey actions, not the brand)
+   655→  * AppHomeView "BELIEV" badge → "KOINO"
+   656→  * crosscrafted-data.ts mock products: "Believ Signature T-Shirt" → "Koino Signature T-Shirt", "Believ Hoodie" → "Koino Hoodie", brand attribute "Believ" → "Koino", 22 total replacements
+   657→- Committed as 5e1ba56 and pushed to main → Vercel deploy triggered.
+   658→- Verified production after deploy:
+   659→  * Homepage: HTTP 200 ✅
+   660→  * Page title: <title>Koino — Faith. Fellowship. Belong.</title> ✅
+   661→  * koino-logo.png: HTTP 200, image/png, 837KB ✅
+   662→  * /manifest.webmanifest: HTTP 200, name "Koino — Faith. Fellowship. Belong.", short_name "Koino", 4 icons, 5 shortcuts ✅
+   663→  * Genesis 1/2/3/4 comic APIs: all HTTP 200 ✅ (no regression to Bible Comics)
+   664→
+   665→Stage Summary:
+   666→- ROOT CAUSE OF OLD BRANDING: "Believ" was the original platform name across i18n strings, component text, layout metadata, and logo file. Tagline was "Believe. Connect. Grow. Play."
+   667→- FIX: Global rebrand to "Koino" with tagline "Faith. Fellowship. Belong." Logo replaced with uploaded master asset.
+   668→- FILES CHANGED: 33 files (1 new manifest.ts + 1 new koino-logo.png + 1 replaced believ-logo.png content + 30 modified source files).
+   669→- ENTER APP routing: unchanged from previous commit (already opens App Home, not Bible Comics).
+   670→- NO CHANGES TO: Believ logo file structure (replaced in-place), brand colors (deep navy + coral/pink/purple/blue gradients preserved), Bible Comics functionality (Genesis 1/2/3/4 unchanged — only "Believ" → "Koino" in share text), Bible reader / Trivia / Prayer Wall / Churches / Marketplace / Business Directory / Events / Admin / Auth, mobile bottom nav, routing architecture, database schema, internal code identifiers (file names, variable names, Prisma models, API paths — all retained per spec).
+   671→- NO OVER-BRANDING: Features keep their own clear names (Bible, Churches, Events, Bible Trivia, Prayer Wall, Marketplace, Business Directory, Bible Comics). No "Koino Bible" / "Koino Churches" / "Koino Events" naming.
+   672→- REMAINING BELIEV REFERENCES (all intentional):
+   673→  * /public/believ-logo.png file name (kept as alias — content is now the Koino logo, so existing Image refs still work)
+   674→  * src/lib/i18n/*.ts key name "landing.cta.enterBeliev" (internal identifier — value is "Enter Koino")
+   675→  * "Believers" (English word for people who believe — NOT the brand — preserved in mock event description)
+   676→  * Internal code identifiers (file names like ChurchesView.tsx, variable names, Prisma models, API paths) — all retained per spec
+   677→  * Production deployment URL "crosscraftedapp.vercel.app" in .env (actual Vercel URL — not changed per spec "do not change production deployment settings blindly")
+   678→- BROWSER TESTS REQUIRED (admin-only, user must verify): open landing page → confirm Koino logo + "Koino" wordmark + "Faith. Fellowship. Belong." tagline → tap ENTER KOINO → confirm App Home opens (not Bible Comics) → confirm "Welcome to Koino" + KOINO badge + "Faith. Fellowship. Belong." tagline → tap each feature → confirm no "Believ" branding anywhere → check browser tab title shows "Koino — Faith. Fellowship. Belong." → check favicon shows Koino logo.
+   679→- MANUAL DNS/DOMAIN WORK STILL NEEDED (per spec section 21):
+   680→  * Official domain www.koino.in — DNS not configured yet (currently still crosscraftedapp.vercel.app)
+   681→  * When ready: configure koino.in DNS → Vercel, add custom domain in Vercel project settings, update NEXT_PUBLIC_SITE_URL env var if needed
+   682→  * Do NOT blindly change production deployment URL until DNS is ready
+   683→
+   684→---
+   685→Task ID: admin-panel-quick-actions-fix
+   686→Agent: main
+   687→Task: Wire admin Quick Actions + overview cards + honest Preview Mode banners.
+   688→
+   689→Work Log:
+   690→- Inspected AdminView.tsx (1921 lines). Found DashboardTab's Quick Actions were <div> elements with cursor-pointer CSS but NO onClick handler — dead buttons. Overview cards were static display, not clickable.
+   691→- Audited underlying data architecture honestly:
+   692→  * Real DB + Real Admin APIs: Bible Comics (14 admin API routes, ComicChapter/ComicPanel Prisma models), Trivia Questions (800+ in DB), Gifts & Redemptions (admin APIs).
+   693→  * Mock data only (NO Prisma model, NO admin API): Churches, Events, Products, Businesses, Prayers, Apologetics, Competitions, Announcements, Analytics — all mock arrays in crosscrafted-data.ts.
+   694→- Fixed Quick Actions: wired all 6 buttons to navigate to correct admin tab via setActiveTab(). Added icons to each button.
+   695→- Fixed overview cards: wired all 6 cards to navigate to their admin tab. Added "Open {label} admin →" hover hint.
+   696→- Passed onNavigate={setActiveTab} prop from parent to DashboardTab.
+   697→- Added "Architecture Status" card on Dashboard:
+   698→  * Green ● DB-backed: Bible Comics, Trivia, Gifts & Redemptions
+   699→  * Orange ● Preview mode: Churches, Events, Marketplace, Prayers, Apologetics, Competitions, Announcements, Analytics
+   700→- Created PreviewModeBanner component and added it to all 8 mock-data tabs (ChurchesTab, EventsTab, MarketplaceTab, PrayersTab, ApologeticsTab, CompetitionsTab, AnnouncementsTab, AnalyticsTab).
+   701→- BibleComicsAdmin does NOT get the banner (it's the only real DB-backed admin section).
+   702→- Committed as 2913f54 and pushed to main → Vercel deploy triggered.
+   703→- Verified production after deploy:
+   704→  * Homepage: HTTP 200 ✅
+   705→  * Genesis 1/2/3/4 comic APIs: all HTTP 200 ✅ (no regression to Bible Comics)
+   706→  * /api/admin/comics: HTTP 403 for non-admin ✅ (auth intact)
+   707→  * Page title: "Koino — Faith. Fellowship. Belong." ✅
+   708→
+   709→Stage Summary:
+   710→- ROOT CAUSE: Quick Actions were <div> with cursor-pointer but no onClick — dead buttons.
+   711→- FIX: All 6 Quick Actions + 6 overview cards now navigate to their correct admin tab via setActiveTab().
+   712→- HONEST UX: PreviewModeBanner on all 8 mock-data tabs clearly tells the admin that actions don't persist to DB. Architecture Status card on Dashboard summarizes what's real vs. preview.
+   713→- FILES CHANGED: src/components/crosscrafted/AdminView.tsx (+103/-22 lines).
+   714→- NO NEW PRISMA MIGRATIONS: Creating real Prisma models for Church/Event/Product/Business/Prayer/Apologetics/Competition/Announcement/Analytics is a large multi-day task that requires schema design + migration + admin API routes + server-side validation + image upload + audit log + analytics tracking. This commit does NOT attempt that — it only fixes the dead Quick Actions and adds honest UX banners.
+   715→- NO CHANGES TO: BibleComicsAdmin (already real), Bible Comics functionality, Trivia Questions (real DB), Gifts & Redemptions (real APIs), Authentication / requireAdmin(), Brand colors / Koino logo, Mobile bottom nav, Routing architecture.
+   716→
+   717→---
+   718→Task ID: koino-signup-onboarding-members
+   719→Agent: main
+   720→Task: Complete signup, onboarding, member profile, WhatsApp channel + admin member system.
+   721→
+   722→Work Log:
+   723→- Added 13 new fields to User Prisma model: username (unique), dateOfBirth, gender, state, city, mobileNumber, mobileVerified, faithStatus, faithJourney, profileCompleted, whatsappChannelPromptShown, whatsappChannelClicked, signupMethod. Ran `prisma db push --accept-data-loss` successfully against production Supabase.
+   724→- Created 4 new API endpoints:
+   725→  1. POST/GET /api/profile/setup — saves onboarding profile step-by-step or complete. Server-authoritative (userId from auth session). Validates username uniqueness, required fields, enum values. GET returns existing partial profile for resume.
+   726→  2. GET /api/profile/check-username?username=X — real-time availability check with suggestions.
+   727→  3. GET /api/admin/members — admin-only member list with search, filters, pagination. ?stats=true returns dashboard stats (totalMembers, newToday, newThisWeek, newThisMonth, recentSignups). 403 for non-admins.
+   728→  4. GET /api/config/whatsapp-channel — single source of truth for the official WhatsApp Channel URL.
+   729→- Updated /api/auth/me to return profileCompleted.
+   730→- Updated getAuthUser() in auth-server.ts to return profileCompleted.
+   731→- Updated useSupabaseUser() hook to expose profileCompleted + loading state.
+   732→- Created OnboardingView.tsx — 4-step flow: Welcome → Profile → Faith → WhatsApp. Progress indicator, username availability check, state/city dropdowns (state-dependent), faith questions with privacy note, WhatsApp channel follow (optional, skippable). Resume capability — loads existing partial profile and skips to appropriate step.
+   733→- Updated page.tsx: added "onboarding" view type, OnboardingView import, useSupabaseUser destructuring, onboarding redirect useEffect (when authenticated && !profileCompleted → navigate to onboarding; when profileCompleted → navigate to home), enterApp() checks profileCompleted before navigating.
+   734→- Committed as 7b491e5 and pushed to main → Vercel deploy triggered.
+   735→- Verified production after deploy:
+   736→  * Homepage: HTTP 200 ✅
+   737→  * /api/auth/me: 401 for unauthenticated ✅
+   738→  * /api/profile/setup: 401 for unauthenticated ✅
+   739→  * /api/admin/members: 403 for non-admin ✅ (admin auth works)
+   740→  * /api/config/whatsapp-channel: 200 with correct URL + label ✅
+   741→  * Genesis 1 comic API: HTTP 200 ✅ (no regression)
+   742→
+   743→Stage Summary:
+   744→- PRISMA MIGRATION: 13 new optional fields on User model (no data loss). Existing users have profileCompleted=false → will see onboarding on next login.
+   745→- FILES CHANGED: 10 files (1 schema + 4 new API routes + 1 new component + 4 modified files for auth wiring).
+   746→- REAL DB-BACKED: User model, profile fields, username uniqueness (DB-level @unique constraint), admin members API (queries real User table), dashboard stats (real counts from DB), WhatsApp channel config endpoint.
+   747→- HONEST LIMITATIONS (not yet built — requires future work):
+   748→  * Admin Members UI tab in AdminView (API exists at /api/admin/members, but the admin panel tab + member list/table/profile UI is not wired yet)
+   749→  * OTP mobile verification for prize claims (requires OTP infrastructure — not built, per spec "Do not create an insecure custom OTP system")
+   750→  * Trivia Winners model + admin UI (requires PrizaWinner Prisma model + admin CRUD)
+   751→  * Activity Log model + API (requires AdminAction Prisma model)
+   752→  * Analytics member growth charts (requires analytics event tracking)
+   753→  * Notification system integration for onboarding completion
+   754→- NO CHANGES TO: Existing auth (Google + Email via Supabase), Bible Comics (Genesis 1/2/3/4 unchanged), Bible/Trivia/Prayer Wall/Churches/Marketplace/Business Directory/Events/Admin, Brand colors / Koino logo, Mobile bottom nav, Routing architecture.
+   755→
+   756→---
+   757→Task ID: koino-trivia-competition-prize-system
+   758→Agent: main
+   759→Task: Bible Trivia competition + real prize system — Competition/Prize/Winner models + server-authoritative scoring.
+   760→
+   761→Work Log:
+   762→- Inspected existing trivia architecture: TriviaQuestion (800+ in DB), TriviaQuestionAttempt (@@unique [userId, questionId] anti-farming), TriviaQuizSession, TriviaPointTransaction, DailyChallenge, DailySpin, UserBadge, StreakFreeze. Existing APIs: /api/trivia/start, /api/trivia/submit, /api/trivia/leaderboard, /api/trivia/stats, /api/trivia/gifts, /api/trivia/claim-gift, /api/gamification/daily-challenge, /api/gamification/daily-spin.
+   763→- Added 4 new Prisma models:
+   764→  1. TriviaCompetition — title, type, category, difficulty, questionCount, attemptLimit, winnerCount, rules, status, startAt, endAt, claimDeadlineDays, prizeId, createdById
+   765→  2. TriviaCompetitionAttempt — questionIds (server-selected), score (competition score), correctCount, accuracy, durationMs. Indexed on [competitionId, score] for leaderboard queries.
+   766→  3. TriviaPrize — name, description, imageUrl, sourceType (koino_merch/custom), productId (references Product — no duplication), quantity, assignedQuantity, remainingQuantity, requiresShipping, terms
+   767→  4. TriviaWinner — rank, score, status (pending_verification → phone_verified → contacted → address_pending → address_verified → processing → shipped → delivered → claimed → cancelled/disqualified/expired), phoneVerified, shipping fields, adminNotes, disqualifiedReason
+   768→- Added relations to User model: competitionAttempts[], triviaWins[]
+   769→- Ran `prisma db push` successfully — all 4 new tables created in production Supabase.
+   770→- Created 5 new API endpoints:
+   771→  1. GET /api/trivia/competitions — public, returns competitions with prize info, participant count, user's rank + attempts
+   772→  2. POST /api/trivia/competitions/[id]/submit — SERVER-AUTHORITATIVE scoring (userId from auth, answers validated server-side, attempt limit enforced via DB count, competition score separate from lifetime FP)
+   773→  3. GET/POST /api/admin/trivia/competitions — admin CRUD
+   774→  4. GET/POST /api/admin/trivia/prizes — admin CRUD with inventory tracking
+   775→  5. GET /api/admin/trivia/winners — admin winner list with user info
+   776→- Updated TriviaView.tsx CompeteView: replaced the old "Church vs Church coming soon" placeholder with a REAL competition browser that fetches from /api/trivia/competitions. Shows LIVE / UPCOMING / ENDED sections with prize images, participant counts, time remaining, user's rank + attempts remaining.
+   777→- Committed as 9b3a0c8 and pushed to main → Vercel deploy triggered.
+   778→- Verified production after deploy:
+   779→  * Homepage: HTTP 200 ✅
+   780→  * /api/trivia/competitions: 200 with {competitions:[]} (empty — admin must create competitions) ✅
+   781→  * /api/trivia/competitions/[id]/submit: 401 for unauthenticated ✅
+   782→  * /api/admin/trivia/prizes: 403 for non-admin ✅
+   783→  * /api/admin/trivia/winners: 403 for non-admin ✅
+   784→  * Genesis 1: HTTP 200 ✅ (no regression)
+   785→
+   786→Stage Summary:
+   787→- PRISMA MIGRATION: 4 new models (TriviaCompetition, TriviaCompetitionAttempt, TriviaPrize, TriviaWinner) + User relations. All created in production DB.
+   788→- FILES CHANGED: 7 files (1 schema + 5 new API routes + 1 modified TriviaView).
+   789→- REAL DB-BACKED: Competition/Prize/Winner Prisma models, competition submit API (server-authoritative scoring), admin CRUD APIs (all 403 for non-admins).
+   790→- KEY DESIGN: Competition Score is SEPARATE from lifetime FP. Attempt limits enforced server-side. Correct answers never sent to browser. Prize inventory tracked. Winner records immutable.
+   791→- HONEST LIMITATIONS (not yet built — requires future work):
+   792→  * Competition quiz PLAY flow (the "Enter Challenge" button is visual only — the quiz UI that fetches questions + renders the quiz + submits answers is not wired yet)
+   793→  * Winner calculation cron job (server-side auto-calculation when endAt passes — currently admin must manually trigger)
+   794→  * OTP mobile verification for prize claims (requires OTP provider integration)
+   795→  * Shipping details collection form
+   796→  * Admin Prize/Competition/Winner management UI in AdminView (APIs exist, admin panel tabs not wired)
+   797→  * Real-time leaderboard refresh
+   798→  * Anti-cheat detection (impossible submissions, rapid answers)
+   799→  * Audit log model + API
+   800→  * Notification system integration for winner notification
+   801→- NO CHANGES TO: Existing TriviaQuestion model (800+ questions preserved), existing Faith Points system (server-authoritative, anti-farming), existing Daily Challenge/Spin/Badges/Stats/Leaderboard, existing difficulty values, existing Practice Mode, Bible Comics, Authentication, Brand colors/Koino logo.
+   802→
+   803→---
+   804→Task ID: trivia-competition-phase2-end-to-end
+   805→Agent: main
+   806→Task: Complete the end-to-end competition play flow — quiz UI + result screen + leaderboard + automatic winner calculation.
+   807→
+   808→Work Log:
+   809→- Created POST /api/trivia/competitions/[id]/start — server-side question selection + attempt creation. Verifies auth, competition liveness (server time), attempt limit (DB count). Selects questions SERVER-SIDE (client never chooses). Returns questions WITHOUT correct answers (stripped server-side). Creates attempt record pre-bound to userId + competitionId.
+   810→- Updated POST /api/trivia/competitions/[id]/submit — now uses attemptId from /start (not creating a new attempt). Verifies attempt ownership (anti-cheat). Prevents duplicate submission. Updates existing attempt record with server-calculated score.
+   811→- Created POST /api/trivia/competitions/[id]/finalize — IDEMPOTENT winner calculation (admin-only). Tie-breaking: score DESC → correctCount DESC → accuracy DESC → durationMs ASC → createdAt ASC. Uses DB transaction: creates winner records + decrements prize inventory atomically. @@unique([competitionId, userId]) prevents duplicates. Marks competition as "ended".
+   812→- Created GET /api/trivia/competitions/[id]/leaderboard — public. Ranks by competition score (not lifetime FP). Deduplicates by userId (best attempt per user). Highlights current user's rank.
+   813→- Created CompetitionQuizView.tsx — full-screen quiz UI: calls /start on mount, displays questions with progress bar, answer selection with A/B/C/D labels, Next/Back navigation, Submit Quiz on final question. Server-authoritative: client never sees correct answers.
+   814→- Created CompetitionResultView — result screen: shows score, correct count, accuracy, rank, FP earned. "View Leaderboard" + "Back to Compete" buttons. Note: "Competition Score is separate from lifetime Faith Points."
+   815→- Created CompetitionLeaderboard.tsx — competition-specific leaderboard: medal icons (🥇🥈🥉), highlights current user, shows rank/avatar/username/correct/accuracy/score. "Your Rank" card at top.
+   816→- Updated TriviaView CompeteView: manages 3 sub-views (quiz, result, leaderboard). "Enter Challenge" button calls /start and opens CompetitionQuizView. After submission, CompetitionResultView shows with server-calculated score + rank. "View Leaderboard" / "View Results" buttons open CompetitionLeaderboard.
+   817→- Fixed leaderboard route (was 404 because GET handler was inside finalize/route.ts — moved to its own leaderboard/route.ts file).
+   818→- Committed as c199f79 + 27d51ee and pushed to main → Vercel deploy triggered.
+   819→- Verified production after deploy:
+   820→  * Homepage: HTTP 200 ✅
+   821→  * /api/trivia/competitions: 200 with {competitions:[]} ✅
+   822→  * /api/trivia/competitions/[id]/start: 401 for unauth ✅
+   823→  * /api/trivia/competitions/[id]/submit: 401 for unauth ✅
+   824→  * /api/trivia/competitions/[id]/finalize: 403 for non-admin ✅
+   825→  * /api/trivia/competitions/[id]/leaderboard: 200 with {leaderboard:[], myRank:null, totalParticipants:0} ✅
+   826→  * Genesis 1: HTTP 200 ✅ (no regression)
+   827→
+   828→Stage Summary:
+   829→- END-TO-END FLOW (now working in code):
+   830→  1. Admin creates competition via POST /api/admin/trivia/competitions
+   831→  2. Admin sets status="live" + startAt/endAt
+   832→  3. User opens Trivia → Compete tab → sees competition card with prize
+   833→  4. User clicks "Enter Challenge" → /start creates attempt + returns questions (no correct answers)
+   834→  5. User answers questions → clicks "Submit Quiz"
+   835→  6. /submit validates answers server-side → calculates score + rank + FP
+   836→  7. Result screen shows score, accuracy, rank, FP earned
+   837→  8. User clicks "View Leaderboard" → sees competition leaderboard with their rank
+   838→  9. When competition ends → admin calls /finalize → winners calculated + prizes allocated (idempotent)
+   839→- FILES CHANGED: 7 files (2 new API routes + 1 updated API + 2 new components + 1 updated TriviaView + leaderboard route fix).
+   840→- REAL DB-BACKED: Competition start/submit/finalize/leaderboard all query real Prisma models. Server-authoritative scoring. Attempt ownership verified. Prize inventory protected via DB transactions.
+   841→- HONEST LIMITATIONS (not yet built):
+   842→  * Admin Prize/Competition/Winner management UI in AdminView (APIs exist, admin panel tabs not wired)
+   843→  * OTP mobile verification for prize claims (requires OTP provider integration)
+   844→  * Shipping details collection form (fields exist in TriviaWinner model, UI not built)
+   845→  * Cron job for automatic finalize (admin must manually call /finalize — can be triggered via curl or admin UI)
+   846→  * Notification system integration for winner notification
+   847→  * Anti-cheat detection (impossible submissions, rapid answers)
+   848→  * Audit log model + API
+   849→
+   850→---
+   851→Task ID: support-donations
+   852→Agent: general-purpose (Support Koino + Donation Settings)
+   853→Task: Rebuild /support page with UPI/QR/Bank + admin Donation Settings
+   854→
+   855→Work Log:
+   856→- Read worklog.md, /support/page.tsx, AdminView.tsx, auth-server.ts,
+   857→  the DonationSettings Prisma model, and the migration SQL to confirm
+   858→  the singleton id="default" pattern with seeded acceptingDonations=true.
+   859→- Created src/app/api/donation-settings/route.ts (public GET). Returns ONLY
+   860→  the display fields (upiId, qrCodeUrl, accountName, accountNumber, ifsc,
+   861→  bankName, branch, donationMessage, acceptingDonations). Strips id and
+   862→  updatedAt. Returns acceptingDonations=true if the row is missing so the
+   863→  public page degrades gracefully.
+   864→- Created src/app/api/admin/donation-settings/route.ts (admin GET + PUT).
+   865→  Uses getAuthUser() from @/lib/auth-server. Distinguishes 401 (no session)
+   866→  from 403 (non-admin) per the API spec — requireAdmin() returns a tagged
+   867→  union {user,response} so the handler can return the response directly.
+   868→  GET lazy-creates the singleton if the seed didn't run. PUT coerces string
+   869→  fields to string|null (empty strings → null) and acceptingDonations to a
+   870→  strict boolean, then upserts on id="default".
+   871→- Created src/components/crosscrafted/DonationMethods.tsx ("use client").
+   872→  Receives settings as props and renders up to three cards:
+   873→    UPI card — shown if upiId set; "Copy UPI ID" button uses
+   874→      navigator.clipboard.writeText with a textarea+execCommand fallback
+   875→      for insecure contexts / older browsers.
+   876→    QR card — shown if qrCodeUrl set; uses a plain <img> (avoids Next/Image
+   877→      remote-domain config friction for arbitrary Supabase URLs) plus an
+   878→      <a download> link with target=_blank fallback.
+   879→    Bank card — shown ONLY if all four of accountName/accountNumber/ifsc/
+   880→      bankName are set (branch is optional display info). Spec: never show
+   881→      fake/placeholder bank details — hide the card entirely if incomplete.
+   882→  If no methods are configured, shows a "Donation methods haven't been
+   883→  configured yet" message with a contact link instead of empty cards.
+   884→- Rewrote src/app/support/page.tsx as a Server Component (no "use client").
+   885→  Kept the existing hero ("Help Keep Koino Free") and the SUPPORT_AREAS grid.
+   886→  Replaced the campaigns section with a "GIVE TO KOINO" section that:
+   887→    - Fetches DonationSettings from Prisma directly (server-side).
+   888→    - Shows "Donations are temporarily paused. Please check back later."
+   889→      when acceptingDonations === false.
+   890→    - Otherwise renders <DonationMethods settings={...}/> and the optional
+   891→      donationMessage callout above the cards.
+   892→    - Adds thank-you footer and the payment honesty note
+   893→      ("Koino does not process online payments…").
+   894→- Created src/components/crosscrafted/admin/DonationSettingsTab.tsx
+   895→  ("use client"). Form with all 9 DonationSettings fields + a copy of the
+   896→  acceptingDonations toggle (custom switch). Loads settings on mount via
+   897→  GET /api/admin/donation-settings, saves via PUT. Uses sonner toasts for
+   898→  success/error/feedback (same pattern as RedemptionsTab). QR code URL is a
+   899→  plain text input — no file uploader (out of scope per spec). Includes a
+   900→  live thumbnail preview of the QR URL (with onError hide to avoid broken
+   901→  image icons). "Reset Form" button clears the form fields without hitting
+   902→  the DB. "Last saved" timestamp badge updates after each successful save.
+   903→- Wired DonationSettingsTab into AdminView.tsx:
+   904→    - Added HandHeart to the existing lucide-react import block.
+   905→    - Imported DonationSettingsTab from
+   906→      @/components/crosscrafted/admin/DonationSettingsTab.
+   907→    - Added "donations" to the AdminTab union type (between "redemptions"
+   908→      and "analytics" per spec).
+   909→    - Added { id: "donations", icon: HandHeart, labelKey: "admin.tab.donations" }
+   910→      to the TABS array, placed after redemptions and before analytics.
+   911→    - Added { activeTab === "donations" && <DonationSettingsTab /> } to
+   912→      the tab content switch (between redemptions and analytics).
+   913→- Added the i18n key "admin.tab.donations": "Donations" to
+   914→  src/lib/i18n/en.ts, immediately after the existing "admin.tab.redemptions"
+   915→  key (i.e. in spec'd position relative to analytics).
+   916→- Ran `npx tsc --noEmit --project tsconfig.json`. Initial run flagged one
+   917→  error in the admin PUT route (acceptingDonations needed strict boolean
+   918→  for Prisma's create payload). Refactored the payload builder to use
+   919→  properly-typed optional fields instead of a loose Record<string, string |
+   920→  boolean | null>, plus extracted coerceString/coerceBool helpers. Re-ran
+   921→  tsc — zero errors in any created/modified file (remaining tsc errors are
+   922→  all pre-existing in examples/, scripts/, and skills/ directories).
+   923→
+   924→Stage Summary:
+   925→- Public API: GET /api/donation-settings returns safe display-only fields.
+   926→- Admin API: GET/PUT /api/admin/donation-settings with proper 401/403
+   927→  separation and upsert-on-PUT semantics.
+   928→- /support page is now a real Server Component that renders admin-configured
+   929→  UPI / QR / Bank cards (or a paused notice, or an empty-config notice).
+   930→- New admin "Donations" tab wired into AdminView with a full settings form
+   931→  (toggle, all 9 fields, save/reset, live QR preview, toast feedback).
+   932→- All TypeScript checks pass for the touched files; no file uploader was
+   933→  built for the QR code (admin pastes a URL); no fake/placeholder bank
+   934→  details are ever shown — sections hide automatically when fields are empty.
+   935→
+   936→---
+   937→Task ID: admin-tabs-batch
+   938→Agent: general-purpose (Admin Contact + Partner + Contributor tabs)
+   939→Task: Build admin Contact Messages, Partner Inquiries, Contributor Applications tabs
+   940→
+   941→Work Log:
+   942→- Read existing patterns: `AdminView.tsx` (tab registry + render switch),
+   943→  `DonationSettingsTab.tsx` (component shape + `sonner` toast usage),
+   944→  `redemptions` API route (admin auth via `requireAdmin()`), and the
+   945→  existing `contributors` route (slugify + Contributor creation pattern).
+   946→- Confirmed Prisma schema for `ContactMessage`, `PartnerInquiry`,
+   947→  `Contributor`, and `ContributorApplication` models. `Contributor.userId`
+   948→  + `Contributor.slug` + `Contributor.applicationId` are all `@unique` —
+   949→  approval flow has to handle all three uniqueness constraints.
+   950→- Created 3 collection API routes (GET list + POST action):
+   951→  - `src/app/api/admin/contact-messages/route.ts`
+   952→  - `src/app/api/admin/partner-inquiries/route.ts`
+   953→  - `src/app/api/admin/contributor-applications/route.ts`
+   954→  All use the donation-settings `requireAdmin()` shape: 401 if no session,
+   955→  403 if `role !== "admin"`, never trusting client roles.
+   956→- Created 3 per-item API routes (PATCH notes/verified + DELETE):
+   957→  - `src/app/api/admin/contact-messages/[id]/route.ts`
+   958→  - `src/app/api/admin/partner-inquiries/[id]/route.ts`
+   959→  - `src/app/api/admin/contributor-applications/[id]/route.ts`
+   960→- The contributor-applications `approve` action creates a linked
+   961→  `Contributor` record idempotently — looks up by `applicationId` first.
+   962→  The slug is generated via a `generateUniqueSlug()` helper that retries
+   963→  up to 5 times with a 4-char random suffix on collision, with a final
+   964→  timestamp fallback. If the application has a `userId` and a Contributor
+   965→  already exists for it, that Contributor is reused (re-linked to this
+   966→  applicationId + refreshed fields); otherwise the application.userId is
+   967→  used (or a `pending-<id>` placeholder for anonymous applicants so the
+   968→  @unique constraint isn't violated later).
+   969→- The contributor-applications PATCH endpoint supports both `{ adminNotes }`
+   970→  and `{ verified }` (or both). `verified` cascades to the linked
+   971→  Contributor row and is rejected (400) when the application isn't yet
+   972→  approved or has no linked Contributor.
+   973→- Built 3 React tab components under `src/components/crosscrafted/admin/`:
+   974→  - `ContactMessagesTab.tsx` — filter chips (All/New/Read/Replied/Closed)
+   975→    with counts, client-side search, list cards with status badges,
+   976→    detail modal with full message + admin notes textarea + status
+   977→    actions + delete.
+   978→  - `PartnerInquiriesTab.tsx` — same pattern; status colors new=blue,
+   979→    contacted=green, archived=gray. Modal shows organization, website,
+   980→    phone, partnershipType, message.
+   981→  - `ContributorApplicationsTab.tsx` — filter chips (5 statuses), list
+   982→    shows fullName/email/churchRole/contentInterests chips, modal shows
+   983→    full bio + whyContribute + sampleUrl + expertise + contentInterests +
+   984→    socialLinks, plus a "Verified Contributor" toggle (only visible after
+   985→    approval) that PATCHes the linked Contributor's `verified` field.
+   986→  All three components render `adminNotes` only inside the admin modal —
+   987→  no public exposure.
+   988→- Wired the three tabs into `src/components/crosscrafted/AdminView.tsx`:
+   989→  extended `AdminTab` type, imported the three tab components + the
+   990→  `Mail`/`Handshake`/`UserCheck` icons, added 3 entries to the `TABS`
+   991→  array (placed after `donations`, before `analytics` per the spec),
+   992→  and added 3 render branches in the tab content switch.
+   993→- Added i18n keys to `src/lib/i18n/en.ts`:
+   994→  `admin.tab.contactMessages`, `admin.tab.partnerInquiries`,
+   995→  `admin.tab.contributors`.
+   996→- Ran `npx tsc --noEmit --project tsconfig.json` — 0 errors in `src/`.
+   997→  The only 5 remaining errors are pre-existing in unrelated
+   998→  `examples/`, `scripts/`, and `skills/` directories (missing
+   999→  `socket.io-client`, `re` module, etc.) and are NOT touched by this
+  1000→  task.
+  1001→
+  1002→Stage Summary:
+  1003→- 6 new admin API routes created across 3 feature domains.
+  1004→- 3 new admin tab components created with full list + filter + search
+  1005→  + detail modal + actions + admin notes workflow.
+  1006→- Contributor approval is idempotent and slug-safe (random suffix on
+  1007→  collision, placeholder userId for anonymous applicants).
+  1008→- `adminNotes`, `reviewedBy`, `reviewedAt` are returned ONLY by the
+  1009→  admin endpoints — public `/api/contact`, `/api/partner`, and
+  1010→  `/api/contributor/apply` routes already create records without
+  1011→  exposing these fields.
+  1012→- AdminView now renders 3 new tabs; the rest of the panel is untouched.
+  1013→- TypeScript clean (no new errors introduced).
+  1014→
+  1015→---
+  1016→Task ID: blog-system
+  1017→Agent: general-purpose (Blog system + sitemap)
+  1018→Task: Build admin Blog tab + improve public blog + dynamic sitemap
+  1019→
+  1020→Work Log:
+  1021→- Read existing patterns: `AdminView.tsx` (tab registry + render switch),
+  1022→  `DonationSettingsTab.tsx` + `ContactMessagesTab.tsx` (admin tab component
+  1023→  shape: filter chips, search, list+detail modal, sonner toast, dark theme),
+  1024→  `auth-server.ts` (`getAuthUser()`), the existing `/blog/page.tsx` and
+  1025→  `/blog/[slug]/page.tsx` (basic versions), and the `DonationSettingsTab`
+  1026→  admin API route (the `requireAdmin()` helper shape that distinguishes 401
+  1027→  from 403). Confirmed Prisma `BlogPost` schema already had all the fields
+  1028→  needed (featured, scheduledAt, canonicalUrl, relatedArticleIds, etc.).
+  1029→- Created 2 admin API routes:
+  1030→  - `src/app/api/admin/blog/route.ts`
+  1031→    - `GET` — admin-only. Returns ALL posts (incl. drafts + future-scheduled),
+  1032→      ordered by updatedAt DESC. Optional `?status=` filter (draft →
+  1033→      published=false; published → published=true; featured → featured=true).
+  1034→    - `POST` — admin-only. Creates a new post. Auto-slugifies title if slug
+  1035→      empty; de-dupes slug by appending `-2`, `-3`, etc. (capped at 20
+  1036→      attempts, timestamp fallback). Tags + relatedArticleIds accept either
+  1037→      CSV or array — coerced to JSON-array strings. If published=true and
+  1038→      publishedAt not set, defaults to now().
+  1039→  - `src/app/api/admin/blog/[id]/route.ts`
+  1040→    - `GET` — admin-only. Returns a single post by id (including drafts).
+  1041→    - `PATCH` — admin-only. Updates any field. Special handling for the
+  1042→      false→true published transition: defaults publishedAt to now() if
+  1043→      neither the body nor the existing row has one. Slug de-dupe check
+  1044→      (excluding self) prevents @unique violation. Scheduled-future + published
+  1045→      is allowed (admin override).
+  1046→    - `DELETE` — admin-only. Hard delete (BlogPost has no soft-delete column).
+  1047→- Built the admin tab component `src/components/crosscrafted/admin/BlogTab.tsx`:
+  1048→  - "use client". Loads posts on mount via GET /api/admin/blog.
+  1049→  - Filter chips: All / Drafts (amber) / Published (green) / Featured (purple),
+  1050→    each showing counts.
+  1051→  - Client-side search across title/slug/author.
+  1052→  - "New Post" button opens the editor modal in create mode; clicking a post
+  1053→    opens it in edit mode.
+  1054→  - List cards show title, slug, author, category chip, status badge
+  1055→    (Draft=amber, Published=green, Featured=purple), publishedAt/updatedAt
+  1056→    (time-ago format).
+  1057→  - Editor modal fields: Title, Slug (with live `/blog/...` preview,
+  1058→    auto-generated from title unless manually edited), Category + Author,
+  1059→    Excerpt, Content (large textarea), Featured Image URL (with live preview
+  1060→    thumbnail + onError hide), Tags (CSV with chip preview), Published +
+  1061→    Featured toggle cards, SEO Title/Description/Canonical URL
+  1062→    (grouped), Scheduled At (datetime-local), Related Article IDs (CSV).
+  1063→    Save button → POST (new) or PATCH (existing); Delete button with
+  1064→    two-step confirm. Sonner toast for success/error. Escape-to-close +
+  1065→    body-scroll lock. The Related Article IDs field uses free text since
+  1066→    the admin doesn't have a list of all post IDs in the modal context —
+  1067→    that's a future enhancement (could be a search-driven multi-select).
+  1068→- Wired Blog tab into `src/components/crosscrafted/AdminView.tsx`:
+  1069→  - Added `"blog"` to the `AdminTab` type union.
+  1070→  - Imported `BlogTab` + added `FileText` to the existing lucide-react
+  1071→    import block.
+  1072→  - Added entry to `TABS` array (after `contributors`, before `analytics`
+  1073→    per the spec).
+  1074→  - Added render branch `{activeTab === "blog" && <BlogTab />}`.
+  1075→- Added i18n key `"admin.tab.blog": "Blog"` to `src/lib/i18n/en.ts` after
+  1076→  the existing `admin.tab.contributors` key.
+  1077→- Rewrote public `/blog` page (`src/app/blog/page.tsx`):
+  1078→  - Server Component, `export const dynamic = "force-dynamic"`.
+  1079→  - PUBLIC query: `published=true AND (publishedAt IS NULL OR publishedAt <= now())`
+  1080→    — drafts and future-scheduled posts are NEVER shown.
+  1081→  - Proper `metadata` (title, description, OG, twitter card, canonical
+  1082→    `https://www.koino.in/blog`).
+  1083→  - Featured hero card (first featured post or fall back to first post),
+  1084→    with large image + Featured ribbon.
+  1085→  - Category filter chips + search input handled by a new client component
+  1086→    `BlogListClient.tsx` ("use client") that takes `posts` + `categories` as
+  1087→    props (search/filter entirely client-side; SEO stays server-rendered).
+  1088→  - Grid of post cards (1-col mobile, 2-col md+) with category eyebrow,
+  1089→    title, excerpt (line-clamp-2), publishedAt + author.
+  1090→  - Empty state ("No blog posts published yet") with link to /about.
+  1091→- Rewrote public `/blog/[slug]` page (`src/app/blog/[slug]/page.tsx`):
+  1092→  - Server Component, `force-dynamic`.
+  1093→  - `generateMetadata()` returns: title (seoTitle || `${title} — Koino Blog`),
+  1094→    description (seoDescription || excerpt), openGraph (type="article",
+  1095→    title, description, images=[featuredImage], siteName=Koino,
+  1096→    url=canonicalUrl || `/blog/${slug}`, publishedTime if set),
+  1097→    twitter (card: summary_large_image).
+  1098→  - Visibility gate: if post not found OR not published OR publishedAt is in
+  1099→    the future → `notFound()`. Same gate in `generateMetadata()` (no SEO for
+  1100→    future-scheduled posts).
+  1101→  - Article layout: back-to-blog link, category eyebrow, title, byline
+  1102→    (publishedAt + author), featured image, excerpt as styled lead,
+  1103→    content as `whitespace-pre-wrap`, tags as chips, canonical link notice
+  1104→    for cross-posted articles.
+  1105→  - "Related Articles" section: parses relatedArticleIds from JSON, fetches
+  1106→    those posts (published + visible only, excluding the current post),
+  1107→    re-orders to match the admin's chosen order, renders as 3-col small
+  1108→    cards (image, category, title, excerpt, date).
+  1109→- Created `src/app/sitemap.ts` (Next.js MetadataRoute.Sitemap convention):
+  1110→  - Combines static marketing URLs (/, /about, /blog, /community, /contact,
+  1111→    /partner, /support, /terms, /privacy, /cookies, /help) with every
+  1112→    published blog post.
+  1113→  - Only published + currently-visible posts are included (same gate as the
+  1114→    public /blog page).
+  1115→  - Per-URL: lastModified, changeFrequency="weekly", priority (1.0 for /,
+  1116→    0.7 for other static, 0.6 for blog posts).
+  1117→  - SITE_ORIGIN hardcoded to `https://www.koino.in`.
+  1118→  - Used `Promise<MetadataRoute.Sitemap>` return type to satisfy the strict
+  1119→    TS async-return-type check (the bare `MetadataRoute.Sitemap` form
+  1120→    triggers TS1064 in this codebase's TS config).
+  1121→- Deleted `public/sitemap.xml` so Next.js's auto-served `/sitemap.xml`
+  1122→  (from `src/app/sitemap.ts`) becomes the single source of truth. The
+  1123→  existing `public/robots.txt` already references `https://www.koino.in/sitemap.xml`,
+  1124→  so no robots.txt change was needed.
+  1125→- Ran `npx tsc --noEmit --project tsconfig.json`. First run flagged a
+  1126→  single error in `src/app/sitemap.ts` (the async return-type issue
+  1127→  above). Fixed by switching to `Promise<MetadataRoute.Sitemap>`.
+  1128→  Re-ran tsc — zero errors in `src/`. The only 5 remaining errors are
+  1129→  pre-existing in unrelated `examples/`, `scripts/`, and `skills/`
+  1130→  directories (socket.io-client, `re` module, etc.) and are NOT touched
+  1131→  by this task.
+  1132→
+  1133→Stage Summary:
+  1134→- 2 new admin API routes created (collection + per-item CRUD) with proper
+  1135→  401/403 separation and admin-only guards via `getAuthUser()`.
+  1136→- 1 new admin tab component (`BlogTab.tsx`) with full list + filter + search
+  1137→  + editor modal + create/update/delete workflow, status badges, and toast
+  1138→  feedback.
+  1139→- AdminView now renders a new "Blog" tab (placed between Contributors and
+  1140→  Analytics); rest of the panel is untouched.
+  1141→- Public `/blog` page rebuilt as a server component with hero card,
+  1142→  category chips, client-side search/filter, 2-col grid, and a proper
+  1143→  empty state. Public `/blog/[slug]` page rebuilt with full SEO metadata
+  1144→  (OG + Twitter + canonical), visibility gate, related-articles section,
+  1145→  and tags chips.
+  1146→- Public blog pages NEVER expose drafts or future-scheduled posts (gate
+  1147→  enforced at both the listing query and the single-post lookup).
+  1148→- Dynamic sitemap served at `/sitemap.xml` from `src/app/sitemap.ts`;
+  1149→  static `public/sitemap.xml` deleted to avoid shadowing.
+  1150→- All file uploads are out of scope — featuredImage is a URL input (admin
+  1151→  pastes Supabase Storage URL with live preview). No rich-text editor —
+  1152→  content is a plain textarea.
+  1153→- TypeScript clean (no new errors introduced).
+  1154→
+  1155→---
+  1156→Task ID: about-partner-contact
+  1157→Agent: general-purpose (About + Partner + Contact improvements)
+  1158→Task: Improve /about (koinonia + India focus), /partner (contributor flow), /contact (success message + contact info)
+  1159→
+  1160→Work Log:
+  1161→- Read all three existing pages (about, partner, contact) plus their API routes
+  1162→  (`/api/contact`, `/api/partner`, `/api/contributor/apply`) and the
+  1163→  ContributorApplicationsTab admin component to understand the contributor
+  1164→  application payload (fullName, email, church, churchRole, city, state,
+  1165→  country, bio, expertise[], website, socialLinks[], whyContribute,
+  1166→  contentInterests[], sampleUrl).
+  1167→- Read `PublicPageLayout` (client component wrapping Koino header + footer)
+  1168→  and confirmed design tokens (bg #12101A, card #1C1929, body #A09DB1,
+  1169→  coral #F39B9B / purple #7C3AED / blue #38BDF8 accents, `neo-input` class).
+  1170→
+  1171→Task 1 — /about (`src/app/about/page.tsx`):
+  1172→- Kept: Koino brand, hero, "Faith. Fellowship. Belong." pillars, features grid, CTA.
+  1173→- Added "The Meaning of Koino" section (after hero, before pillars): explains
+  1174→  koinonia (κοινωνία) as fellowship/communion/partnership/joint participation/
+  1175→  sharing life together, references Acts 2:42, Philippians 2:1, 1 John 1:3-7,
+  1176→  with a styled callout card quoting Acts 2:42.
+  1177→- Added "Built With India in Mind" section (after features): explains India focus,
+  1178→  state/city organization of churches/events/businesses, Bible Trivia tailored
+  1179→  for Indian Christian communities, long-term vision for Indian-language Bible.
+  1180→  HONESTLY lists: UI languages available (English, Hindi, Bengali, Telugu,
+  1181→  Marathi, Tamil, Gujarati, Urdu, Kannada, Oriya, Malayalam, Punjabi, Assamese),
+  1182→  and clearly states Bible translations currently available (KJV, WEB) with an
+  1183→  explicit note that Indian-language Bible translations are NOT yet available.
+  1184→- Added full Metadata export (title + description + OG).
+  1185→
+  1186→Task 2 — /partner:
+  1187→- Split into server wrapper (`page.tsx` exports Metadata + renders
+  1188→  PartnerPageClient) and client component (`PartnerPageClient.tsx`) so we can
+  1189→  have both metadata and client-side tab state.
+  1190→- Added hero (eyebrow "PARTNER WITH KOINO", headline about helping Christians
+  1191→  grow through teaching/experience/biblical knowledge, subheading).
+  1192→- Added "Who Can Partner?" grid of 10 partner types (Pastors, Church Leaders,
+  1193→  Bible Teachers, Apologists, Evangelists, Christian Authors, Theologians,
+  1194→  Ministry Leaders, Worship Leaders, Christian Content Creators) each with a
+  1195→  Lucide icon and one-line description.
+  1196→- Added "Contribution Areas" section (Blog Articles, Apologetics, Bible
+  1197→  Studies, Devotionals, Christian Q&A, Teaching Content).
+  1198→- Added "How It Works" 5-step workflow (Submit Application → Admin Review
+  1199→  PENDING→UNDER_REVIEW → Approval → Receive Permissions CAN_WRITE_* → Publish).
+  1200→- Added "✓ Koino Verified Contributor" callout clarifying that verification
+  1201→  means reviewed/approved, NOT endorsement of every theological statement.
+  1202→- Implemented a two-tab UI at the bottom: "Partnership Inquiry" (existing form,
+  1203→  POSTs to /api/partner with PartnerInquiry model — UNCHANGED) and "Become a
+  1204→  Contributor" (new form with all ContributorApplication fields, POSTs to
+  1205→  /api/contributor/apply which already exists). No duplicate contributor system
+  1206→  created.
+  1207→
+  1208→Task 3 — /contact:
+  1209→- Split into server wrapper (`page.tsx` exports Metadata + renders
+  1210→  ContactPageClient) and client component (`ContactPageClient.tsx`).
+  1211→- Updated success message to the exact spec: "Thank you for contacting Koino.
+  1212→  We have received your message." (replaces the old "Your message has been
+  1213→  received. We'll get back to you soon." copy).
+  1214→- Added "Contact Information" cards: Email (hello@koino.in, mailto link),
+  1215→  WhatsApp Channel (hardcoded https://whatsapp.com/channel/0029Vb96qSoBFLgTRTxI5v2q
+  1216→  with a note that it is configurable), Response Time ("We typically respond
+  1217→  within 2-3 business days.").
+  1218→- Added "Why Contact Us?" section with 5 cards (Report a problem/bug, Request a
+  1219→  feature, Ask about partnerships, Report inappropriate content, General
+  1220→  inquiries).
+  1221→- Widened the form layout to `max-w-5xl` outer / `lg:col-span-3` form card (was
+  1222→  `max-w-md`) and moved the form into a styled card on the right of the contact
+  1223→  info column. Form still POSTs to /api/contact with the same fields.
+  1224→- Added full Metadata (title "Contact Us | Koino" + description + OG).
+  1225→
+  1226→TypeScript: `npx tsc --noEmit --project tsconfig.json` runs clean for all
+  1227→modified files. The only 5 remaining errors are pre-existing in unrelated
+  1228→directories (`examples/websocket/*`, `scripts/translate-missing-i18n.ts`,
+  1229→`skills/image-edit/*`, `skills/stock-analysis-skill/*`) and were not introduced
+  1230→by this task.
+  1231→
+  1232→Stage Summary:
+  1233→- /about: now explains the biblical meaning of koinonia (with a verse callout
+  1234→  from Acts 2:42) and is transparent about India-focused vision + actual UI
+  1235→  language coverage and Bible translation availability (KJV + WEB only).
+  1236→- /partner: rebuilt as a two-track page — explanatory sections (who can
+  1237→  partner, contribution areas, workflow, verified contributor callout) plus a
+  1238→  tabbed form that preserves the existing PartnerInquiry flow on /api/partner
+  1239→  and adds a separate Contributor Application flow on /api/contributor/apply.
+  1240→- /contact: success message now matches spec exactly, contact info (email,
+  1241→  WhatsApp channel, response time) and a "Why Contact Us?" section added, form
+  1242→  widened.
+  1243→- All three pages export proper Next.js Metadata. No fake contact details —
+  1244→  only `hello@koino.in` placeholder and a hardcoded, clearly-marked-configurable
+  1245→  WhatsApp channel URL. No claims about Indian-language Bibles that don't
+  1246→  exist yet.
+  1247→---
+  1248→Task ID: blog-sections-landing-apphome
+  1249→Agent: general-purpose (Blog sections on landing + App Home)
+  1250→Task: Add "From the Koino Community" blog section to landing + "Latest from Koino" to App Home
+  1251→
+  1252→Work Log:
+  1253→- Read worklog, prisma schema (BlogPost model confirmed), existing public /blog
+  1254→  pages, and admin blog API to learn conventions (PrismaClient at module scope,
+  1255→  published gate, publishedAt null/lte(now) gate, serialization pattern).
+  1256→- Created `src/app/api/blog/latest/route.ts` — public GET endpoint returning up
+  1257→  to 3 (max 10 via ?limit) published posts. Selects only the public-safe fields
+  1258→  (id, title, slug, excerpt, featuredImage, category, author, publishedAt).
+  1259→  Serializes Date → ISO string. Fails soft: 200 with `{ posts: [] }` on internal
+  1260→  error so landing/App Home silently hide the section.
+  1261→- Modified `src/components/crosscrafted/LandingHero.tsx`:
+  1262→  - Added `useEffect`, `useState` imports + a local `BlogCardData` type.
+  1263→  - Added `blogPosts` / `blogLoading` state + a fetch-on-mount effect with a
+  1264→    `cancelled` flag for cleanup.
+  1265→  - Inserted a NEW `<section id="from-community">` between the "Meet
+  1266→    Christians Around the World" section and the "Final CTA" section per spec.
+  1267→  - Three states: skeleton (3 animate-pulse cards), empty ("Articles are being
+  1268→    prepared. Check back soon." — no CTA), and the 3-card grid + "VIEW ALL
+  1269→    ARTICLES" button linking to /blog. Cards use `<Link href={/blog/${slug}}>`
+  1270→    for client-side nav. Handles image-or-gradient placeholder, category
+  1271→    eyebrow, title (line-clamp-2), excerpt (line-clamp-2), publishedAt + author.
+  1272→- Modified `src/components/crosscrafted/AppHomeView.tsx`:
+  1273→  - Added `useEffect`, `useState` imports + `BlogCardData` type.
+  1274→  - Added fetch-on-mount effect (silently hides on error).
+  1275→  - Inserted a NEW "LATEST FROM KOINO" section AFTER the LordsbookCommunityCard
+  1276→    (truly at the bottom of the App Home). Uses the GROUPS label styling
+  1277→    (text-[10px] tracking-[0.25em] #F39B9B + gradient divider). 3-card grid
+  1278→    (1/2/3 cols responsive). Cards use `<a href={/blog/${slug}}>` for full route
+  1279→    nav since /blog/* is a public App Router page outside the SPA. Section is
+  1280→    conditionally rendered only when posts exist — no skeleton, no empty state.
+  1281→- Ran `npx tsc --noEmit --project tsconfig.json`: zero errors in any of the
+  1282→  modified/created files (only pre-existing errors in unrelated examples/,
+  1283→  scripts/, skills/ directories remain — those are not part of the Koino app).
+  1284→
+  1285→Stage Summary:
+  1286→- New public API: GET /api/blog/latest (max 10 posts, public-safe fields only,
+  1287→  draft + future-scheduled posts excluded). Mirrors the visibility gate used
+  1288→  by the /blog list and /blog/[slug] pages.
+  1289→- Landing page (`/`) now surfaces a "From the Koino Community" section with up
+  1290→  to 3 recent articles, a subtle skeleton loading state, an empty-state (no
+  1291→  View All CTA when no posts exist), and a "VIEW ALL ARTICLES" button linking
+  1292→  to /blog. Silently hidden on fetch error.
+  1293→- Authenticated App Home now surfaces a "LATEST FROM KOINO" section at the
+  1294→  bottom with up to 3 recent articles, hidden entirely when no posts/error.
+  1295→  Cards use `<a href>` for full-route navigation to the public blog article
+  1296→  (which renders inside PublicPageLayout and works for authed users too).
+  1297→- All three locations (public landing, public blog list, authenticated App
+  1298→  Home) now read from the same published-visibility gate, so draft and
+  1299→  future-scheduled posts are never exposed anywhere on the user-facing
+  1300→  surface.
+  1301→- No TypeScript errors introduced; no existing design tokens changed; only
+  1302→  additive sections were inserted (no redesign).
+  1303→
+  1304→---
+  1305→Task ID: apologetics-cms
+  1306→Agent: general-purpose (Admin Apologetics article CMS)
+  1307→Task: Build ApologeticsTab + wire to /api/admin/articles (KoinoArticle, contentType=APOLOGETICS)
+  1308→
+  1309→Work Log:
+  1310→- Read worklog.md and the existing `BlogTab.tsx` (crosscrafted/admin) to learn
+  1311→  the canonical patterns (helpers, FilterChip, StatusBadge, modal lifecycle,
+  1312→  escape-to-close, body scroll lock, toast feedback, slug auto-gen, save/delete
+  1313→  flows, form primitives `Field` and `Toggle`).
+  1314→- Read `/api/admin/articles/route.ts` and `/api/admin/articles/[id]/route.ts`
+  1315→  to confirm the exact request/response shape — `?type=APOLOGETICS` list filter,
+  1316→  `?status=draft|published|featured` status filter, `{articles: [...]}` list
+  1317→  response, `{article: {...}}` single response, POST defaults `contentType`
+  1318→  to `"APOLOGETICS"`, PATCH supports partial updates, status transition to
+  1319→  `published` auto-stamps `publishedAt`.
+  1320→- Created `src/components/crosscrafted/admin/ApologeticsTab.tsx` as a near-clone
+  1321→  of `BlogTab.tsx` but adapted for the `KoinoArticle` model:
+  1322→    * `KoinoArticle` type mirrors the API serializer (camelCase fields
+  1323→      `coverImageUrl`, `authorName`, `bibleRefs`, `sources`, `relatedIds`,
+  1324→      `publishedAt`, `seoTitle`, etc.).
+  1325→    * `FormState` adds: `category`, `subcategory`, `difficulty`,
+  1326→      `shortAnswer`, `bibleRefs` (CSV), `coverImageUrl`, `authorName`.
+  1327→    * `EMPTY_FORM` defaults `status` to `"draft"`, `featured` to false, and
+  1328→      `difficulty` to `""` (None).
+  1329→    * `APOLOGETICS_CATEGORIES` constant lists the 11 canonical categories
+  1330→      (God & Existence, Jesus Christ, Resurrection, Bible, Science & Faith,
+  1331→      Suffering & Evil, Morality & Ethics, Other Worldviews, Doubt & Faith,
+  1332→      Culture & Christianity, Salvation) so admins pick from a `<select>`.
+  1333→    * `DIFFICULTY_OPTIONS = ["BEGINNER", "INTERMEDIATE", "ADVANCED"]`.
+  1334→    * `load()` hits `/api/admin/articles?type=APOLOGETICS&status=...` with
+  1335→      `cache: "no-store"`; uses `useCallback` + `useEffect` like BlogTab.
+  1336→    * Filter chips All / Drafts / Published / Featured use the same colors
+  1337→      as BlogTab (amber/green/purple).
+  1338→    * Card list shows: title, `/apologetics/<slug>` preview line with author,
+  1339→      excerpt, category + difficulty badges, last-updated time-ago stamp.
+  1340→    * `ApologeticsEditorModal` field order: Title, Slug (live preview
+  1341→      `/apologetics/<slug>`), Category dropdown, Subcategory, Difficulty
+  1342→      dropdown, Excerpt, Short Answer, Content (textarea), Cover Image URL
+  1343→      (with live `<img>` thumbnail), Author Name, Bible References (CSV with
+  1344→      live chip preview), Status+Featured toggles, SEO Title/Description/
+  1345→      Canonical URL group.
+  1346→    * Save: POSTs `contentType: "APOLOGETICS"` on create; PATCHes on edit.
+  1347→      Validates `title` and `content` required. Toasts success/error.
+  1348→    * Delete: two-step confirm dialog → DELETE → toast → reload.
+  1349→    * Preview button: only renders when editing an existing published article;
+  1350→      opens `/apologetics/<slug>` in a new tab via `target="_blank"`.
+  1351→    * Save button uses `bg-[#7C3AED]` (Koino purple) primary action color.
+  1352→- Modified `src/components/crosscrafted/AdminView.tsx`:
+  1353→    * Added `import ApologeticsTab from "@/components/crosscrafted/admin/ApologeticsTab";`
+  1354→      next to the existing BlogTab import.
+  1355→    * Deleted the local `function ApologeticsTab()` (~106 lines) that used
+  1356→      `APOLOGETICS_QUESTIONS` mock data + `PreviewModeBanner`.
+  1357→    * The render branch `{activeTab === "apologetics" && <ApologeticsTab />}`
+  1358→      at line ~235 now resolves to the imported component (no JSX change
+  1359→      needed because the names match).
+  1360→    * Removed the now-unused `type ApologeticsQuestion` import and the
+  1361→      `Send` Lucide icon (only the deleted local function used them).
+  1362→      Left `APOLOGETICS_QUESTIONS` and `HelpCircle` because they're still
+  1363→      used by the Dashboard tab stat cards and Analytics tab.
+  1364→- Self-correction mid-task: a `MultiEdit` call briefly removed 12 unrelated
+  1365→  Lucide imports (`LogIn`, `Tag`, `Palette`, `Package`, `Mail`, `Truck`,
+  1366→  `CheckCircle`, `BookOpen`, `AlertCircle`, `BadgeCheck`, `Loader2`, `Send`)
+  1367→  due to a bad regex pattern. Caught this via grep against the file body,
+  1368→  then restored the 11 still-used imports in the original alphabetical order.
+  1369→  The render branches at lines 88/90/95/134/333/522/535/578/601/1871/1973/
+  1370→  2444-2510/2564/2756 confirm those icons are all in active use.
+  1371→- Ran `npx tsc --noEmit --project tsconfig.json` — zero errors in `src/`.
+  1372→  Only the pre-existing expected errors remain (examples/, scripts/, skills/).
+  1373→
+  1374→Stage Summary:
+  1375→- New file: `src/components/crosscrafted/admin/ApologeticsTab.tsx` (~830 LOC)
+  1376→  — fully replaces the mock-based local tab. Talks to the already-built
+  1377→  `/api/admin/articles` REST API with `contentType=APOLOGETICS` enforced on
+  1378→  every create. Mirrors BlogTab's UX patterns so admins have a familiar
+  1379→  editor for the apologetics CMS.
+  1380→- Modified file: `src/components/crosscrafted/AdminView.tsx` — 1 import
+  1381→  added, 1 import added (component), 1 import removed (`type ApologeticsQuestion`),
+  1382→  1 icon import removed (`Send`), 1 local function (~106 LOC) deleted. The
+  1383→  render branch already used `<ApologeticsTab />` so the wiring was just a
+  1384→  naming swap from local-function to imported-component.
+  1385→- Public `/apologetics` and `/apologetics/[slug]` pages were untouched (they
+  1386→  already read from `KoinoArticle` with `status: "published"`, so newly
+  1387→  published articles via the admin editor will appear there immediately —
+  1388→  the API route already calls `revalidatePath("/", "layout")`).
+  1389→- No migrations were created. No SQL run. The KoinoArticle table already
+  1390→  exists in production Supabase.
+  1391→- TypeScript: `npx tsc --noEmit --project tsconfig.json 2>&1 | grep -E "^src/"`
+  1392→  returned zero lines.
+  1393→

@@ -1,0 +1,999 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→import { useCallback, useEffect, useMemo, useState } from "react";
+     4→     4→import { toast } from "sonner";
+     5→     5→import {
+     6→     6→  FileText,
+     7→     7→  Loader2,
+     8→     8→  Search,
+     9→     9→  X,
+    10→    10→  Save,
+    11→    11→  Trash2,
+    12→    12→  Plus,
+    13→    13→  Star,
+    14→    14→  Eye,
+    15→    15→  EyeOff,
+    16→    16→  Clock,
+    17→    17→  AlertCircle,
+    18→    18→  ExternalLink,
+    19→    19→} from "lucide-react";
+    20→    20→
+    21→    21→// ─── Types ─────────────────────────────────────────────────────────────────
+    22→    22→
+    23→    23→// Mirrors the API response shape from /api/admin/articles.
+    24→    24→type KoinoArticle = {
+    25→    25→  id: string;
+    26→    26→  title: string;
+    27→    27→  slug: string;
+    28→    28→  contentType: string;
+    29→    29→  category: string | null;
+    30→    30→  subcategory: string | null;
+    31→    31→  excerpt: string | null;
+    32→    32→  shortAnswer: string | null;
+    33→    33→  content: string;
+    34→    34→  coverImageUrl: string | null;
+    35→    35→  authorId: string | null;
+    36→    36→  authorName: string | null;
+    37→    37→  status: string; // "draft" | "published" | ...
+    38→    38→  difficulty: string | null; // "BEGINNER" | "INTERMEDIATE" | "ADVANCED"
+    39→    39→  featured: boolean;
+    40→    40→  bibleRefs: string; // JSON array string
+    41→    41→  sources: string; // JSON array string
+    42→    42→  relatedIds: string; // JSON array string
+    43→    43→  publishedAt: string | null;
+    44→    44→  scheduledAt: string | null;
+    45→    45→  seoTitle: string | null;
+    46→    46→  seoDescription: string | null;
+    47→    47→  canonicalUrl: string | null;
+    48→    48→  viewCount: number;
+    49→    49→  createdAt: string;
+    50→    50→  updatedAt: string;
+    51→    51→};
+    52→    52→
+    53→    53→type FormState = {
+    54→    54→  title: string;
+    55→    55→  slug: string;
+    56→    56→  category: string;
+    57→    57→  subcategory: string;
+    58→    58→  difficulty: string; // "" | "BEGINNER" | "INTERMEDIATE" | "ADVANCED"
+    59→    59→  excerpt: string;
+    60→    60→  shortAnswer: string;
+    61→    61→  content: string;
+    62→    62→  coverImageUrl: string;
+    63→    63→  authorName: string;
+    64→    64→  bibleRefs: string; // CSV
+    65→    65→  status: string; // "draft" | "published"
+    66→    66→  featured: boolean;
+    67→    67→  seoTitle: string;
+    68→    68→  seoDescription: string;
+    69→    69→  canonicalUrl: string;
+    70→    70→};
+    71→    71→
+    72→    72→const EMPTY_FORM: FormState = {
+    73→    73→  title: "",
+    74→    74→  slug: "",
+    75→    75→  category: "",
+    76→    76→  subcategory: "",
+    77→    77→  difficulty: "",
+    78→    78→  excerpt: "",
+    79→    79→  shortAnswer: "",
+    80→    80→  content: "",
+    81→    81→  coverImageUrl: "",
+    82→    82→  authorName: "",
+    83→    83→  bibleRefs: "",
+    84→    84→  status: "draft",
+    85→    85→  featured: false,
+    86→    86→  seoTitle: "",
+    87→    87→  seoDescription: "",
+    88→    88→  canonicalUrl: "",
+    89→    89→};
+    90→    90→
+    91→    91→// The 11 canonical apologetics categories. Order matches the public page.
+    92→    92→const APOLOGETICS_CATEGORIES = [
+    93→    93→  "God & Existence",
+    94→    94→  "Jesus Christ",
+    95→    95→  "Resurrection",
+    96→    96→  "Bible",
+    97→    97→  "Science & Faith",
+    98→    98→  "Suffering & Evil",
+    99→    99→  "Morality & Ethics",
+   100→   100→  "Other Worldviews",
+   101→   101→  "Doubt & Faith",
+   102→   102→  "Culture & Christianity",
+   103→   103→  "Salvation",
+   104→   104→];
+   105→   105→
+   106→   106→const DIFFICULTY_OPTIONS = ["BEGINNER", "INTERMEDIATE", "ADVANCED"] as const;
+   107→   107→
+   108→   108→// ─── Helpers ──────────────────────────────────────────────────────────────
+   109→   109→
+   110→   110→function slugify(input: string): string {
+   111→   111→  return input
+   112→   112→    .toString()
+   113→   113→    .toLowerCase()
+   114→   114→    .trim()
+   115→   115→    .replace(/[^a-z0-9\s-]/g, "")
+   116→   116→    .replace(/[\s_-]+/g, "-")
+   117→   117→    .replace(/^-+|-+$/g, "")
+   118→   118→    .slice(0, 80);
+   119→   119→}
+   120→   120→
+   121→   121→// Parse a JSON array string safely — returns string[].
+   122→   122→function parseStringArray(raw: string | null): string[] {
+   123→   123→  if (!raw) return [];
+   124→   124→  try {
+   125→   125→    const parsed = JSON.parse(raw);
+   126→   126→    if (Array.isArray(parsed)) {
+   127→   127→      return parsed.map((v) => String(v ?? "")).filter((v) => v.length > 0);
+   128→   128→    }
+   129→   129→  } catch {
+   130→   130→    // ignore
+   131→   131→  }
+   132→   132→  return [];
+   133→   133→}
+   134→   134→
+   135→   135→function formatTimeAgo(iso: string): string {
+   136→   136→  const d = new Date(iso);
+   137→   137→  const diff = Date.now() - d.getTime();
+   138→   138→  const mins = Math.floor(diff / 60000);
+   139→   139→  if (mins < 60) return `${mins}m ago`;
+   140→   140→  const hrs = Math.floor(mins / 60);
+   141→   141→  if (hrs < 24) return `${hrs}h ago`;
+   142→   142→  const days = Math.floor(hrs / 24);
+   143→   143→  return `${days}d ago`;
+   144→   144→}
+   145→   145→
+   146→   146→function toFormState(article: KoinoArticle | null): FormState {
+   147→   147→  if (!article) return { ...EMPTY_FORM };
+   148→   148→  return {
+   149→   149→    title: article.title,
+   150→   150→    slug: article.slug,
+   151→   151→    category: article.category ?? "",
+   152→   152→    subcategory: article.subcategory ?? "",
+   153→   153→    difficulty: article.difficulty ?? "",
+   154→   154→    excerpt: article.excerpt ?? "",
+   155→   155→    shortAnswer: article.shortAnswer ?? "",
+   156→   156→    content: article.content,
+   157→   157→    coverImageUrl: article.coverImageUrl ?? "",
+   158→   158→    authorName: article.authorName ?? "",
+   159→   159→    bibleRefs: parseStringArray(article.bibleRefs).join(", "),
+   160→   160→    status: article.status === "published" ? "published" : "draft",
+   161→   161→    featured: article.featured,
+   162→   162→    seoTitle: article.seoTitle ?? "",
+   163→   163→    seoDescription: article.seoDescription ?? "",
+   164→   164→    canonicalUrl: article.canonicalUrl ?? "",
+   165→   165→  };
+   166→   166→}
+   167→   167→
+   168→   168→// ─── Component ─────────────────────────────────────────────────────────────
+   169→   169→
+   170→   170→export default function ApologeticsTab() {
+   171→   171→  const [articles, setArticles] = useState<KoinoArticle[]>([]);
+   172→   172→  const [loading, setLoading] = useState(true);
+   173→   173→  const [filter, setFilter] = useState<"all" | "draft" | "published" | "featured">("all");
+   174→   174→  const [search, setSearch] = useState("");
+   175→   175→  const [editing, setEditing] = useState<{ id: string | null } | null>(null);
+   176→   176→
+   177→   177→  const load = useCallback(async () => {
+   178→   178→    setLoading(true);
+   179→   179→    try {
+   180→   180→      const params = new URLSearchParams({ type: "APOLOGETICS" });
+   181→   181→      if (filter !== "all") params.set("status", filter);
+   182→   182→      const url = `/api/admin/articles?${params.toString()}`;
+   183→   183→      const res = await fetch(url, { cache: "no-store" });
+   184→   184→      if (!res.ok) {
+   185→   185→        const data = await res.json().catch(() => ({}));
+   186→   186→        throw new Error(data?.error || `HTTP ${res.status}`);
+   187→   187→      }
+   188→   188→      const data = (await res.json()) as { articles: KoinoArticle[] };
+   189→   189→      setArticles(data.articles || []);
+   190→   190→    } catch (e: any) {
+   191→   191→      toast.error(e?.message || "Failed to load apologetics articles");
+   192→   192→    } finally {
+   193→   193→      setLoading(false);
+   194→   194→    }
+   195→   195→  }, [filter]);
+   196→   196→
+   197→   197→  useEffect(() => {
+   198→   198→    load();
+   199→   199→  }, [load]);
+   200→   200→
+   201→   201→  // Client-side search across title / slug / author.
+   202→   202→  const filtered = useMemo(() => {
+   203→   203→    const q = search.trim().toLowerCase();
+   204→   204→    if (!q) return articles;
+   205→   205→    return articles.filter((a) =>
+   206→   206→      [a.title, a.slug, a.authorName ?? "", a.category ?? ""].some((s) =>
+   207→   207→        s.toLowerCase().includes(q)
+   208→   208→      )
+   209→   209→    );
+   210→   210→  }, [articles, search]);
+   211→   211→
+   212→   212→  const counts = useMemo(() => {
+   213→   213→    return {
+   214→   214→      total: articles.length,
+   215→   215→      draft: articles.filter((a) => a.status === "draft").length,
+   216→   216→      published: articles.filter((a) => a.status === "published").length,
+   217→   217→      featured: articles.filter((a) => a.featured).length,
+   218→   218→    };
+   219→   219→  }, [articles]);
+   220→   220→
+   221→   221→  const openNew = () => setEditing({ id: null });
+   222→   222→  const openEdit = (id: string) => setEditing({ id });
+   223→   223→  const closeEditor = () => {
+   224→   224→    setEditing(null);
+   225→   225→  };
+   226→   226→
+   227→   227→  const handleSaved = () => {
+   228→   228→    closeEditor();
+   229→   229→    load();
+   230→   230→  };
+   231→   231→
+   232→   232→  const handleDeleted = () => {
+   233→   233→    closeEditor();
+   234→   234→    load();
+   235→   235→  };
+   236→   236→
+   237→   237→  if (loading) {
+   238→   238→    return (
+   239→   239→      <div className="flex items-center justify-center py-12">
+   240→   240→        <div className="w-8 h-8 rounded-full border-2 border-transparent border-t-[#7C3AED] animate-spin" />
+   241→   241→      </div>
+   242→   242→    );
+   243→   243→  }
+   244→   244→
+   245→   245→  return (
+   246→   246→    <div className="space-y-3">
+   247→   247→      {/* Header */}
+   248→   248→      <div className="flex items-center gap-2">
+   249→   249→        <div className="w-1 h-5 rounded-full bg-[#7C3AED]" />
+   250→   250→        <h2 className="text-sm font-bold text-white">Apologetics Articles</h2>
+   251→   251→        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#7C3AED]/15 text-[#A78BFA]">
+   252→   252→          {counts.total}
+   253→   253→        </span>
+   254→   254→        <button
+   255→   255→          onClick={openNew}
+   256→   256→          className="ml-auto bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-bold rounded-xl px-3 py-2 flex items-center gap-1.5 transition-all"
+   257→   257→        >
+   258→   258→          <Plus size={12} />
+   259→   259→          Write Article
+   260→   260→        </button>
+   261→   261→      </div>
+   262→   262→
+   263→   263→      {/* Status filter chips */}
+   264→   264→      <div className="flex flex-wrap gap-1.5">
+   265→   265→        <FilterChip
+   266→   266→          active={filter === "all"}
+   267→   267→          onClick={() => setFilter("all")}
+   268→   268→          label="All"
+   269→   269→          count={counts.total}
+   270→   270→        />
+   271→   271→        <FilterChip
+   272→   272→          active={filter === "draft"}
+   273→   273→          onClick={() => setFilter("draft")}
+   274→   274→          label="Drafts"
+   275→   275→          count={counts.draft}
+   276→   276→          color="#F59E0B"
+   277→   277→        />
+   278→   278→        <FilterChip
+   279→   279→          active={filter === "published"}
+   280→   280→          onClick={() => setFilter("published")}
+   281→   281→          label="Published"
+   282→   282→          count={counts.published}
+   283→   283→          color="#22C55E"
+   284→   284→        />
+   285→   285→        <FilterChip
+   286→   286→          active={filter === "featured"}
+   287→   287→          onClick={() => setFilter("featured")}
+   288→   288→          label="Featured"
+   289→   289→          count={counts.featured}
+   290→   290→          color="#A855F7"
+   291→   291→        />
+   292→   292→      </div>
+   293→   293→
+   294→   294→      {/* Search */}
+   295→   295→      <div className="relative">
+   296→   296→        <Search
+   297→   297→          size={14}
+   298→   298→          className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none"
+   299→   299→        />
+   300→   300→        <input
+   301→   301→          type="text"
+   302→   302→          value={search}
+   303→   303→          onChange={(e) => setSearch(e.target.value)}
+   304→   304→          placeholder="Search by title, slug, author, or category…"
+   305→   305→          className="neo-input text-sm pl-9"
+   306→   306→        />
+   307→   307→      </div>
+   308→   308→
+   309→   309→      {/* List */}
+   310→   310→      {filtered.length === 0 ? (
+   311→   311→        <div className="bg-[#1C1929] border border-dashed border-white/[0.12] rounded-2xl p-8 text-center">
+   312→   312→          <FileText size={28} className="mx-auto text-[#475569] mb-2" />
+   313→   313→          <p className="text-sm text-[#94A3B8]">
+   314→   314→            {search ? "No articles match your search." : "No apologetics articles yet."}
+   315→   315→          </p>
+   316→   316→          {!search && (
+   317→   317→            <button
+   318→   318→              onClick={openNew}
+   319→   319→              className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-[#A78BFA] hover:text-white"
+   320→   320→            >
+   321→   321→              <Plus size={12} /> Write your first article
+   322→   322→            </button>
+   323→   323→          )}
+   324→   324→        </div>
+   325→   325→      ) : (
+   326→   326→        <div className="space-y-2">
+   327→   327→          {filtered.map((a) => (
+   328→   328→            <button
+   329→   329→              key={a.id}
+   330→   330→              onClick={() => openEdit(a.id)}
+   331→   331→              className="w-full text-left bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4 hover:border-white/[0.15] transition-all"
+   332→   332→            >
+   333→   333→              <div className="flex items-start justify-between gap-2 mb-1">
+   334→   334→                <div className="min-w-0 flex-1">
+   335→   335→                  <h3 className="text-sm font-bold text-white truncate">{a.title}</h3>
+   336→   336→                  <p className="text-[11px] text-[#94A3B8] truncate">
+   337→   337→                    /apologetics/{a.slug}
+   338→   338→                    {a.authorName && ` · ${a.authorName}`}
+   339→   339→                  </p>
+   340→   340→                </div>
+   341→   341→                <div className="flex items-center gap-1.5 shrink-0">
+   342→   342→                  {a.featured && <StatusBadge color="#A855F7" label="Featured" />}
+   343→   343→                  {a.status === "published" ? (
+   344→   344→                    <StatusBadge color="#22C55E" label="Published" />
+   345→   345→                  ) : (
+   346→   346→                    <StatusBadge color="#F59E0B" label="Draft" />
+   347→   347→                  )}
+   348→   348→                </div>
+   349→   349→              </div>
+   350→   350→              {a.excerpt && (
+   351→   351→                <p className="text-[11px] text-[#A09DB1] line-clamp-1 mb-1.5">{a.excerpt}</p>
+   352→   352→              )}
+   353→   353→              <div className="flex items-center gap-2 text-[10px] text-[#64748B]">
+   354→   354→                {a.category && (
+   355→   355→                  <span className="px-1.5 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] font-bold uppercase tracking-wider">
+   356→   356→                    {a.category}
+   357→   357→                  </span>
+   358→   358→                )}
+   359→   359→                {a.difficulty && (
+   360→   360→                  <span className="px-1.5 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[#A78BFA] font-bold uppercase tracking-wider">
+   361→   361→                    {a.difficulty}
+   362→   362→                  </span>
+   363→   363→                )}
+   364→   364→                {a.status === "published" && a.publishedAt ? (
+   365→   365→                  <span className="flex items-center gap-0.5">
+   366→   366→                    <Eye size={9} /> {formatTimeAgo(a.publishedAt)}
+   367→   367→                  </span>
+   368→   368→                ) : (
+   369→   369→                  <span className="flex items-center gap-0.5">
+   370→   370→                    <Clock size={9} /> {formatTimeAgo(a.updatedAt)}
+   371→   371→                  </span>
+   372→   372→                )}
+   373→   373→              </div>
+   374→   374→            </button>
+   375→   375→          ))}
+   376→   376→        </div>
+   377→   377→      )}
+   378→   378→
+   379→   379→      {/* Editor modal */}
+   380→   380→      {editing && (
+   381→   381→        <ApologeticsEditorModal
+   382→   382→          articleId={editing.id}
+   383→   383→          onClose={closeEditor}
+   384→   384→          onSaved={handleSaved}
+   385→   385→          onDeleted={handleDeleted}
+   386→   386→        />
+   387→   387→      )}
+   388→   388→    </div>
+   389→   389→  );
+   390→   390→}
+   391→   391→
+   392→   392→// ─── Sub-components ────────────────────────────────────────────────────────
+   393→   393→
+   394→   394→function FilterChip({
+   395→   395→  active,
+   396→   396→  onClick,
+   397→   397→  label,
+   398→   398→  count,
+   399→   399→  color,
+   400→   400→}: {
+   401→   401→  active: boolean;
+   402→   402→  onClick: () => void;
+   403→   403→  label: string;
+   404→   404→  count: number;
+   405→   405→  color?: string;
+   406→   406→}) {
+   407→   407→  const activeBg = color ? `${color}` : "#7C3AED";
+   408→   408→  return (
+   409→   409→    <button
+   410→   410→      onClick={onClick}
+   411→   411→      className={`bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 transition-all ${
+   412→   412→        active ? "text-white border-transparent" : "text-[#94A3B8] hover:text-white"
+   413→   413→      }`}
+   414→   414→      style={active ? { backgroundColor: `${activeBg}25`, borderColor: `${activeBg}80`, color } : undefined}
+   415→   415→    >
+   416→   416→      {label}
+   417→   417→      <span
+   418→   418→        className={`text-[10px] px-1.5 py-0.5 rounded-md ${
+   419→   419→          active ? "bg-white/20" : "bg-white/[0.06] text-[#94A3B8]"
+   420→   420→        }`}
+   421→   421→      >
+   422→   422→        {count}
+   423→   423→      </span>
+   424→   424→    </button>
+   425→   425→  );
+   426→   426→}
+   427→   427→
+   428→   428→function StatusBadge({ color, label }: { color: string; label: string }) {
+   429→   429→  return (
+   430→   430→    <span
+   431→   431→      className="px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider shrink-0"
+   432→   432→      style={{ backgroundColor: `${color}25`, color }}
+   433→   433→    >
+   434→   434→      {label}
+   435→   435→    </span>
+   436→   436→  );
+   437→   437→}
+   438→   438→
+   439→   439→// ─── Editor modal ──────────────────────────────────────────────────────────
+   440→   440→
+   441→   441→function ApologeticsEditorModal({
+   442→   442→  articleId,
+   443→   443→  onClose,
+   444→   444→  onSaved,
+   445→   445→  onDeleted,
+   446→   446→}: {
+   447→   447→  articleId: string | null;
+   448→   448→  onClose: () => void;
+   449→   449→  onSaved: () => void;
+   450→   450→  onDeleted: () => void;
+   451→   451→}) {
+   452→   452→  const [form, setForm] = useState<FormState>({ ...EMPTY_FORM });
+   453→   453→  const [loading, setLoading] = useState(articleId !== null);
+   454→   454→  const [saving, setSaving] = useState(false);
+   455→   455→  const [deleting, setDeleting] = useState(false);
+   456→   456→  const [confirmDelete, setConfirmDelete] = useState(false);
+   457→   457→  const [slugTouched, setSlugTouched] = useState(false);
+   458→   458→  const [currentSlug, setCurrentSlug] = useState<string>("");
+   459→   459→  const [currentStatus, setCurrentStatus] = useState<string>("draft");
+   460→   460→
+   461→   461→  // Load existing article if editing.
+   462→   462→  useEffect(() => {
+   463→   463→    if (!articleId) {
+   464→   464→      setLoading(false);
+   465→   465→      return;
+   466→   466→    }
+   467→   467→    let cancelled = false;
+   468→   468→    (async () => {
+   469→   469→      try {
+   470→   470→        const res = await fetch(`/api/admin/articles/${articleId}`, { cache: "no-store" });
+   471→   471→        if (!res.ok) {
+   472→   472→          const data = await res.json().catch(() => ({}));
+   473→   473→          throw new Error(data?.error || `HTTP ${res.status}`);
+   474→   474→        }
+   475→   475→        const data = (await res.json()) as { article: KoinoArticle };
+   476→   476→        if (cancelled) return;
+   477→   477→        setForm(toFormState(data.article));
+   478→   478→        setCurrentSlug(data.article.slug);
+   479→   479→        setCurrentStatus(data.article.status);
+   480→   480→      } catch (e: any) {
+   481→   481→        toast.error(e?.message || "Failed to load article");
+   482→   482→        onClose();
+   483→   483→      } finally {
+   484→   484→        if (!cancelled) setLoading(false);
+   485→   485→      }
+   486→   486→    })();
+   487→   487→    return () => {
+   488→   488→      cancelled = true;
+   489→   489→    };
+   490→   490→  }, [articleId, onClose]);
+   491→   491→
+   492→   492→  // Close on Escape + lock scroll.
+   493→   493→  useEffect(() => {
+   494→   494→    const onKey = (e: KeyboardEvent) => {
+   495→   495→      if (e.key === "Escape") onClose();
+   496→   496→    };
+   497→   497→    window.addEventListener("keydown", onKey);
+   498→   498→    document.body.style.overflow = "hidden";
+   499→   499→    return () => {
+   500→   500→      window.removeEventListener("keydown", onKey);
+   501→   501→      document.body.style.overflow = "";
+   502→   502→    };
+   503→   503→  }, [onClose]);
+   504→   504→
+   505→   505→  const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+   506→   506→    setForm((f) => ({ ...f, [key]: value }));
+   507→   507→  };
+   508→   508→
+   509→   509→  // Auto-generate slug from title if the admin hasn't manually touched the slug.
+   510→   510→  const effectiveSlug = slugTouched && form.slug ? form.slug : slugify(form.title);
+   511→   511→
+   512→   512→  const save = async () => {
+   513→   513→    if (!form.title.trim()) {
+   514→   514→      toast.error("Title is required");
+   515→   515→      return;
+   516→   516→    }
+   517→   517→    if (!form.content.trim()) {
+   518→   518→      toast.error("Content is required");
+   519→   519→      return;
+   520→   520→    }
+   521→   521→    setSaving(true);
+   522→   522→    try {
+   523→   523→      const payload: Record<string, unknown> = {
+   524→   524→        contentType: "APOLOGETICS",
+   525→   525→        title: form.title.trim(),
+   526→   526→        slug: form.slug.trim(), // server will slugify + de-dupe if empty
+   527→   527→        category: form.category.trim() || null,
+   528→   528→        subcategory: form.subcategory.trim() || null,
+   529→   529→        difficulty: form.difficulty || null,
+   530→   530→        excerpt: form.excerpt,
+   531→   531→        shortAnswer: form.shortAnswer,
+   532→   532→        content: form.content,
+   533→   533→        coverImageUrl: form.coverImageUrl,
+   534→   534→        authorName: form.authorName,
+   535→   535→        bibleRefs: form.bibleRefs, // CSV → server coerces to JSON array
+   536→   536→        status: form.status, // "draft" | "published"
+   537→   537→        featured: form.featured,
+   538→   538→        seoTitle: form.seoTitle,
+   539→   539→        seoDescription: form.seoDescription,
+   540→   540→        canonicalUrl: form.canonicalUrl,
+   541→   541→      };
+   542→   542→      const url = articleId ? `/api/admin/articles/${articleId}` : "/api/admin/articles";
+   543→   543→      const method = articleId ? "PATCH" : "POST";
+   544→   544→      const res = await fetch(url, {
+   545→   545→        method,
+   546→   546→        headers: { "Content-Type": "application/json" },
+   547→   547→        body: JSON.stringify(payload),
+   548→   548→      });
+   549→   549→      if (!res.ok) {
+   550→   550→        const data = await res.json().catch(() => ({}));
+   551→   551→        throw new Error(data?.error || `HTTP ${res.status}`);
+   552→   552→      }
+   553→   553→      toast.success(articleId ? "Article updated" : "Article created");
+   554→   554→      onSaved();
+   555→   555→    } catch (e: any) {
+   556→   556→      toast.error(e?.message || "Failed to save article");
+   557→   557→    } finally {
+   558→   558→      setSaving(false);
+   559→   559→    }
+   560→   560→  };
+   561→   561→
+   562→   562→  const remove = async () => {
+   563→   563→    if (!articleId) return;
+   564→   564→    setDeleting(true);
+   565→   565→    try {
+   566→   566→      const res = await fetch(`/api/admin/articles/${articleId}`, { method: "DELETE" });
+   567→   567→      if (!res.ok) {
+   568→   568→        const data = await res.json().catch(() => ({}));
+   569→   569→        throw new Error(data?.error || `HTTP ${res.status}`);
+   570→   570→      }
+   571→   571→      toast.success("Article deleted");
+   572→   572→      onDeleted();
+   573→   573→    } catch (e: any) {
+   574→   574→      toast.error(e?.message || "Failed to delete article");
+   575→   575→    } finally {
+   576→   576→      setDeleting(false);
+   577→   577→    }
+   578→   578→  };
+   579→   579→
+   580→   580→  if (loading) {
+   581→   581→    return (
+   582→   582→      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+   583→   583→        <div className="w-8 h-8 rounded-full border-2 border-transparent border-t-[#7C3AED] animate-spin" />
+   584→   584→      </div>
+   585→   585→    );
+   586→   586→  }
+   587→   587→
+   588→   588→  return (
+   589→   589→    <div
+   590→   590→      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm"
+   591→   591→      onClick={onClose}
+   592→   592→    >
+   593→   593→      <div
+   594→   594→        className="bg-[#1C1929] border border-white/[0.08] rounded-t-3xl sm:rounded-3xl p-6 w-full max-w-2xl max-h-[92vh] overflow-y-auto"
+   595→   595→        onClick={(e) => e.stopPropagation()}
+   596→   596→      >
+   597→   597→        {/* Header */}
+   598→   598→        <div className="flex items-center justify-between mb-4">
+   599→   599→          <div className="flex items-center gap-2">
+   600→   600→            <FileText size={14} className="text-[#A78BFA]" />
+   601→   601→            <h2 className="text-sm font-extrabold text-white">
+   602→   602→              {articleId ? "Edit Article" : "New Article"}
+   603→   603→            </h2>
+   604→   604→          </div>
+   605→   605→          <button
+   606→   606→            onClick={onClose}
+   607→   607→            className="w-7 h-7 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-[#94A3B8] hover:text-white"
+   608→   608→            aria-label="Close"
+   609→   609→          >
+   610→   610→            <X size={14} />
+   611→   611→          </button>
+   612→   612→        </div>
+   613→   613→
+   614→   614→        {/* Body */}
+   615→   615→        <div className="space-y-3">
+   616→   616→          {/* Title */}
+   617→   617→          <Field label="Title" required>
+   618→   618→            <input
+   619→   619→              type="text"
+   620→   620→              value={form.title}
+   621→   621→              onChange={(e) => set("title", e.target.value)}
+   622→   622→              className="neo-input text-sm"
+   623→   623→              placeholder="Did Jesus Really Rise from the Dead?"
+   624→   624→            />
+   625→   625→          </Field>
+   626→   626→
+   627→   627→          {/* Slug */}
+   628→   628→          <Field label="Slug" hint="URL-friendly. Auto-generated from title if empty.">
+   629→   629→            <input
+   630→   630→              type="text"
+   631→   631→              value={form.slug}
+   632→   632→              onChange={(e) => {
+   633→   633→                set("slug", e.target.value);
+   634→   634→                setSlugTouched(true);
+   635→   635→              }}
+   636→   636→              className="neo-input text-sm"
+   637→   637→              placeholder={slugify(form.title) || "did-jesus-really-rise"}
+   638→   638→              style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+   639→   639→            />
+   640→   640→            <p className="mt-1 text-[10px] text-[#64748B]">
+   641→   641→              Live preview:{" "}
+   642→   642→              <span className="text-[#38BDF8]">/apologetics/{effectiveSlug || "—"}</span>
+   643→   643→            </p>
+   644→   644→          </Field>
+   645→   645→
+   646→   646→          {/* Category + Subcategory */}
+   647→   647→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   648→   648→            <Field label="Category">
+   649→   649→              <select
+   650→   650→                value={form.category}
+   651→   651→                onChange={(e) => set("category", e.target.value)}
+   652→   652→                className="neo-input text-sm bg-[#1C1929]"
+   653→   653→              >
+   654→   654→                <option value="">— None —</option>
+   655→   655→                {APOLOGETICS_CATEGORIES.map((c) => (
+   656→   656→                  <option key={c} value={c}>
+   657→   657→                    {c}
+   658→   658→                  </option>
+   659→   659→                ))}
+   660→   660→              </select>
+   661→   661→            </Field>
+   662→   662→            <Field label="Subcategory" hint="Optional.">
+   663→   663→              <input
+   664→   664→                type="text"
+   665→   665→                value={form.subcategory}
+   666→   666→                onChange={(e) => set("subcategory", e.target.value)}
+   667→   667→                className="neo-input text-sm"
+   668→   668→                placeholder="e.g. Cosmological Argument"
+   669→   669→              />
+   670→   670→            </Field>
+   671→   671→          </div>
+   672→   672→
+   673→   673→          {/* Difficulty */}
+   674→   674→          <Field label="Difficulty" hint="Reader level. Optional.">
+   675→   675→            <select
+   676→   676→              value={form.difficulty}
+   677→   677→              onChange={(e) => set("difficulty", e.target.value)}
+   678→   678→              className="neo-input text-sm bg-[#1C1929]"
+   679→   679→            >
+   680→   680→              <option value="">— None —</option>
+   681→   681→              {DIFFICULTY_OPTIONS.map((d) => (
+   682→   682→                <option key={d} value={d}>
+   683→   683→                  {d}
+   684→   684→                </option>
+   685→   685→              ))}
+   686→   686→            </select>
+   687→   687→          </Field>
+   688→   688→
+   689→   689→          {/* Excerpt */}
+   690→   690→          <Field label="Excerpt" hint="Short summary shown on cards.">
+   691→   691→            <textarea
+   692→   692→              value={form.excerpt}
+   693→   693→              onChange={(e) => set("excerpt", e.target.value)}
+   694→   694→              className="neo-input text-sm h-16 resize-none"
+   695→   695→              placeholder="One or two sentences to hook the reader."
+   696→   696→            />
+   697→   697→          </Field>
+   698→   698→
+   699→   699→          {/* Short Answer */}
+   700→   700→          <Field
+   701→   701→            label="Short Answer"
+   702→   702→            hint="Optional TL;DR shown at the top of the article (one paragraph)."
+   703→   703→          >
+   704→   704→            <textarea
+   705→   705→              value={form.shortAnswer}
+   706→   706→              onChange={(e) => set("shortAnswer", e.target.value)}
+   707→   707→              className="neo-input text-sm h-20 resize-none"
+   708→   708→              placeholder="A one-paragraph summary answer. e.g. Yes — the historical evidence strongly supports the resurrection…"
+   709→   709→            />
+   710→   710→          </Field>
+   711→   711→
+   712→   712→          {/* Content */}
+   713→   713→          <Field
+   714→   714→            label="Content"
+   715→   715→            hint="Markdown / plain text. Rendered on /apologetics/[slug]."
+   716→   716→            required
+   717→   717→          >
+   718→   718→            <textarea
+   719→   719→              value={form.content}
+   720→   720→              onChange={(e) => set("content", e.target.value)}
+   721→   721→              className="neo-input text-sm h-44 resize-y font-mono"
+   722→   722→              placeholder={"# Heading\n\nWrite your article here…"}
+   723→   723→            />
+   724→   724→          </Field>
+   725→   725→
+   726→   726→          {/* Cover image */}
+   727→   727→          <Field label="Cover Image URL" hint="Paste a Supabase Storage URL.">
+   728→   728→            <input
+   729→   729→              type="text"
+   730→   730→              value={form.coverImageUrl}
+   731→   731→              onChange={(e) => set("coverImageUrl", e.target.value)}
+   732→   732→              className="neo-input text-sm"
+   733→   733→              placeholder="https://<supabase-storage>/apologetics/cover.jpg"
+   734→   734→              style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+   735→   735→            />
+   736→   736→            {form.coverImageUrl && (
+   737→   737→              <div className="mt-2 flex items-center gap-2 p-2 rounded-xl bg-white/[0.04] border border-white/[0.06]">
+   738→   738→                {/* eslint-disable-next-line @next/next/no-img-element */}
+   739→   739→                <img
+   740→   740→                  src={form.coverImageUrl}
+   741→   741→                  alt="Cover preview"
+   742→   742→                  className="w-16 h-12 object-cover rounded-md bg-[#0f0f1a]"
+   743→   743→                  onError={(e) => {
+   744→   744→                    (e.currentTarget as HTMLImageElement).style.display = "none";
+   745→   745→                  }}
+   746→   746→                />
+   747→   747→                <span className="text-[10px] text-[#94A3B8] break-all line-clamp-2">
+   748→   748→                  {form.coverImageUrl}
+   749→   749→                </span>
+   750→   750→              </div>
+   751→   751→            )}
+   752→   752→          </Field>
+   753→   753→
+   754→   754→          {/* Author Name */}
+   755→   755→          <Field label="Author Name">
+   756→   756→            <input
+   757→   757→              type="text"
+   758→   758→              value={form.authorName}
+   759→   759→              onChange={(e) => set("authorName", e.target.value)}
+   760→   760→              className="neo-input text-sm"
+   761→   761→              placeholder="Author name (defaults to Admin)"
+   762→   762→            />
+   763→   763→          </Field>
+   764→   764→
+   765→   765→          {/* Bible References */}
+   766→   766→          <Field label="Bible References" hint="Comma-separated. e.g. John 20:1-29, 1 Cor 15">
+   767→   767→            <input
+   768→   768→              type="text"
+   769→   769→              value={form.bibleRefs}
+   770→   770→              onChange={(e) => set("bibleRefs", e.target.value)}
+   771→   771→              className="neo-input text-sm"
+   772→   772→              placeholder="John 20:1-29, 1 Cor 15, Romans 1:20"
+   773→   773→            />
+   774→   774→            {form.bibleRefs.trim().length > 0 && (
+   775→   775→              <div className="mt-1.5 flex flex-wrap gap-1">
+   776→   776→                {form.bibleRefs
+   777→   777→                  .split(",")
+   778→   778→                  .map((t) => t.trim())
+   779→   779→                  .filter((t) => t.length > 0)
+   780→   780→                  .map((t, i) => (
+   781→   781→                    <span
+   782→   782→                      key={i}
+   783→   783→                      className="bg-[#38BDF8]/10 text-[#38BDF8] text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-md"
+   784→   784→                    >
+   785→   785→                      {t}
+   786→   786→                    </span>
+   787→   787→                  ))}
+   788→   788→              </div>
+   789→   789→            )}
+   790→   790→          </Field>
+   791→   791→
+   792→   792→          {/* Status + Featured */}
+   793→   793→          <div className="grid grid-cols-2 gap-2">
+   794→   794→            <Toggle
+   795→   795→              checked={form.status === "published"}
+   796→   796→              onChange={(v) => set("status", v ? "published" : "draft")}
+   797→   797→              label="Published"
+   798→   798→              hint={form.status === "published" ? "Visible on /apologetics" : "Hidden (draft)"}
+   799→   799→              icon={form.status === "published" ? <Eye size={12} /> : <EyeOff size={12} />}
+   800→   800→              color="#22C55E"
+   801→   801→            />
+   802→   802→            <Toggle
+   803→   803→              checked={form.featured}
+   804→   804→              onChange={(v) => set("featured", v)}
+   805→   805→              label="Featured"
+   806→   806→              hint={form.featured ? "Hero card" : "Standard card"}
+   807→   807→              icon={<Star size={12} />}
+   808→   808→              color="#A855F7"
+   809→   809→            />
+   810→   810→          </div>
+   811→   811→
+   812→   812→          {/* SEO */}
+   813→   813→          <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-3 space-y-3">
+   814→   814→            <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">
+   815→   815→              SEO
+   816→   816→            </p>
+   817→   817→            <Field label="SEO Title" hint="Defaults to title if empty.">
+   818→   818→              <input
+   819→   819→                type="text"
+   820→   820→                value={form.seoTitle}
+   821→   821→                onChange={(e) => set("seoTitle", e.target.value)}
+   822→   822→                className="neo-input text-sm"
+   823→   823→                placeholder="Optional — overrides <title> for search engines"
+   824→   824→              />
+   825→   825→            </Field>
+   826→   826→            <Field label="SEO Description" hint="Defaults to excerpt if empty.">
+   827→   827→              <textarea
+   828→   828→                value={form.seoDescription}
+   829→   829→                onChange={(e) => set("seoDescription", e.target.value)}
+   830→   830→                className="neo-input text-sm h-16 resize-none"
+   831→   831→                placeholder="Optional — meta description for search engines / social shares"
+   832→   832→              />
+   833→   833→            </Field>
+   834→   834→            <Field label="Canonical URL" hint="For cross-posted articles only.">
+   835→   835→              <input
+   836→   836→                type="text"
+   837→   837→                value={form.canonicalUrl}
+   838→   838→                onChange={(e) => set("canonicalUrl", e.target.value)}
+   839→   839→                className="neo-input text-sm"
+   840→   840→                placeholder="https://medium.com/your-article-123"
+   841→   841→                style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+   842→   842→              />
+   843→   843→            </Field>
+   844→   844→          </div>
+   845→   845→
+   846→   846→          {/* Actions */}
+   847→   847→          <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-white/[0.06]">
+   848→   848→            {articleId && (
+   849→   849→              <div className="mr-auto flex items-center gap-2">
+   850→   850→                {currentStatus === "published" && currentSlug && (
+   851→   851→                  <a
+   852→   852→                    href={`/apologetics/${currentSlug}`}
+   853→   853→                    target="_blank"
+   854→   854→                    rel="noopener noreferrer"
+   855→   855→                    className="text-[#38BDF8] hover:bg-[#38BDF8]/10 text-[11px] font-bold flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all"
+   856→   856→                    onClick={(e) => e.stopPropagation()}
+   857→   857→                  >
+   858→   858→                    <ExternalLink size={12} /> Preview
+   859→   859→                  </a>
+   860→   860→                )}
+   861→   861→                {confirmDelete ? (
+   862→   862→                  <div className="flex items-center gap-1.5">
+   863→   863→                    <AlertCircle size={12} className="text-[#EF4444]" />
+   864→   864→                    <span className="text-[11px] text-[#94A3B8]">Delete permanently?</span>
+   865→   865→                    <button
+   866→   866→                      onClick={remove}
+   867→   867→                      disabled={deleting}
+   868→   868→                      className="bg-[#EF4444]/10 hover:bg-[#EF4444]/20 text-[#EF4444] text-[11px] font-bold rounded-lg px-2 py-1 disabled:opacity-50"
+   869→   869→                    >
+   870→   870→                      {deleting ? <Loader2 size={11} className="animate-spin" /> : "Yes, delete"}
+   871→   871→                    </button>
+   872→   872→                    <button
+   873→   873→                      onClick={() => setConfirmDelete(false)}
+   874→   874→                      disabled={deleting}
+   875→   875→                      className="text-[#94A3B8] hover:text-white text-[11px] font-bold px-2 py-1"
+   876→   876→                    >
+   877→   877→                      Cancel
+   878→   878→                    </button>
+   879→   879→                  </div>
+   880→   880→                ) : (
+   881→   881→                  <button
+   882→   882→                    onClick={() => setConfirmDelete(true)}
+   883→   883→                    disabled={saving || deleting}
+   884→   884→                    className="text-[#EF4444] hover:bg-[#EF4444]/10 text-[11px] font-bold flex items-center gap-1.5 disabled:opacity-50"
+   885→   885→                  >
+   886→   886→                    <Trash2 size={12} /> Delete
+   887→   887→                  </button>
+   888→   888→                )}
+   889→   889→              </div>
+   890→   890→            )}
+   891→   891→            <button
+   892→   892→              onClick={onClose}
+   893→   893→              disabled={saving || deleting}
+   894→   894→              className="px-4 py-2.5 rounded-xl bg-white/[0.04] text-[#94A3B8] hover:text-white border border-white/[0.06] text-sm font-semibold disabled:opacity-50"
+   895→   895→            >
+   896→   896→              Cancel
+   897→   897→            </button>
+   898→   898→            <button
+   899→   899→              onClick={save}
+   900→   900→              disabled={saving || deleting}
+   901→   901→              className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-extrabold text-sm flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all hover:-translate-y-px"
+   902→   902→            >
+   903→   903→              {saving ? (
+   904→   904→                <>
+   905→   905→                  <Loader2 size={14} className="animate-spin" /> Saving…
+   906→   906→                </>
+   907→   907→              ) : (
+   908→   908→                <>
+   909→   909→                  <Save size={14} /> {articleId ? "Save Changes" : "Create Article"}
+   910→   910→                </>
+   911→   911→              )}
+   912→   912→            </button>
+   913→   913→          </div>
+   914→   914→        </div>
+   915→   915→      </div>
+   916→   916→    </div>
+   917→   917→  );
+   918→   918→}
+   919→   919→
+   920→   920→// ─── Form primitives ───────────────────────────────────────────────────────
+   921→   921→
+   922→   922→function Field({
+   923→   923→  label,
+   924→   924→  required,
+   925→   925→  hint,
+   926→   926→  children,
+   927→   927→}: {
+   928→   928→  label: string;
+   929→   929→  required?: boolean;
+   930→   930→  hint?: string;
+   931→   931→  children: React.ReactNode;
+   932→   932→}) {
+   933→   933→  return (
+   934→   934→    <div>
+   935→   935→      <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+   936→   936→        {label} {required && <span className="text-[#F39B9B]">*</span>}
+   937→   937→      </label>
+   938→   938→      {children}
+   939→   939→      {hint && <p className="mt-1 text-[10px] text-[#64748B] leading-relaxed">{hint}</p>}
+   940→   940→    </div>
+   941→   941→  );
+   942→   942→}
+   943→   943→
+   944→   944→function Toggle({
+   945→   945→  checked,
+   946→   946→  onChange,
+   947→   947→  label,
+   948→   948→  hint,
+   949→   949→  icon,
+   950→   950→  color,
+   951→   951→}: {
+   952→   952→  checked: boolean;
+   953→   953→  onChange: (v: boolean) => void;
+   954→   954→  label: string;
+   955→   955→  hint: string;
+   956→   956→  icon: React.ReactNode;
+   957→   957→  color: string;
+   958→   958→}) {
+   959→   959→  return (
+   960→   960→    <button
+   961→   961→      type="button"
+   962→   962→      onClick={() => onChange(!checked)}
+   963→   963→      className={`bg-white/[0.03] border rounded-xl p-3 text-left flex items-start gap-2 transition-all ${
+   964→   964→        checked ? "border-white/[0.15]" : "border-white/[0.06] hover:border-white/[0.1]"
+   965→   965→      }`}
+   966→   966→      style={checked ? { backgroundColor: `${color}15`, borderColor: `${color}50` } : undefined}
+   967→   967→    >
+   968→   968→      <span
+   969→   969→        className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+   970→   970→        style={{ backgroundColor: `${color}20`, color }}
+   971→   971→      >
+   972→   972→        {icon}
+   973→   973→      </span>
+   974→   974→      <div className="min-w-0 flex-1">
+   975→   975→        <p className="text-xs font-bold text-white">{label}</p>
+   976→   976→        <p className="text-[10px] text-[#94A3B8]">{hint}</p>
+   977→   977→      </div>
+   978→   978→      <span
+   979→   979→        className={`mt-0.5 w-4 h-4 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
+   980→   980→          checked ? "" : "border-white/20"
+   981→   981→        }`}
+   982→   982→        style={checked ? { backgroundColor: color, borderColor: color } : undefined}
+   983→   983→      >
+   984→   984→        {checked && (
+   985→   985→          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+   986→   986→            <path
+   987→   987→              d="M2 5L4 7L8 3"
+   988→   988→              stroke="white"
+   989→   989→              strokeWidth="2"
+   990→   990→              strokeLinecap="round"
+   991→   991→              strokeLinejoin="round"
+   992→   992→            />
+   993→   993→          </svg>
+   994→   994→        )}
+   995→   995→      </span>
+   996→   996→    </button>
+   997→   997→  );
+   998→   998→}
+   999→   999→
