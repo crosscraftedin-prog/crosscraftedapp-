@@ -1,0 +1,950 @@
+     1→"use client";
+     2→
+     3→import { useCallback, useEffect, useMemo, useState } from "react";
+     4→import { toast } from "sonner";
+     5→import {
+     6→  FileText,
+     7→  Loader2,
+     8→  Search,
+     9→  X,
+    10→  Save,
+    11→  Trash2,
+    12→  Plus,
+    13→  Star,
+    14→  Eye,
+    15→  EyeOff,
+    16→  Clock,
+    17→  AlertCircle,
+    18→} from "lucide-react";
+    19→
+    20→// ─── Types ─────────────────────────────────────────────────────────────────
+    21→
+    22→// Mirrors the API response shape from /api/admin/blog.
+    23→type BlogPost = {
+    24→  id: string;
+    25→  title: string;
+    26→  slug: string;
+    27→  excerpt: string | null;
+    28→  content: string;
+    29→  featuredImage: string | null;
+    30→  author: string | null;
+    31→  category: string;
+    32→  tags: string; // JSON array string
+    33→  published: boolean;
+    34→  featured: boolean;
+    35→  seoTitle: string | null;
+    36→  seoDescription: string | null;
+    37→  scheduledAt: string | null;
+    38→  canonicalUrl: string | null;
+    39→  relatedArticleIds: string; // JSON array string
+    40→  publishedAt: string | null;
+    41→  createdAt: string;
+    42→  updatedAt: string;
+    43→};
+    44→
+    45→type FormState = {
+    46→  title: string;
+    47→  slug: string;
+    48→  excerpt: string;
+    49→  content: string;
+    50→  featuredImage: string;
+    51→  author: string;
+    52→  category: string;
+    53→  tags: string; // CSV
+    54→  published: boolean;
+    55→  featured: boolean;
+    56→  seoTitle: string;
+    57→  seoDescription: string;
+    58→  scheduledAt: string; // datetime-local string yyyy-MM-ddTHH:mm
+    59→  canonicalUrl: string;
+    60→  relatedArticleIds: string; // CSV
+    61→};
+    62→
+    63→const EMPTY_FORM: FormState = {
+    64→  title: "",
+    65→  slug: "",
+    66→  excerpt: "",
+    67→  content: "",
+    68→  featuredImage: "",
+    69→  author: "",
+    70→  category: "Bible",
+    71→  tags: "",
+    72→  published: false,
+    73→  featured: false,
+    74→  seoTitle: "",
+    75→  seoDescription: "",
+    76→  scheduledAt: "",
+    77→  canonicalUrl: "",
+    78→  relatedArticleIds: "",
+    79→};
+    80→
+    81→// ─── Helpers ──────────────────────────────────────────────────────────────
+    82→
+    83→function slugify(input: string): string {
+    84→  return input
+    85→    .toString()
+    86→    .toLowerCase()
+    87→    .trim()
+    88→    .replace(/[^a-z0-9\s-]/g, "")
+    89→    .replace(/[\s_-]+/g, "-")
+    90→    .replace(/^-+|-+$/g, "")
+    91→    .slice(0, 80);
+    92→}
+    93→
+    94→// Parse a JSON array string safely — returns string[].
+    95→function parseStringArray(raw: string | null): string[] {
+    96→  if (!raw) return [];
+    97→  try {
+    98→    const parsed = JSON.parse(raw);
+    99→    if (Array.isArray(parsed)) {
+   100→      return parsed.map((v) => String(v ?? "")).filter((v) => v.length > 0);
+   101→    }
+   102→  } catch {
+   103→    // ignore
+   104→  }
+   105→  return [];
+   106→}
+   107→
+   108→function formatTimeAgo(iso: string): string {
+   109→  const d = new Date(iso);
+   110→  const diff = Date.now() - d.getTime();
+   111→  const mins = Math.floor(diff / 60000);
+   112→  if (mins < 60) return `${mins}m ago`;
+   113→  const hrs = Math.floor(mins / 60);
+   114→  if (hrs < 24) return `${hrs}h ago`;
+   115→  const days = Math.floor(hrs / 24);
+   116→  return `${days}d ago`;
+   117→}
+   118→
+   119→function formatDateTime(iso: string | null): string {
+   120→  if (!iso) return "—";
+   121→  try {
+   122→    return new Date(iso).toLocaleString(undefined, {
+   123→      dateStyle: "medium",
+   124→      timeStyle: "short",
+   125→    });
+   126→  } catch {
+   127→    return "—";
+   128→  }
+   129→}
+   130→
+   131→// Convert an ISO string to the value expected by <input type="datetime-local">:
+   132→// yyyy-MM-ddTHH:mm in the user's local timezone.
+   133→function toDatetimeLocalValue(iso: string | null): string {
+   134→  if (!iso) return "";
+   135→  try {
+   136→    const d = new Date(iso);
+   137→    if (isNaN(d.getTime())) return "";
+   138→    const pad = (n: number) => String(n).padStart(2, "0");
+   139→    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+   140→      d.getHours()
+   141→    )}:${pad(d.getMinutes())}`;
+   142→  } catch {
+   143→    return "";
+   144→  }
+   145→}
+   146→
+   147→function toFormState(post: BlogPost | null): FormState {
+   148→  if (!post) return { ...EMPTY_FORM };
+   149→  return {
+   150→    title: post.title,
+   151→    slug: post.slug,
+   152→    excerpt: post.excerpt ?? "",
+   153→    content: post.content,
+   154→    featuredImage: post.featuredImage ?? "",
+   155→    author: post.author ?? "",
+   156→    category: post.category,
+   157→    tags: parseStringArray(post.tags).join(", "),
+   158→    published: post.published,
+   159→    featured: post.featured,
+   160→    seoTitle: post.seoTitle ?? "",
+   161→    seoDescription: post.seoDescription ?? "",
+   162→    scheduledAt: toDatetimeLocalValue(post.scheduledAt),
+   163→    canonicalUrl: post.canonicalUrl ?? "",
+   164→    relatedArticleIds: parseStringArray(post.relatedArticleIds).join(", "),
+   165→  };
+   166→}
+   167→
+   168→// ─── Component ─────────────────────────────────────────────────────────────
+   169→
+   170→export default function BlogTab() {
+   171→  const [posts, setPosts] = useState<BlogPost[]>([]);
+   172→  const [loading, setLoading] = useState(true);
+   173→  const [filter, setFilter] = useState<"all" | "draft" | "published" | "featured">("all");
+   174→  const [search, setSearch] = useState("");
+   175→  const [editing, setEditing] = useState<{ id: string | null } | null>(null);
+   176→
+   177→  const load = useCallback(async () => {
+   178→    setLoading(true);
+   179→    try {
+   180→      const url =
+   181→        filter === "all"
+   182→          ? "/api/admin/blog"
+   183→          : `/api/admin/blog?status=${filter}`;
+   184→      const res = await fetch(url, { cache: "no-store" });
+   185→      if (!res.ok) {
+   186→        const data = await res.json().catch(() => ({}));
+   187→        throw new Error(data?.error || `HTTP ${res.status}`);
+   188→      }
+   189→      const data = (await res.json()) as { posts: BlogPost[] };
+   190→      setPosts(data.posts || []);
+   191→    } catch (e: any) {
+   192→      toast.error(e?.message || "Failed to load blog posts");
+   193→    } finally {
+   194→      setLoading(false);
+   195→    }
+   196→  }, [filter]);
+   197→
+   198→  useEffect(() => {
+   199→    load();
+   200→  }, [load]);
+   201→
+   202→  // Client-side search across title / slug / author.
+   203→  const filtered = useMemo(() => {
+   204→    const q = search.trim().toLowerCase();
+   205→    if (!q) return posts;
+   206→    return posts.filter((p) =>
+   207→      [p.title, p.slug, p.author ?? ""].some((s) => s.toLowerCase().includes(q))
+   208→    );
+   209→  }, [posts, search]);
+   210→
+   211→  const counts = useMemo(() => {
+   212→    return {
+   213→      total: posts.length,
+   214→      draft: posts.filter((p) => !p.published).length,
+   215→      published: posts.filter((p) => p.published).length,
+   216→      featured: posts.filter((p) => p.featured).length,
+   217→    };
+   218→  }, [posts]);
+   219→
+   220→  const openNew = () => setEditing({ id: null });
+   221→  const openEdit = (id: string) => setEditing({ id });
+   222→  const closeEditor = () => {
+   223→    setEditing(null);
+   224→  };
+   225→
+   226→  const handleSaved = () => {
+   227→    closeEditor();
+   228→    load();
+   229→  };
+   230→
+   231→  const handleDeleted = () => {
+   232→    closeEditor();
+   233→    load();
+   234→  };
+   235→
+   236→  if (loading) {
+   237→    return (
+   238→      <div className="flex items-center justify-center py-12">
+   239→        <div className="w-8 h-8 rounded-full border-2 border-transparent border-t-[#7C3AED] animate-spin" />
+   240→      </div>
+   241→    );
+   242→  }
+   243→
+   244→  return (
+   245→    <div className="space-y-3">
+   246→      {/* Header */}
+   247→      <div className="flex items-center gap-2">
+   248→        <div className="w-1 h-5 rounded-full bg-[#7C3AED]" />
+   249→        <h2 className="text-sm font-bold text-white">Blog Posts</h2>
+   250→        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#7C3AED]/15 text-[#A78BFA]">
+   251→          {counts.total}
+   252→        </span>
+   253→        <button
+   254→          onClick={openNew}
+   255→          className="ml-auto bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-bold rounded-xl px-3 py-2 flex items-center gap-1.5 transition-all"
+   256→        >
+   257→          <Plus size={12} />
+   258→          New Post
+   259→        </button>
+   260→      </div>
+   261→
+   262→      {/* Status filter chips */}
+   263→      <div className="flex flex-wrap gap-1.5">
+   264→        <FilterChip
+   265→          active={filter === "all"}
+   266→          onClick={() => setFilter("all")}
+   267→          label="All"
+   268→          count={counts.total}
+   269→        />
+   270→        <FilterChip
+   271→          active={filter === "draft"}
+   272→          onClick={() => setFilter("draft")}
+   273→          label="Drafts"
+   274→          count={counts.draft}
+   275→          color="#F59E0B"
+   276→        />
+   277→        <FilterChip
+   278→          active={filter === "published"}
+   279→          onClick={() => setFilter("published")}
+   280→          label="Published"
+   281→          count={counts.published}
+   282→          color="#22C55E"
+   283→        />
+   284→        <FilterChip
+   285→          active={filter === "featured"}
+   286→          onClick={() => setFilter("featured")}
+   287→          label="Featured"
+   288→          count={counts.featured}
+   289→          color="#A855F7"
+   290→        />
+   291→      </div>
+   292→
+   293→      {/* Search */}
+   294→      <div className="relative">
+   295→        <Search
+   296→          size={14}
+   297→          className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none"
+   298→        />
+   299→        <input
+   300→          type="text"
+   301→          value={search}
+   302→          onChange={(e) => setSearch(e.target.value)}
+   303→          placeholder="Search by title, slug, or author…"
+   304→          className="neo-input text-sm pl-9"
+   305→        />
+   306→      </div>
+   307→
+   308→      {/* List */}
+   309→      {filtered.length === 0 ? (
+   310→        <div className="bg-[#1C1929] border border-dashed border-white/[0.12] rounded-2xl p-8 text-center">
+   311→          <FileText size={28} className="mx-auto text-[#475569] mb-2" />
+   312→          <p className="text-sm text-[#94A3B8]">
+   313→            {search ? "No posts match your search." : "No blog posts yet."}
+   314→          </p>
+   315→          {!search && (
+   316→            <button
+   317→              onClick={openNew}
+   318→              className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-[#A78BFA] hover:text-white"
+   319→            >
+   320→              <Plus size={12} /> Create your first post
+   321→            </button>
+   322→          )}
+   323→        </div>
+   324→      ) : (
+   325→        <div className="space-y-2">
+   326→          {filtered.map((p) => (
+   327→            <button
+   328→              key={p.id}
+   329→              onClick={() => openEdit(p.id)}
+   330→              className="w-full text-left bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4 hover:border-white/[0.15] transition-all"
+   331→            >
+   332→              <div className="flex items-start justify-between gap-2 mb-1">
+   333→                <div className="min-w-0 flex-1">
+   334→                  <h3 className="text-sm font-bold text-white truncate">{p.title}</h3>
+   335→                  <p className="text-[11px] text-[#94A3B8] truncate">
+   336→                    /{p.slug}
+   337→                    {p.author && ` · ${p.author}`}
+   338→                  </p>
+   339→                </div>
+   340→                <div className="flex items-center gap-1.5 shrink-0">
+   341→                  {p.featured && <StatusBadge color="#A855F7" label="Featured" />}
+   342→                  {p.published ? (
+   343→                    <StatusBadge color="#22C55E" label="Published" />
+   344→                  ) : (
+   345→                    <StatusBadge color="#F59E0B" label="Draft" />
+   346→                  )}
+   347→                </div>
+   348→              </div>
+   349→              {p.excerpt && (
+   350→                <p className="text-[11px] text-[#A09DB1] line-clamp-1 mb-1.5">{p.excerpt}</p>
+   351→              )}
+   352→              <div className="flex items-center gap-2 text-[10px] text-[#64748B]">
+   353→                <span className="px-1.5 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] font-bold uppercase tracking-wider">
+   354→                  {p.category}
+   355→                </span>
+   356→                {p.published && p.publishedAt ? (
+   357→                  <span className="flex items-center gap-0.5">
+   358→                    <Eye size={9} /> {formatTimeAgo(p.publishedAt)}
+   359→                  </span>
+   360→                ) : (
+   361→                  <span className="flex items-center gap-0.5">
+   362→                    <Clock size={9} /> {formatTimeAgo(p.updatedAt)}
+   363→                  </span>
+   364→                )}
+   365→              </div>
+   366→            </button>
+   367→          ))}
+   368→        </div>
+   369→      )}
+   370→
+   371→      {/* Editor modal */}
+   372→      {editing && (
+   373→        <BlogEditorModal
+   374→          postId={editing.id}
+   375→          onClose={closeEditor}
+   376→          onSaved={handleSaved}
+   377→          onDeleted={handleDeleted}
+   378→        />
+   379→      )}
+   380→    </div>
+   381→  );
+   382→}
+   383→
+   384→// ─── Sub-components ────────────────────────────────────────────────────────
+   385→
+   386→function FilterChip({
+   387→  active,
+   388→  onClick,
+   389→  label,
+   390→  count,
+   391→  color,
+   392→}: {
+   393→  active: boolean;
+   394→  onClick: () => void;
+   395→  label: string;
+   396→  count: number;
+   397→  color?: string;
+   398→}) {
+   399→  const activeBg = color ? `${color}` : "#7C3AED";
+   400→  return (
+   401→    <button
+   402→      onClick={onClick}
+   403→      className={`bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-1.5 text-xs font-bold flex items-center gap-1.5 transition-all ${
+   404→        active ? "text-white border-transparent" : "text-[#94A3B8] hover:text-white"
+   405→      }`}
+   406→      style={active ? { backgroundColor: `${activeBg}25`, borderColor: `${activeBg}80`, color } : undefined}
+   407→    >
+   408→      {label}
+   409→      <span
+   410→        className={`text-[10px] px-1.5 py-0.5 rounded-md ${
+   411→          active ? "bg-white/20" : "bg-white/[0.06] text-[#94A3B8]"
+   412→        }`}
+   413→      >
+   414→        {count}
+   415→      </span>
+   416→    </button>
+   417→  );
+   418→}
+   419→
+   420→function StatusBadge({ color, label }: { color: string; label: string }) {
+   421→  return (
+   422→    <span
+   423→      className="px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider shrink-0"
+   424→      style={{ backgroundColor: `${color}25`, color }}
+   425→    >
+   426→      {label}
+   427→    </span>
+   428→  );
+   429→}
+   430→
+   431→// ─── Editor modal ──────────────────────────────────────────────────────────
+   432→
+   433→function BlogEditorModal({
+   434→  postId,
+   435→  onClose,
+   436→  onSaved,
+   437→  onDeleted,
+   438→}: {
+   439→  postId: string | null;
+   440→  onClose: () => void;
+   441→  onSaved: () => void;
+   442→  onDeleted: () => void;
+   443→}) {
+   444→  const [form, setForm] = useState<FormState>({ ...EMPTY_FORM });
+   445→  const [loading, setLoading] = useState(postId !== null);
+   446→  const [saving, setSaving] = useState(false);
+   447→  const [deleting, setDeleting] = useState(false);
+   448→  const [confirmDelete, setConfirmDelete] = useState(false);
+   449→  const [slugTouched, setSlugTouched] = useState(false);
+   450→
+   451→  // Load existing post if editing.
+   452→  useEffect(() => {
+   453→    if (!postId) {
+   454→      setLoading(false);
+   455→      return;
+   456→    }
+   457→    let cancelled = false;
+   458→    (async () => {
+   459→      try {
+   460→        const res = await fetch(`/api/admin/blog/${postId}`, { cache: "no-store" });
+   461→        if (!res.ok) {
+   462→          const data = await res.json().catch(() => ({}));
+   463→          throw new Error(data?.error || `HTTP ${res.status}`);
+   464→        }
+   465→        const data = (await res.json()) as { post: BlogPost };
+   466→        if (cancelled) return;
+   467→        setForm(toFormState(data.post));
+   468→      } catch (e: any) {
+   469→        toast.error(e?.message || "Failed to load post");
+   470→        onClose();
+   471→      } finally {
+   472→        if (!cancelled) setLoading(false);
+   473→      }
+   474→    })();
+   475→    return () => {
+   476→      cancelled = true;
+   477→    };
+   478→  }, [postId, onClose]);
+   479→
+   480→  // Close on Escape + lock scroll.
+   481→  useEffect(() => {
+   482→    const onKey = (e: KeyboardEvent) => {
+   483→      if (e.key === "Escape") onClose();
+   484→    };
+   485→    window.addEventListener("keydown", onKey);
+   486→    document.body.style.overflow = "hidden";
+   487→    return () => {
+   488→      window.removeEventListener("keydown", onKey);
+   489→      document.body.style.overflow = "";
+   490→    };
+   491→  }, [onClose]);
+   492→
+   493→  const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+   494→    setForm((f) => ({ ...f, [key]: value }));
+   495→  };
+   496→
+   497→  // Auto-generate slug from title if the admin hasn't manually touched the slug.
+   498→  const effectiveSlug = slugTouched && form.slug ? form.slug : slugify(form.title);
+   499→
+   500→  const save = async () => {
+   501→    if (!form.title.trim()) {
+   502→      toast.error("Title is required");
+   503→      return;
+   504→    }
+   505→    if (!form.category.trim()) {
+   506→      toast.error("Category is required");
+   507→      return;
+   508→    }
+   509→    setSaving(true);
+   510→    try {
+   511→      const payload = {
+   512→        title: form.title.trim(),
+   513→        slug: form.slug.trim(), // server will slugify + de-dupe if empty
+   514→        excerpt: form.excerpt,
+   515→        content: form.content,
+   516→        featuredImage: form.featuredImage,
+   517→        author: form.author,
+   518→        category: form.category.trim(),
+   519→        tags: form.tags, // CSV → server coerces to JSON array
+   520→        published: form.published,
+   521→        featured: form.featured,
+   522→        seoTitle: form.seoTitle,
+   523→        seoDescription: form.seoDescription,
+   524→        scheduledAt: form.scheduledAt || null,
+   525→        canonicalUrl: form.canonicalUrl,
+   526→        relatedArticleIds: form.relatedArticleIds, // CSV → server coerces
+   527→      };
+   528→      const url = postId ? `/api/admin/blog/${postId}` : "/api/admin/blog";
+   529→      const method = postId ? "PATCH" : "POST";
+   530→      const res = await fetch(url, {
+   531→        method,
+   532→        headers: { "Content-Type": "application/json" },
+   533→        body: JSON.stringify(payload),
+   534→      });
+   535→      if (!res.ok) {
+   536→        const data = await res.json().catch(() => ({}));
+   537→        throw new Error(data?.error || `HTTP ${res.status}`);
+   538→      }
+   539→      toast.success(postId ? "Post updated" : "Post created");
+   540→      onSaved();
+   541→    } catch (e: any) {
+   542→      toast.error(e?.message || "Failed to save post");
+   543→    } finally {
+   544→      setSaving(false);
+   545→    }
+   546→  };
+   547→
+   548→  const remove = async () => {
+   549→    if (!postId) return;
+   550→    setDeleting(true);
+   551→    try {
+   552→      const res = await fetch(`/api/admin/blog/${postId}`, { method: "DELETE" });
+   553→      if (!res.ok) {
+   554→        const data = await res.json().catch(() => ({}));
+   555→        throw new Error(data?.error || `HTTP ${res.status}`);
+   556→      }
+   557→      toast.success("Post deleted");
+   558→      onDeleted();
+   559→    } catch (e: any) {
+   560→      toast.error(e?.message || "Failed to delete post");
+   561→    } finally {
+   562→      setDeleting(false);
+   563→    }
+   564→  };
+   565→
+   566→  if (loading) {
+   567→    return (
+   568→      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+   569→        <div className="w-8 h-8 rounded-full border-2 border-transparent border-t-[#7C3AED] animate-spin" />
+   570→      </div>
+   571→    );
+   572→  }
+   573→
+   574→  return (
+   575→    <div
+   576→      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm"
+   577→      onClick={onClose}
+   578→    >
+   579→      <div
+   580→        className="bg-[#1C1929] border border-white/[0.08] rounded-t-3xl sm:rounded-3xl p-6 w-full max-w-2xl max-h-[92vh] overflow-y-auto"
+   581→        onClick={(e) => e.stopPropagation()}
+   582→      >
+   583→        {/* Header */}
+   584→        <div className="flex items-center justify-between mb-4">
+   585→          <div className="flex items-center gap-2">
+   586→            <FileText size={14} className="text-[#A78BFA]" />
+   587→            <h2 className="text-sm font-extrabold text-white">
+   588→              {postId ? "Edit Post" : "New Post"}
+   589→            </h2>
+   590→          </div>
+   591→          <button
+   592→            onClick={onClose}
+   593→            className="w-7 h-7 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-[#94A3B8] hover:text-white"
+   594→            aria-label="Close"
+   595→          >
+   596→            <X size={14} />
+   597→          </button>
+   598→        </div>
+   599→
+   600→        {/* Body */}
+   601→        <div className="space-y-3">
+   602→          {/* Title */}
+   603→          <Field label="Title" required>
+   604→            <input
+   605→              type="text"
+   606→              value={form.title}
+   607→              onChange={(e) => set("title", e.target.value)}
+   608→              className="neo-input text-sm"
+   609→              placeholder="The Grace of Quiet Mornings"
+   610→            />
+   611→          </Field>
+   612→
+   613→          {/* Slug */}
+   614→          <Field label="Slug" hint="URL-friendly. Auto-generated from title if empty.">
+   615→            <input
+   616→              type="text"
+   617→              value={form.slug}
+   618→              onChange={(e) => {
+   619→                set("slug", e.target.value);
+   620→                setSlugTouched(true);
+   621→              }}
+   622→              className="neo-input text-sm"
+   623→              placeholder={slugify(form.title) || "the-grace-of-quiet-mornings"}
+   624→              style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+   625→            />
+   626→            <p className="mt-1 text-[10px] text-[#64748B]">
+   627→              Live preview:{" "}
+   628→              <span className="text-[#38BDF8]">/blog/{effectiveSlug || "—"}</span>
+   629→            </p>
+   630→          </Field>
+   631→
+   632→          {/* Category + Author */}
+   633→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   634→            <Field label="Category" required>
+   635→              <input
+   636→                type="text"
+   637→                value={form.category}
+   638→                onChange={(e) => set("category", e.target.value)}
+   639→                className="neo-input text-sm"
+   640→                placeholder="Bible / Faith / Christian Living"
+   641→              />
+   642→            </Field>
+   643→            <Field label="Author">
+   644→              <input
+   645→                type="text"
+   646→                value={form.author}
+   647→                onChange={(e) => set("author", e.target.value)}
+   648→                className="neo-input text-sm"
+   649→                placeholder="Author name"
+   650→              />
+   651→            </Field>
+   652→          </div>
+   653→
+   654→          {/* Excerpt */}
+   655→          <Field label="Excerpt" hint="Short summary shown on cards.">
+   656→            <textarea
+   657→              value={form.excerpt}
+   658→              onChange={(e) => set("excerpt", e.target.value)}
+   659→              className="neo-input text-sm h-16 resize-none"
+   660→              placeholder="One or two sentences to hook the reader."
+   661→            />
+   662→          </Field>
+   663→
+   664→          {/* Content */}
+   665→          <Field
+   666→            label="Content"
+   667→            hint="Markdown / plain text. Rendered as whitespace-pre-wrap on /blog/[slug]."
+   668→          >
+   669→            <textarea
+   670→              value={form.content}
+   671→              onChange={(e) => set("content", e.target.value)}
+   672→              className="neo-input text-sm h-44 resize-y font-mono"
+   673→              placeholder={"# Heading\n\nWrite your article here…"}
+   674→            />
+   675→          </Field>
+   676→
+   677→          {/* Featured image */}
+   678→          <Field label="Featured Image URL" hint="Paste a Supabase Storage URL.">
+   679→            <input
+   680→              type="text"
+   681→              value={form.featuredImage}
+   682→              onChange={(e) => set("featuredImage", e.target.value)}
+   683→              className="neo-input text-sm"
+   684→              placeholder="https://<supabase-storage>/blog/post-cover.jpg"
+   685→              style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+   686→            />
+   687→            {form.featuredImage && (
+   688→              <div className="mt-2 flex items-center gap-2 p-2 rounded-xl bg-white/[0.04] border border-white/[0.06]">
+   689→                {/* eslint-disable-next-line @next/next/no-img-element */}
+   690→                <img
+   691→                  src={form.featuredImage}
+   692→                  alt="Cover preview"
+   693→                  className="w-16 h-12 object-cover rounded-md bg-[#0f0f1a]"
+   694→                  onError={(e) => {
+   695→                    (e.currentTarget as HTMLImageElement).style.display = "none";
+   696→                  }}
+   697→                />
+   698→                <span className="text-[10px] text-[#94A3B8] break-all line-clamp-2">
+   699→                  {form.featuredImage}
+   700→                </span>
+   701→              </div>
+   702→            )}
+   703→          </Field>
+   704→
+   705→          {/* Tags */}
+   706→          <Field label="Tags" hint="Comma-separated.">
+   707→            <input
+   708→              type="text"
+   709→              value={form.tags}
+   710→              onChange={(e) => set("tags", e.target.value)}
+   711→              className="neo-input text-sm"
+   712→              placeholder="prayer, grace, morning"
+   713→            />
+   714→            {form.tags.trim().length > 0 && (
+   715→              <div className="mt-1.5 flex flex-wrap gap-1">
+   716→                {form.tags
+   717→                  .split(",")
+   718→                  .map((t) => t.trim())
+   719→                  .filter((t) => t.length > 0)
+   720→                  .map((t, i) => (
+   721→                    <span
+   722→                      key={i}
+   723→                      className="bg-[#38BDF8]/10 text-[#38BDF8] text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-md"
+   724→                    >
+   725→                      {t}
+   726→                    </span>
+   727→                  ))}
+   728→              </div>
+   729→            )}
+   730→          </Field>
+   731→
+   732→          {/* Published + Featured */}
+   733→          <div className="grid grid-cols-2 gap-2">
+   734→            <Toggle
+   735→              checked={form.published}
+   736→              onChange={(v) => set("published", v)}
+   737→              label="Published"
+   738→              hint={form.published ? "Visible on /blog" : "Hidden (draft)"}
+   739→              icon={form.published ? <Eye size={12} /> : <EyeOff size={12} />}
+   740→              color="#22C55E"
+   741→            />
+   742→            <Toggle
+   743→              checked={form.featured}
+   744→              onChange={(v) => set("featured", v)}
+   745→              label="Featured"
+   746→              hint={form.featured ? "Hero card" : "Standard card"}
+   747→              icon={<Star size={12} />}
+   748→              color="#A855F7"
+   749→            />
+   750→          </div>
+   751→
+   752→          {/* SEO */}
+   753→          <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-3 space-y-3">
+   754→            <p className="text-[10px] font-bold uppercase tracking-wider text-[#94A3B8]">
+   755→              SEO
+   756→            </p>
+   757→            <Field label="SEO Title" hint="Defaults to title — Koino Blog if empty.">
+   758→              <input
+   759→                type="text"
+   760→                value={form.seoTitle}
+   761→                onChange={(e) => set("seoTitle", e.target.value)}
+   762→                className="neo-input text-sm"
+   763→                placeholder="Optional — overrides <title> for search engines"
+   764→              />
+   765→            </Field>
+   766→            <Field label="SEO Description" hint="Defaults to excerpt if empty.">
+   767→              <textarea
+   768→                value={form.seoDescription}
+   769→                onChange={(e) => set("seoDescription", e.target.value)}
+   770→                className="neo-input text-sm h-16 resize-none"
+   771→                placeholder="Optional — meta description for search engines / social shares"
+   772→              />
+   773→            </Field>
+   774→            <Field label="Canonical URL" hint="For cross-posted articles only.">
+   775→              <input
+   776→                type="text"
+   777→                value={form.canonicalUrl}
+   778→                onChange={(e) => set("canonicalUrl", e.target.value)}
+   779→                className="neo-input text-sm"
+   780→                placeholder="https://medium.com/your-article-123"
+   781→                style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+   782→              />
+   783→            </Field>
+   784→          </div>
+   785→
+   786→          {/* Scheduling + Related */}
+   787→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   788→            <Field label="Scheduled At" hint="Future date = hidden from /blog until then.">
+   789→              <input
+   790→                type="datetime-local"
+   791→                value={form.scheduledAt}
+   792→                onChange={(e) => set("scheduledAt", e.target.value)}
+   793→                className="neo-input text-sm"
+   794→              />
+   795→            </Field>
+   796→            <Field label="Related Article IDs" hint="Comma-separated post IDs.">
+   797→              <input
+   798→                type="text"
+   799→                value={form.relatedArticleIds}
+   800→                onChange={(e) => set("relatedArticleIds", e.target.value)}
+   801→                className="neo-input text-sm"
+   802→                placeholder="clxxxx1, clxxxx2"
+   803→                style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
+   804→              />
+   805→            </Field>
+   806→          </div>
+   807→
+   808→          {/* Actions */}
+   809→          <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-white/[0.06]">
+   810→            {postId && (
+   811→              <div className="mr-auto">
+   812→                {confirmDelete ? (
+   813→                  <div className="flex items-center gap-1.5">
+   814→                    <AlertCircle size={12} className="text-[#EF4444]" />
+   815→                    <span className="text-[11px] text-[#94A3B8]">Delete permanently?</span>
+   816→                    <button
+   817→                      onClick={remove}
+   818→                      disabled={deleting}
+   819→                      className="bg-[#EF4444]/10 hover:bg-[#EF4444]/20 text-[#EF4444] text-[11px] font-bold rounded-lg px-2 py-1 disabled:opacity-50"
+   820→                    >
+   821→                      {deleting ? <Loader2 size={11} className="animate-spin" /> : "Yes, delete"}
+   822→                    </button>
+   823→                    <button
+   824→                      onClick={() => setConfirmDelete(false)}
+   825→                      disabled={deleting}
+   826→                      className="text-[#94A3B8] hover:text-white text-[11px] font-bold px-2 py-1"
+   827→                    >
+   828→                      Cancel
+   829→                    </button>
+   830→                  </div>
+   831→                ) : (
+   832→                  <button
+   833→                    onClick={() => setConfirmDelete(true)}
+   834→                    disabled={saving || deleting}
+   835→                    className="text-[#EF4444] hover:bg-[#EF4444]/10 text-[11px] font-bold flex items-center gap-1.5 disabled:opacity-50"
+   836→                  >
+   837→                    <Trash2 size={12} /> Delete
+   838→                  </button>
+   839→                )}
+   840→              </div>
+   841→            )}
+   842→            <button
+   843→              onClick={onClose}
+   844→              disabled={saving || deleting}
+   845→              className="px-4 py-2.5 rounded-xl bg-white/[0.04] text-[#94A3B8] hover:text-white border border-white/[0.06] text-sm font-semibold disabled:opacity-50"
+   846→            >
+   847→              Cancel
+   848→            </button>
+   849→            <button
+   850→              onClick={save}
+   851→              disabled={saving || deleting}
+   852→              className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-[#F39B9B] hover:bg-[#E27B7B] text-slate-950 font-extrabold text-sm flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all hover:-translate-y-px"
+   853→            >
+   854→              {saving ? (
+   855→                <>
+   856→                  <Loader2 size={14} className="animate-spin" /> Saving…
+   857→                </>
+   858→              ) : (
+   859→                <>
+   860→                  <Save size={14} /> {postId ? "Save Changes" : "Create Post"}
+   861→                </>
+   862→              )}
+   863→            </button>
+   864→          </div>
+   865→        </div>
+   866→      </div>
+   867→    </div>
+   868→  );
+   869→}
+   870→
+   871→// ─── Form primitives ───────────────────────────────────────────────────────
+   872→
+   873→function Field({
+   874→  label,
+   875→  required,
+   876→  hint,
+   877→  children,
+   878→}: {
+   879→  label: string;
+   880→  required?: boolean;
+   881→  hint?: string;
+   882→  children: React.ReactNode;
+   883→}) {
+   884→  return (
+   885→    <div>
+   886→      <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#94A3B8] mb-1.5">
+   887→        {label} {required && <span className="text-[#F39B9B]">*</span>}
+   888→      </label>
+   889→      {children}
+   890→      {hint && <p className="mt-1 text-[10px] text-[#64748B] leading-relaxed">{hint}</p>}
+   891→    </div>
+   892→  );
+   893→}
+   894→
+   895→function Toggle({
+   896→  checked,
+   897→  onChange,
+   898→  label,
+   899→  hint,
+   900→  icon,
+   901→  color,
+   902→}: {
+   903→  checked: boolean;
+   904→  onChange: (v: boolean) => void;
+   905→  label: string;
+   906→  hint: string;
+   907→  icon: React.ReactNode;
+   908→  color: string;
+   909→}) {
+   910→  return (
+   911→    <button
+   912→      type="button"
+   913→      onClick={() => onChange(!checked)}
+   914→      className={`bg-white/[0.03] border rounded-xl p-3 text-left flex items-start gap-2 transition-all ${
+   915→        checked ? "border-white/[0.15]" : "border-white/[0.06] hover:border-white/[0.1]"
+   916→      }`}
+   917→      style={checked ? { backgroundColor: `${color}15`, borderColor: `${color}50` } : undefined}
+   918→    >
+   919→      <span
+   920→        className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+   921→        style={{ backgroundColor: `${color}20`, color }}
+   922→      >
+   923→        {icon}
+   924→      </span>
+   925→      <div className="min-w-0 flex-1">
+   926→        <p className="text-xs font-bold text-white">{label}</p>
+   927→        <p className="text-[10px] text-[#94A3B8]">{hint}</p>
+   928→      </div>
+   929→      <span
+   930→        className={`mt-0.5 w-4 h-4 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
+   931→          checked ? "" : "border-white/20"
+   932→        }`}
+   933→        style={checked ? { backgroundColor: color, borderColor: color } : undefined}
+   934→      >
+   935→        {checked && (
+   936→          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+   937→            <path
+   938→              d="M2 5L4 7L8 3"
+   939→              stroke="white"
+   940→              strokeWidth="2"
+   941→              strokeLinecap="round"
+   942→              strokeLinejoin="round"
+   943→            />
+   944→          </svg>
+   945→        )}
+   946→      </span>
+   947→    </button>
+   948→  );
+   949→}
+   950→
