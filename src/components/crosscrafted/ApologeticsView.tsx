@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Heart,
@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  APOLOGETICS_POSTS,
   APOLOGETICS_QUESTIONS,
   APOLOGETICS_TOPICS,
   CHURCH_GRADIENTS,
@@ -29,10 +28,34 @@ import {
 } from "@/lib/crosscrafted-data";
 import { useTranslation } from "@/lib/i18n/LanguageContext";
 
+// ─── Helper: map admin category label → APOLOGETICS_TOPICS id ──────────────
+// The admin editor uses category labels like "God & Existence", "Jesus Christ",
+// "Resurrection", "Bible", "Science & Faith", etc. The SPA's topic filter uses
+// IDs like "gods_existence", "resurrection", "bible_reliability".
+// This helper maps the label to the closest topic ID so the filter works.
+// If no match, returns "" (shows under "All Topics").
+function mapCategoryToTopicId(category: string | null | undefined): string {
+  if (!category) return "";
+  const c = category.toLowerCase().trim();
+  if (c.includes("god") && c.includes("exist")) return "gods_existence";
+  if (c.includes("evil") || c.includes("suffer")) return "problem_of_evil";
+  if (c.includes("resurrection") || c.includes("jesus")) return "resurrection";
+  if (c.includes("bible")) return "bible_reliability";
+  if (c.includes("science")) return "science_faith";
+  if (c.includes("world") || c.includes("religion")) return "world_religions";
+  return ""; // no topic match — shows under "All Topics"
+}
+
 export default function ApologeticsView() {
   const t = useTranslation();
   const [activeTab, setActiveTab] = useState<"articles" | "qa">("articles");
-  const [posts] = useState<ApologeticsPost[]>(APOLOGETICS_POSTS);
+  // ─── PUBLISHED ARTICLES (loaded from real DB via /api/articles) ───
+  // The APOLOGETICS_POSTS mock array is NO LONGER used — all articles come
+  // from the database. status=published + contentType=APOLOGETICS only
+  // (server-enforced). Admin-created articles appear here after publishing.
+  const [posts, setPosts] = useState<ApologeticsPost[]>([]);
+  const [postsLoading, setPostsLoading] = useState(true);
+  const [postsError, setPostsError] = useState<string | null>(null);
   const [questions, setQuestions] = useState<ApologeticsQuestion[]>(APOLOGETICS_QUESTIONS);
   const [liked, setLiked] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -42,6 +65,45 @@ export default function ApologeticsView() {
   const [showAskModal, setShowAskModal] = useState(false);
   const [askForm, setAskForm] = useState({ title: "", body: "", topic: "", author: "" });
   const [answerText, setAnswerText] = useState<Record<string, string>>({});
+
+  // ─── Fetch published apologetics articles from the database ───
+  // Public API returns ONLY status=published + contentType=APOLOGETICS
+  // (server-enforced). Maps DB fields to the ApologeticsPost shape.
+  const loadPosts = async () => {
+    setPostsLoading(true);
+    setPostsError(null);
+    try {
+      const res = await fetch("/api/articles?type=APOLOGETICS", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load articles");
+      const articles = data.articles || [];
+      // Map DB article → ApologeticsPost shape
+      const mapped: ApologeticsPost[] = articles.map((a: any) => ({
+        id: a.id,
+        title: a.title,
+        body: a.excerpt || a.shortAnswer || "", // use excerpt as the preview body
+        author: a.authorName || "Koino",
+        topic: mapCategoryToTopicId(a.category), // map category label → topic id
+        date: a.publishedAt || a.createdAt,
+        likes: a.viewCount || 0, // use viewCount as a proxy for engagement
+        comments: 0,
+        cover_gradient: 0,
+        cover_image: a.coverImageUrl || undefined,
+        slug: a.slug, // for linking to /apologetics/[slug]
+        featured: a.featured,
+      }));
+      setPosts(mapped);
+    } catch (e: any) {
+      setPostsError(e.message || "Failed to load articles");
+      setPosts([]);
+    } finally {
+      setPostsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPosts();
+  }, []);
 
   const filtered = useMemo(() => {
     return posts.filter((p) => {
@@ -249,12 +311,58 @@ export default function ApologeticsView() {
       <AnimatePresence mode="wait">
         {activeTab === "articles" ? (
           <motion.div key="articles" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            {/* Loading state */}
+            {postsLoading && (
+              <div className="text-center py-12">
+                <div className="w-8 h-8 mx-auto rounded-full border-2 border-transparent border-t-[#7C3AED] animate-spin mb-3" />
+                <p className="text-xs text-[#94A3B8]">Loading articles…</p>
+              </div>
+            )}
+
+            {/* Error state */}
+            {!postsLoading && postsError && (
+              <div className="bg-[#EF4444]/8 border border-[#EF4444]/20 rounded-2xl p-5 text-center">
+                <p className="text-sm font-bold text-[#EF4444] mb-1">Failed to load articles</p>
+                <p className="text-xs text-[#A09DB1] mb-3">{postsError}</p>
+                <button
+                  onClick={loadPosts}
+                  className="px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[#94A3B8] hover:text-white text-xs font-bold transition-all"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+
+            {/* Empty state — no published articles yet */}
+            {!postsLoading && !postsError && posts.length === 0 && (
+              <div className="text-center py-12">
+                <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#7C3AED]/15 border border-[#7C3AED]/25 mb-3">
+                  <BookOpen size={24} className="text-[#A78BFA]" />
+                </div>
+                <p className="text-sm font-bold text-white mb-1">No articles published yet</p>
+                <p className="text-xs text-[#A09DB1] max-w-sm mx-auto">
+                  Apologetics articles will appear here once they are published by the Koino team.
+                </p>
+              </div>
+            )}
+
+            {/* Articles list (only when not loading/error/empty) */}
+            {!postsLoading && !postsError && posts.length > 0 && (
+              <>
             {/* Featured Post */}
             {filtered[0] && !filterTopic && !search && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                onClick={() => setOpenPost(filtered[0])}
+                onClick={() => {
+                  // If the post has a slug (DB-backed), navigate to the public
+                  // article page. Otherwise (legacy mock), open the modal.
+                  if (filtered[0].slug) {
+                    window.location.href = `/apologetics/${filtered[0].slug}`;
+                  } else {
+                    setOpenPost(filtered[0]);
+                  }
+                }}
                 className="relative rounded-2xl overflow-hidden cursor-pointer mb-4 border border-white/[0.06]"
               >
                 <div className="relative h-44" style={{ background: CHURCH_GRADIENTS[filtered[0].cover_gradient] }}>
@@ -290,7 +398,15 @@ export default function ApologeticsView() {
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.05 }}
-                    onClick={() => setOpenPost(post)}
+                    onClick={() => {
+                      // If the post has a slug (DB-backed), navigate to the
+                      // public article page. Otherwise (legacy mock), open modal.
+                      if (post.slug) {
+                        window.location.href = `/apologetics/${post.slug}`;
+                      } else {
+                        setOpenPost(post);
+                      }
+                    }}
                     className="bg-[#1C1929] border border-white/[0.06] rounded-2xl p-4 cursor-pointer hover:border-white/[0.12] transition-all"
                   >
                     <div className="flex items-start gap-3 mb-2">
@@ -349,6 +465,8 @@ export default function ApologeticsView() {
                 <Search size={32} className="mx-auto text-[#475569] mb-2" />
                 <p className="text-sm text-[#475569]">No articles found.</p>
               </div>
+            )}
+              </>
             )}
           </motion.div>
         ) : (

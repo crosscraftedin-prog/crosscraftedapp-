@@ -98,6 +98,8 @@ export type ApologeticsPost = {
   comments: number;
   cover_gradient: number;
   cover_image?: string;
+  slug?: string; // for DB-backed articles — links to /apologetics/[slug]
+  featured?: boolean;
 };
 
 export type ApologeticsAnswer = {
