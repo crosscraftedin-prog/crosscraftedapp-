@@ -37,13 +37,26 @@ function safeParseArray<T>(value: string | null | undefined, fallback: T[]): T[]
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const article = await db.koinoArticle.findUnique({ where: { slug } });
-  // Drafts must NOT appear in metadata — return generic "not found" metadata
-  // for any article that isn't published + APOLOGETICS.
+  console.log("[apologetics/[slug] generateMetadata] loading slug:", slug);
+
+  let article;
+  try {
+    article = await db.koinoArticle.findUnique({ where: { slug } });
+  } catch (err) {
+    console.error("[apologetics/[slug] generateMetadata] DB query FAILED:", err);
+    // Return minimal metadata so the page can still attempt to render
+    return { title: "Koino" };
+  }
+
+  console.log("[apologetics/[slug] generateMetadata] article found:", article ? article.id : "null");
+
   if (!article || article.status !== "published" || article.contentType !== "APOLOGETICS") {
+    console.log("[apologetics/[slug] generateMetadata] returning not-found metadata (status:", article?.status, "contentType:", article?.contentType, ")");
     return { title: "Article Not Found — Koino" };
   }
+
   const canonical = article.canonicalUrl || `https://www.koino.in/apologetics/${article.slug}`;
+  console.log("[apologetics/[slug] generateMetadata] returning full metadata");
   return {
     title: article.seoTitle || `${article.title} — Koino`,
     description: article.seoDescription || article.excerpt || "",
@@ -67,37 +80,27 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function ApologeticsArticlePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  console.log("[apologetics/[slug] page] loading slug:", slug);
 
-  // Fetch the article WITHOUT the author relation include.
-  // The Turn Into Article flow creates articles with authorId=null, and
-  // the include on the Contributor relation can throw if the production
-  // DB schema has any drift. The authorName field is denormalized on
-  // KoinoArticle, so we don't need the relation for display.
-  //
-  // IMPORTANT: We do NOT wrap this in a try/catch that calls notFound().
-  // If the database is down or the query fails for a non-"not found" reason
-  // (connection error, schema mismatch, Prisma error), the exception
-  // should propagate as a server-side error (500) — NOT be silently
-  // converted to a 404. Only a genuine "article doesn't exist" (null
-  // return) should produce a 404.
   const article = await db.koinoArticle.findUnique({
     where: { slug },
   });
 
+  console.log("[apologetics/[slug] page] article found:", article ? { id: article.id, status: article.status, contentType: article.contentType } : "null");
+
   // Article not found, or not published, or not APOLOGETICS → 404
   if (!article || article.status !== "published" || article.contentType !== "APOLOGETICS") notFound();
 
+  console.log("[apologetics/[slug] page] article passed checks, parsing JSON fields...");
+
   // ─── Safe JSON parsing (null-safe + type-safe) ────────────────────
-  // bibleRefs, sources, relatedIds are TEXT columns with @default("[]").
-  // In production they might be NULL or contain invalid values.
-  // safeParseArray verifies the parsed value is actually an array —
-  // not just that JSON.parse didn't throw.
   const bibleRefs: string[] = safeParseArray<string>(article.bibleRefs, []);
   const sources: any[] = safeParseArray<any>(article.sources, []);
   const relatedIds: string[] = safeParseArray<string>(article.relatedIds, []);
 
+  console.log("[apologetics/[slug] page] JSON parsed:", { bibleRefs: bibleRefs.length, sources: sources.length, relatedIds: relatedIds.length });
+
   // Fetch related articles (only published ones) — wrapped in try/catch
-  // so a DB error on the related query doesn't crash the entire page.
   let relatedArticles: any[] = [];
   if (relatedIds.length > 0) {
     try {
@@ -106,10 +109,11 @@ export default async function ApologeticsArticlePage({ params }: { params: Promi
         select: { id: true, title: true, slug: true, category: true, excerpt: true, coverImageUrl: true },
       });
     } catch (error) {
-      console.error("[apologetics/[slug]] Related articles query error:", error);
-      // Silently skip — the article itself still renders without related articles
+      console.error("[apologetics/[slug] page] Related articles query error:", error);
     }
   }
+
+  console.log("[apologetics/[slug] page] about to render JSX...");
 
   // Difficulty badge color
   const difficultyColor: Record<string, string> = {
