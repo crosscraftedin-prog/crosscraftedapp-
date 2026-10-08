@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { PrismaClient } from "@prisma/client";
 import PublicPageLayout from "@/components/crosscrafted/PublicPageLayout";
 import Link from "next/link";
-import { ArrowLeft, BadgeCheck, BookOpen, Calendar, Share2 } from "lucide-react";
+import { ArrowLeft, BookOpen, Calendar, Share2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 
@@ -27,6 +27,19 @@ function safeUrl(url: string | undefined): string | null {
   }
   // Block everything else (javascript:, data:, vbscript:, file:, etc.)
   return null;
+}
+
+// Safe JSON parser — handles null/undefined/invalid gracefully.
+// Used for bibleRefs, sources, relatedIds (TEXT columns that store JSON arrays).
+// In production, these columns might be NULL if the table was created before
+// the @default("[]") was added — this prevents JSON.parse(null) crashes.
+function safeParseJson<T>(value: string | null | undefined, fallback: T): T {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 
@@ -62,26 +75,46 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function ApologeticsArticlePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const article = await db.koinoArticle.findUnique({
-    where: { slug },
-    include: {
-      author: { select: { displayName: true, slug: true, profilePhoto: true, verified: true, churchRole: true, church: true, bio: true } },
-    },
-  });
+
+  let article: any = null;
+  try {
+    // Fetch the article WITHOUT the author relation include.
+    // The Turn Into Article flow creates articles with authorId=null, and
+    // the include on the Contributor relation can throw if the production
+    // DB schema has any drift. The authorName field is denormalized on
+    // KoinoArticle, so we don't need the relation for display.
+    article = await db.koinoArticle.findUnique({
+      where: { slug },
+    });
+  } catch (error) {
+    console.error("[apologetics/[slug]] DB query error:", error);
+    notFound();
+  }
 
   if (!article || article.status !== "published" || article.contentType !== "APOLOGETICS") notFound();
 
-  const bibleRefs: string[] = JSON.parse(article.bibleRefs || "[]");
-  const sources: any[] = JSON.parse(article.sources || "[]");
-  const relatedIds: string[] = JSON.parse(article.relatedIds || "[]");
+  // ─── Safe JSON parsing (null-safe) ─────────────────────────────────
+  // bibleRefs, sources, relatedIds are TEXT columns with @default("[]").
+  // In production they might be NULL if the column was added without a
+  // default. Use safeParseJson to handle null/undefined/invalid gracefully.
+  const bibleRefs: string[] = safeParseJson(article.bibleRefs, []);
+  const sources: any[] = safeParseJson(article.sources, []);
+  const relatedIds: string[] = safeParseJson(article.relatedIds, []);
 
-  // Fetch related articles (only published ones)
-  const relatedArticles = relatedIds.length > 0
-    ? await db.koinoArticle.findMany({
+  // Fetch related articles (only published ones) — wrapped in try/catch
+  // so a DB error on the related query doesn't crash the entire page.
+  let relatedArticles: any[] = [];
+  if (relatedIds.length > 0) {
+    try {
+      relatedArticles = await db.koinoArticle.findMany({
         where: { id: { in: relatedIds }, status: "published" },
         select: { id: true, title: true, slug: true, category: true, excerpt: true, coverImageUrl: true },
-      })
-    : [];
+      });
+    } catch (error) {
+      console.error("[apologetics/[slug]] Related articles query error:", error);
+      // Silently skip — the article itself still renders without related articles
+    }
+  }
 
   // Difficulty badge color
   const difficultyColor: Record<string, string> = {
@@ -116,30 +149,8 @@ export default async function ApologeticsArticlePage({ params }: { params: Promi
 
         {article.excerpt && <p className="text-base text-[#A09DB1] leading-relaxed mb-4 font-semibold">{article.excerpt}</p>}
 
-        {/* Author card */}
-        {article.author && (
-          <div className="flex items-center gap-3 mb-6 bg-[#1C1929] border border-white/[0.06] rounded-xl p-3">
-            <div className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-[#7C3AED] to-[#F39B9B] shrink-0">
-              {article.author.profilePhoto && <img src={article.author.profilePhoto} alt="" className="w-full h-full object-cover" />}
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-1">
-                <p className="text-sm font-bold text-white">{article.author.displayName}</p>
-                {article.author.verified && (
-                  <span className="flex items-center gap-0.5 text-[9px] font-bold text-[#38BDF8]">
-                    <BadgeCheck size={10} /> Verified
-                  </span>
-                )}
-              </div>
-              <p className="text-[10px] text-[#94A3B8]">
-                {article.author.churchRole}{article.author.churchRole && article.author.church ? " • " : ""}{article.author.church}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* If no author relation but authorName is set, show it */}
-        {!article.author && article.authorName && (
+        {/* Author display — uses denormalized authorName field (no DB relation needed) */}
+        {article.authorName && (
           <div className="flex items-center gap-2 mb-6 text-[11px] text-[#94A3B8]">
             <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#7C3AED] to-[#F39B9B] flex items-center justify-center text-white text-[10px] font-bold shrink-0">
               {article.authorName.charAt(0).toUpperCase()}
